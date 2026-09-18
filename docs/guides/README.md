@@ -30,6 +30,8 @@
    - 골든 매트릭스 주입, Ryu Greenlet 블로킹 방지, Contract-First 검증 등 고품질 코드 생성을 위한 필수 프롬프트 패턴.
 3. **[📡 Pydantic v2 계약(Contract) & Redis IPC 규격](00_common/contract_first_ipc_guide.md)**
    - 4대 핵심 Redis 채널(`sdn:stats:port`, `sdn:anomaly:alert`, `sdn:control:command`, `sdn:topology:sync`)의 Pydantic v2 데이터 모델 및 직렬화 표준.
+4. **[🐙 실전 Git & GitHub 3인 협업 가이드](00_common/git_collaboration_guide.md)**
+   - Collaborator 초대/수락, GitHub PAT 토큰 인증, 3인 디렉토리 격리 수칙 및 충돌 방지 워크플로우.
 
 ---
 
