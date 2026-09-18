@@ -4,7 +4,7 @@
 > **대상:** 개발자 A (SDN & 인프라 엔지니어)  
 > **개발 방식:** 바이브 코딩 (AI 코딩 어시스턴트 프롬프트 중심 개발)  
 > **1주차 마일스톤:** 다중 경로(다이아몬드) 가상 네트워크 토폴로지 구축, Ryu Docker 및 Redis 컨테이너 구동, OpenFlow 1.3 기반 루프 방지 L2/L3 스위칭 구현 (`pingall` 100% 무유실 성공), 토폴로지 동기화 규격 검증  
-> **참조 문서:** `Self-Defending_SDN_Tower_Roadmap_v2.md`
+> **참조 문서:** `roadmap_v2.md`
 
 ---
 
@@ -85,7 +85,7 @@ textgg/
 │       └── verify_week1.sh         # 1주차 최종 E2E 자동 검증 스크립트
 ├── B/                              # 개발자 B (AI & 보안)
 ├── C/                              # 개발자 C (웹 관제탑)
-└── Self-Defending_SDN_Tower_Roadmap_v2.md
+└── roadmap_v2.md
 ```
 
 > 💡 **바이브 코딩 팁:** 터미널에서 작업할 때는 항상 `cd /home/tlgus/programming/textgg/A`로 진입한 후 명령어를 실행하세요.

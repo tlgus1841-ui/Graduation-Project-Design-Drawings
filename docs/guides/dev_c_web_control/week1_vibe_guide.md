@@ -4,7 +4,7 @@
 > **대상:** 개발자 C (웹 관제탑 풀스택 엔지니어)  
 > **개발 방식:** 바이브 코딩 (AI 코딩 어시스턴트 프롬프트 중심 초고속 개발)  
 > **1주차 마일스톤:** Python 3.10 기반 FastAPI 백엔드 셋업, Stale Connection 방어 WebSocket Hub 구축, 계약 기반 Pydantic v2 스키마 및 REST 제어 API 스켈레톤 구현, SDN 통계/이상/토폴로지 Mock 생성기 완성, Node 20 + React 18.2 + Vite + Tailwind CSS 다크테마 관제탑 레이아웃 및 실시간 웹소켓 연동 검증.  
-> **참조 문서:** `Self-Defending_SDN_Tower_Roadmap_v2.md`
+> **참조 문서:** `roadmap_v2.md`
 
 ---
 
@@ -132,7 +132,7 @@ textgg/
 │           ├── setup_frontend.sh                  # npm 패키지 설치 자동화 스크립트
 │           ├── run_all.sh                         # 백엔드 + 프론트엔드 동시 기동 스크립트
 │           └── verify_week1_c.sh                  # 1주차 E2E 전체 자동 검증 스크립트
-└── Self-Defending_SDN_Tower_Roadmap_v2.md
+└── roadmap_v2.md
 ```
 
 > 💡 **바이브 코딩 팁:**  
@@ -296,7 +296,7 @@ FastAPI 0.109.2와 Pydantic v2.6.1 기반의 웹 관제탑 백엔드 핵심 코�
 ```python
 """
 웹 관제탑 공통 데이터 계약 모델 (Pydantic v2)
-참조: Self-Defending_SDN_Tower_Roadmap_v2.md 제6장
+참조: roadmap_v2.md 제6장
 """
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field

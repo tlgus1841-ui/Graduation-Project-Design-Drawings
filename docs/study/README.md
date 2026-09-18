@@ -77,7 +77,7 @@
 ## 👥 3. 역할별 맞춤 학습 로드맵
 
 ### 🅰️ 개발자 A (SDN 인프라 & 제어 평면 엔지니어)
-- **실무 가이드북:** [`Developer_A_Week1_VibeCoding_Guide.md`](file:///home/tlgus/programming/textgg/Developer/A/Developer_A_Week1_VibeCoding_Guide.md)
+- **실무 가이드북:** [`week1_vibe_guide.md`](../guides/dev_a_sdn_infra/week1_vibe_guide.md)
 - **주요 담당:** Mininet Diamond 토폴로지, Ryu OpenFlow 1.3 애플리케이션, L2/L3 스위칭 & 루프 방지, Dijkstra 동적 라우팅, Docker 배포
 - **권장 학습 순서:**
   1. [`01_Network_and_SDN_Fundamentals.md`](./01_Network_and_SDN_Fundamentals.md): OpenFlow 1.3 메시지 규격(Packet-In, Flow-Mod, PortStats) 완벽 이해
@@ -86,7 +86,7 @@
   4. [`08_Environment_and_Troubleshooting.md`](./08_Environment_and_Troubleshooting.md): Docker `--net=host` 모드의 이유, ARP Broadcast Storm 방지책 숙지
 
 ### 🅱️ 개발자 B (AI & 보안 데이터 파이프라인 엔지니어)
-- **실무 가이드북:** [`Developer_B_Week1_VibeCoding_Guide.md`](file:///home/tlgus/programming/textgg/Developer/B/Developer_B_Week1_VibeCoding_Guide.md)
+- **실무 가이드북:** [`week1_vibe_guide.md`](../guides/dev_b_ai_security/week1_vibe_guide.md)
 - **주요 담당:** Scapy 트래픽 생성기(정상 트래픽, Random IP Spoofing SYN Flood), 5대 SDN 파생 피처 엔지니어링, Isolation Forest 모델 학습 및 추론, Redis 연동
 - **권장 학습 순서:**
   1. [`01_Network_and_SDN_Fundamentals.md`](./01_Network_and_SDN_Fundamentals.md): TCP 3-way Handshake 및 IP/TCP 패킷 헤더 구조 이해
@@ -95,7 +95,7 @@
   4. [`06_Distributed_System_and_FastAPI.md`](./06_Distributed_System_and_FastAPI.md): Redis Pub/Sub 메시지 발행/구독 규격 이해
 
 ### 🅲 개발자 C (웹 관제탑 풀스택 엔지니어)
-- **실무 가이드북:** [`Developer_C_Week1_VibeCoding_Guide.md`](file:///home/tlgus/programming/textgg/Developer/C/Developer_C_Week1_VibeCoding_Guide.md)
+- **실무 가이드북:** [`week1_vibe_guide.md`](../guides/dev_c_web_control/week1_vibe_guide.md)
 - **주요 담당:** FastAPI 비동기 백엔드 서버, WebSocket Hub 브로드캐스터, Mock 데이터 생성기, React 18 + vis-network 대시보드 UI
 - **권장 학습 순서:**
   1. [`06_Distributed_System_and_FastAPI.md`](./06_Distributed_System_and_FastAPI.md): Python Asyncio 비동기 프로그래밍, WebSocket 생명주기 및 Stale Connection 방어, Pydantic v2 계약 스키마

@@ -4,7 +4,7 @@
 > **대상:** 개발자 B (AI & 보안 파이프라인 엔지니어)  
 > **개발 방식:** 바이브 코딩 (AI 코딩 어시스턴트 프롬프트 중심 개발)  
 > **1주차 마일스톤:** Python 3.10 가상환경 구축, Scapy 기반 정상/공격 트래픽 생성기 구현, Checksum Offload & IP Spoofing 방어 검증, 5대 표준 SDN 피처 계산기 및 데이터 로거 작성, Redis IPC Pub/Sub 통신 규격 검증  
-> **참조 문서:** `Self-Defending_SDN_Tower_Roadmap_v2.md`
+> **참조 문서:** `roadmap_v2.md`
 
 ---
 
@@ -98,7 +98,7 @@ textgg/
 │   │   └── data/                                  # 2주차 AI 모델 학습용 데이터셋 저장소
 │   │       └── .gitkeep
 │   └── C/                                         # 개발자 C (FastAPI & React 관제탑)
-└── Self-Defending_SDN_Tower_Roadmap_v2.md         # 프로젝트 전체 로드맵
+└── roadmap_v2.md         # 프로젝트 전체 로드맵
 ```
 
 > 💡 **바이브 코딩 팁:** 터미널에서 작업할 때는 항상 `cd /home/tlgus/programming/textgg/Developer/B`로 이동한 후 가상환경(`source venv-ai/bin/activate`)을 켜고 작업하세요.
