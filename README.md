@@ -25,7 +25,8 @@
 .
 ├── README.md                              # 프로젝트 종합 안내서 (대문)
 ├── docs/                                  # 프로젝트 기술 및 기획 문서 일원화
-│   ├── planning/                          # 로드맵, 환경 규칙, 일정 관리
+│   ├── planning/                          # 로드맵, 공식 기획서, 환경 규칙, 일정 관리
+│   │   ├── project_proposal.md            # [공식] 졸업작품 개발 기획서 (제출/심사용)
 │   │   ├── roadmap_v2.md                  # 3인 협업 설계서 및 골든 버전 매트릭스
 │   │   ├── environment_rules.md           # Python uv 패키지 매니저 및 환경 규칙
 │   │   └── schedule_and_milestones.md     # 주차별 일정 및 과제 관리표
@@ -44,6 +45,7 @@
 
 ## 📚 4. 주요 문서 바로가기
 
+* 📑 **공식 졸업작품 개발 기획서:** [`docs/planning/project_proposal.md`](docs/planning/project_proposal.md)
 * 📋 **종합 로드맵 및 기술 스택 규격:** [`docs/planning/roadmap_v2.md`](docs/planning/roadmap_v2.md)
 * ⚙️ **개발 환경 및 패키지 룰:** [`docs/planning/environment_rules.md`](docs/planning/environment_rules.md)
 * 📖 **8대 기술 스터디 종합 인덱스:** [`docs/study/README.md`](docs/study/README.md)
