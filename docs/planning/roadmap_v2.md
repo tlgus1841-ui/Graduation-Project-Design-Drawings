@@ -122,13 +122,15 @@ SDN 프로젝트(Ryu + Mininet + FastAPI + ML + React)는 **버전 불일치로 
 
 ---
 
-## 4. 3인 팀 역할 분담 (R&R: Roles & Responsibilities)
+## 4. 3인 팀 역할 분담 및 산출물 기여 (R&R: Roles & Responsibilities)
 
-| 담당 | 역할 | 담당 영역 | 작업 환경 및 도구 |
-|---|---|---|---|
-| **개발자 A** | **SDN & 인프라 엔지니어** | Mininet 토폴로지, Ryu 컨트롤러, OpenFlow 프로토콜, 동적 라우팅 및 플로우 제어 | Ubuntu 22.04, Mininet 2.3, OVS 2.17, Docker(Python 3.8, Ryu 4.34) |
-| **개발자 B** | **AI & 보안 파이프라인 엔지니어** | 모의 공격/정상 트래픽 생성, 실시간 피처 엔지니어링, 이상 탐지 모델, AI 추론 워커 | Python 3.10(`venv-ai`), Scapy 2.5, Scikit-learn 1.3, Pandas, Redis |
-| **개발자 C** | **웹 관제탑 풀스택 엔지니어** | FastAPI 비동기 서버, WebSocket 브릿지, React 관제 대시보드, 토폴로지/차트 시각화 | Python 3.10(`venv-web`), FastAPI, Node 20 LTS, React 18.2, vis-network |
+`docs/planning/ai_harness_engineering_plan.md`를 단일 진실 공급원(SSOT)으로 하여 3인의 역할과 책임을 다음과 같이 정의합니다.
+
+| 역할 | 담당자 (학번) | 핵심 담당 영역 및 주 업무 | 깃허브 / 산출물 기여 |
+|:---:|:---:|:---|:---|
+| **Tech Lead** | **박시현 (본인)**<br>(22101489) | • 가상 네트워크(Mininet) 및 테스트 하네스 아키텍처 설계<br>• 전체 파이프라인 통합 및 인터페이스 규격 정의<br>• 코어 SDN 컨트롤러(OpenFlow 차단 룰 주입 엔진) 연동<br>• FSM 기반 라우팅 플래핑 방지 & 화이트리스트 안전 가드레일 | • **레포지토리 관리자**<br>• **코어 아키텍처 커밋 독점**<br>• **하네스 프레임워크 구축 (`harness/`, `tests/harness/`)** |
+| **Domain Dev & QA** | **유재민 (팀원 B)**<br>(22101498) | • 위협 탐지 알고리즘(Isolation Forest) 구현<br>• Scapy 기반 공격 시나리오(SYN Flood/IP 변조) 패킷 생성<br>• 실시간 5대 SDN 표준 파생 피처 엔지니어링<br>• 벤치마크 실행 및 정량 데이터(지연시간, F1, 처리량) 추출 | • **탐지/공격 모듈 커밋 (`traffic/`, `model.py`)**<br>• **테스트 결과 보고서 및 그래프 데이터셋**<br>• **정량 성능 평가 리포트** |
+| **PM & Tech Writer** | **김관우 (팀장)**<br>(22102237) | • 지도교수님 주간 보고 및 주차별 일정/이슈 관리<br>• 방어 정책 및 공격 시나리오 기획서 작성<br>• 최종 논문(보고서) 작성 및 종합 발표 PPT 제작 총괄<br>• 관제탑 웹 UI/UX 기획 및 시연 시나리오 대본 총괄 | • **문서화(Docs) 총괄**<br>• **시스템 흐름도 기획**<br>• **최종 발표 총괄** |
 
 ---
 
@@ -256,13 +258,13 @@ python-multipart==0.0.9
 
 3인 병렬 개발을 위해 첫 주에 반드시 동결(Freeze)해야 하는 통신 데이터 규격입니다.
 
-### 6.1 Redis Pub/Sub 채널 구조
+### 6.1 Redis Pub/Sub 채널 구조 (Pydantic SSOT 계약)
 | 채널명 | 송신자 | 수신자 | 목적 |
 |---|---|---|---|
-| `sdn:stats:port` | 개발자 A (Ryu) | 개발자 B (AI), 개발자 C (FastAPI) | 주기적 포트 통계 스트리밍 |
-| `sdn:anomaly:alert` | 개발자 B (AI) | 개발자 A (Ryu), 개발자 C (FastAPI) | 이상 탐지 알림 및 분석 결과 |
-| `sdn:control:command` | 개발자 B (AI), 개발자 C (FastAPI) | 개발자 A (Ryu) | 플로우 제어 (차단, 우회, 복원) |
-| `sdn:topology:sync` | 개발자 A (Ryu) | 개발자 C (FastAPI) | 토폴로지 노드/링크 상태 초기화 |
+| `sdn:stats:port` | 박시현 (Ryu 컨트롤러) | 유재민 (AI Worker), 관제 백엔드 (FastAPI) | 주기적 포트 통계 스트리밍 |
+| `sdn:anomaly:alert` | 유재민 (AI Worker) | 박시현 (Ryu 컨트롤러), 관제 백엔드 (FastAPI) | 이상 탐지 알림 및 위협 분석 결과 |
+| `sdn:control:command` | 유재민 (AI Worker), 관리자 패널 | 박시현 (Ryu 컨트롤러) | 플로우 제어 (In_port 차단, 우회, 복원) |
+| `sdn:topology:sync` | 박시현 (Ryu 컨트롤러) | 관제 백엔드 (FastAPI) | 토폴로지 노드/링크 상태 초기화 |
 
 ---
 
@@ -331,103 +333,120 @@ python-multipart==0.0.9
 
 ---
 
-## 7. 주차별 3인 병렬 개발 로드맵 (5주 완성 스프린트)
+## 7. 주차별 3인 병렬 개발 로드맵 (AI 하네스 기반 5주 스프린트)
 
-```
-[주차]        개발자 A (SDN)             개발자 B (AI/보안)           개발자 C (웹 관제탑)
------------------------------------------------------------------------------------------
-1주차     Mininet 토폴로지 구축      Scapy 트래픽 생성기 제작     FastAPI Mock 서버 구축
-(기반)    Ryu 기본 스위칭 & LLDP     트래픽 수집 스크립트 작성    React 대시보드 레이아웃
-           └────── [1주차 말: Redis 채널 규격 및 통신 프로토콜 전원 합의] ──────┘
+```text
+[주차]        Tech Lead: 박시현             Domain Dev & QA: 유재민       PM & Tech Writer: 김관우
+--------------------------------------------------------------------------------------------------
+1주차     Mininet 토폴로지 & 룰셋 배포  Scapy 트래픽 생성기 제작     하네스 기획서 & 프로젝트 제안서
+(기반)    Pydantic IPC 스키마 동결      Checksum 무결성 검증         FastAPI Mock 서버 & UI 흐름도
+          Mock IPC 테스트 하네스 구축   5대 피처 엔지니어링 설계     교수님 주간 보고 & 일정 수립
+           └────── [1주차 말: Pydantic IPC 계약 동결 & Mock 하네스 100% 통과] ──────┘
 
-2주차     Ryu 포트 통계 폴러 구현    실시간 피처 추출기 개발      vis-network 토폴로지 맵
-(단위엔진) Redis Stats Publish      Isolation Forest 모델 학습   ApexCharts 실시간 차트
-          단일 스위치 Drop 테스트     더미 데이터 기반 추론 검증   WebSocket 수신 연동
+2주차     Ryu 포트 통계 폴러 구현       실시간 피처 추출기 개발      관제탑 vis-network 토폴로지 맵
+(단위엔진) Redis Stats Publish           Isolation Forest 모델 구축   ApexCharts 실시간 차트 연동
+          Whitelist Guard 프로토타입    모델 벤치마크 하네스 구현    2차 주간 보고 & UI 검수
+           
+3주차     Dijkstra 우회 라우팅 엔진     독립 AI 워커 프로세스 완성   FastAPI-Redis 중계 브릿지 연동
+(1차통합)  선제적 OFPFC_ADD 프로비저닝   E2E 지연시간 프로파일러 착수 실시간 보안 경보 피드 UI
+          Redis 제어 명령 수신기 연동   정상 급증(Flash Crowd) 튜닝  중간 논문 초안 및 3차 주간 보고
+           └───────────── [3주차 말: Ryu - AI - Backend 3자 통합 하네스 검증] ─────────────┘
 
-3주차     Dijkstra 우회 라우팅 엔진   AI 워커(독립 프로세스) 완성  FastAPI-Redis 브릿지 연동
-(1차통합)  Redis 제어 명령 수신기     Redis 경보/명령 발행 연동    실시간 이벤트 로그 UI
-          └───────────── [3주차 말: Ryu - AI - Backend 3자 통합 테스트] ─────────────┘
+4주차     In_port 격리 + 다중 우회      정상/DDoS 동시 주입 시나리오  방어 시나리오 명세서 최종화
+(E2E통합)  FSM 기반 라우팅 플래핑 방지   F1-Score / FPR 정량 리포트   수동 비상 차단 패널 검수
+          서킷 브레이커 긴급 차단 연동  우회 트래픽 무유실 측정      4차 주간 보고 및 시연 대본 작성
+           └─────── [4주차 말: 전 시나리오 E2E 통합 테스트 (공격-탐지-우회-복구)] ───────┘
 
-4주차     In_port 격리 + 다중 우회   정상/DDoS 동시 주입 시나리오  수동 비상 차단 API 연동
-(E2E통합)  타임아웃 및 자가복구 구현   탐지 정밀도(F1) 최적화       토폴로지 색상 동적 갱신
-          └─────── [4주차 말: 전 시나리오 E2E 통합 테스트 (공격-탐지-우회-복구)] ───────┘
-
-5주차     예외 처리 (링크 단절 대응)  추론 레이턴시 튜닝 (<50ms)   대시보드 UI/UX 완성
-(시연준비) 최종 발표 시연 리허설     시연용 공격 스크립트 패키징  시연 동영상 및 최종 보고서
+5주차     예외 처리 (링크 단절 대응)   추론 레이턴시 튜닝 (<50ms)   대시보드 UI/UX 완성
+(시연준비) 원클릭 데모 릴리즈 패키징    성능 벤치마크 데이터셋 추출  최종 발표 PPT & 시연 리허설 총괄
+          전체 코드 리팩토링 & v1.0.0   고화질 백업 시연 영상 녹화   최종 졸업작품 보고서(논문) 완성
 ```
 
 ---
 
-## 8. 단계별 상세 실행 가이드
+## 8. 단계별 상세 실행 가이드 (Dual Harness Workflow)
 
-### Sprint 1: 인프라 및 기반 프로토콜 확립 (1주차)
-* **목표:** 환경 구성 완료, 공통 규격 정의, Mock 서버를 통한 독립 개발 환경 조성.
-* **개발자 A:**
+### Sprint 1: 인프라 및 기반 하네스 프로토콜 확립 (1주차)
+* **목표:** 환경 격리 완료, Pydantic 계약 스키마 동결, Mock 테스트 하네스를 통한 독립 개발 환경 조성.
+* **Tech Lead (박시현):**
   - Ubuntu 22.04 호스트에 Mininet 2.3+ 설치 및 OVS 2.17 정상 구동 확인.
   - Python 3.8 Ryu Docker 컨테이너 빌드 및 `--net=host` 모드로 OVS 통신(`127.0.0.1:6653`) 검증.
   - 다중 경로 토폴로지(`diamond_topo.py`) 작성 (S1-S2, S1-S3, S2-S4, S3-S4).
-* **개발자 B:**
-  - Python 3.10 가상환경(`venv-ai`) 생성 및 `requirements-ai.txt` 설치.
-  - Scapy를 활용한 정상 트래픽 생성 스크립트(`traffic_normal.py`) 작성.
-  - Scapy 랜덤 IP 변조 SYN Flooding 공격 스크립트(`traffic_attack.py`) 작성.
-* **개발자 C:**
-  - Python 3.10 가상환경(`venv-web`) 생성 및 `requirements-web.txt` 설치.
-  - FastAPI 프로젝트 셋업 및 WebSocket 엔드포인트 구현.
-  - 토폴로지/통계 더미 데이터를 생성해 WebSocket으로 1초마다 전송하는 `mock_generator.py` 작성.
-  - Node 20 LTS 기반 React (Vite) 프로젝트 생성, Tailwind CSS 세팅, 기본 대시보드 레이아웃 잡기.
+  - Pydantic v2 IPC 계약 스키마(`harness/contracts/`) 확정 및 Mock IPC 테스트 러너(`test_mock_ipc.py`) 작성.
+* **Domain Dev & QA (유재민):**
+  - Python 3.10 가상환경(`venv-ai`) 생성 및 의존성 패키지 설치.
+  - Scapy를 활용한 정상 트래픽 생성 스크립트(`traffic_normal.py`) 작성 (Poisson Web/Bulk/ICMP).
+  - Scapy 랜덤 IP 변조 SYN Flooding 공격 스크립트(`traffic_attack.py`) 작성 (Checksum 무결성 검증).
+  - 5대 SDN 표준 파생 피처($\Delta \text{PPS}$, $\Delta \text{BPS}$, $\text{BPP}$) 규격 정의.
+* **PM & Tech Writer (김관우):**
+  - 공식 개발 기획서 및 AI 하네스 엔지니어링 계획서(`docs/planning/`) 총괄 정리.
+  - FastAPI 프로젝트 셋업 및 WebSocket 더미 텔레메트리 송출기(`mock_generator.py`) 연동.
+  - Node 20 LTS 기반 React (Vite) 프로젝트 생성, Tailwind CSS 세팅, 기본 대시보드 레이아웃 검수.
+  - 1주차 교수님 주간 보고서 작성 및 미팅 주관.
 
 ---
 
-### Sprint 2: 각 도메인 핵심 엔진 구현 (2주차)
-* **목표:** 각자의 컴포넌트를 독립적으로 동작 가능한 수준까지 완성.
-* **개발자 A:**
-  - Ryu의 `hub.spawn`을 활용해 2초마다 `OFPPortStatsRequest`를 브로드캐스팅하는 모니터링 루프 구현.
-  - `OFPPortStatsReply` 수신 시 바이트/패킷 카운터를 추출하여 Redis `sdn:stats:port`로 Publish.
-  - OVS 포트 번호(`port_no`)와 연결된 호스트 MAC/IP 매핑 테이블 동적 생성.
-* **개발자 B:**
+### Sprint 2: 각 도메인 핵심 엔진 & 벤치마크 하네스 구현 (2주차)
+* **목표:** 각 컴포넌트의 독립 엔진 구현 및 모델 평가 하네스 초동 구동.
+* **Tech Lead (박시현):**
+  - Ryu `hub.spawn`을 활용해 2초마다 `OFPPortStatsRequest`를 브로드캐스팅하는 모니터링 루프 구현.
+  - `OFPPortStatsReply` 수신 시 바이트/패킷 카운터를 파싱하여 Redis `sdn:stats:port`로 Publish.
+  - OVS 포트 번호와 연결 호스트 매핑 테이블 관리 및 화이트리스트 안전 가드레일(`whitelist_guard.py`) 초안 작성.
+* **Domain Dev & QA (유재민):**
   - Redis `sdn:stats:port` 채널 구독 모듈 구현.
-  - 이전 틱과 현재 틱의 차이를 이용해 $\Delta \text{PPS}$, $\Delta \text{BPS}$, $\text{BPP}$ 계산 로직 작성.
-  - 정상 및 공격 트래픽 데이터를 파일로 로깅하여 Isolation Forest 모델 사전 학습.
-* **개발자 C:**
-  - React에서 `vis-network`를 사용해 가상 스위치 및 호스트를 그래프로 렌더링.
-  - `ApexCharts`를 연동하여 가상 메트릭(PPS/BPS) 실시간 스트리밍 차트 구현.
-  - Mock 데이터를 받아 그래프 노드 색상이 변하고 차트가 갱신되는 UI 검증 완료.
+  - 실시간 5대 파생 피처 계산기(`feature_extractor.py`) 구현.
+  - 정상 및 공격 트래픽 데이터를 CSV로 로깅하여 Isolation Forest 모델 사전 학습.
+  - 모델 평가 하네스(`model_evaluator.py`)를 통해 이상치 점수 및 F1-Score 측정 시작.
+* **PM & Tech Writer (김관우):**
+  - React 관제탑에서 `vis-network`를 사용해 가상 스위치 및 호스트를 동적 그래프로 렌더링 검수.
+  - `ApexCharts`를 연동하여 실시간 PPS/BPS 스트리밍 차트 UI 연동.
+  - 2주차 주간 진행 보고서 작성 및 팀 마일스톤 진척도 관리.
 
 ---
 
 ### Sprint 3: 1차 통합 및 비동기 IPC 연동 (3주차)
-* **목표:** Ryu, AI Worker, FastAPI 간의 Redis 메시지 연동 확인.
-* **개발자 A:**
+* **목표:** Ryu, AI Worker, FastAPI 간의 Redis 메시지 파이프라인 관통 검증.
+* **Tech Lead (박시현):**
   - NetworkX 라이브러리를 연동하여 S1에서 S4로 가는 최단 경로(기본: S1-S2-S4)와 대체 경로(우회: S1-S3-S4) 계산.
-  - Redis `sdn:control:command` 채널을 구독하는 이벤트 루프를 Ryu 백그라운드 태스크로 추가.
-* **개발자 B:**
+  - 우회 경로상 중간 스위치들에 선제적 `OFPFC_ADD` 규칙 설치 파이프라인 구현.
+  - Redis `sdn:control:command` 채널을 구독하는 이벤트 루프를 Ryu 백그라운드 태스크로 연동.
+* **Domain Dev & QA (유재민):**
   - 독립 프로세스 `ai_worker.py` 완성: 실시간 통계 수신 $\to$ 피처 정규화 $\to$ Isolation Forest 추론 $\to$ 이상 감지 시 Redis `sdn:anomaly:alert` 및 제어 명령 발행.
-  - 스코어 임계값(Threshold) 튜닝을 통해 False Positive(정상 트래픽 오탐) 최소화.
-* **개발자 C:**
-  - FastAPI에 Redis Pub/Sub 리스너를 결합하여 실제 Ryu/AI 데이터가 들어오면 즉시 브라우저로 중계하도록 전환.
-  - 대시보드에 보안 이벤트 타임라인 컴포넌트 추가 (공격 감지 시 빨간색 경보 팝업).
+  - 정상 급증(Flash Crowd) 오탐 방지를 위한 Contamination 파라미터 및 임계값 튜닝.
+  - E2E 지연시간 프로파일러(`latency_profiler.py`) 연동.
+* **PM & Tech Writer (김관우):**
+  - FastAPI에 Redis Pub/Sub 리스너를 결합하여 실제 Ryu/AI 텔레메트리를 브라우저로 중계 브로드캐스팅.
+  - 관제 대시보드에 보안 이벤트 타임라인 컴포넌트 추가 (공격 감지 시 적색 경보 팝업).
+  - 3차 주간 보고서 및 중간 졸업논문 개요서 작성.
 
 ---
 
 ### Sprint 4: E2E 통합 및 자율 방어/복구 파이프라인 완성 (4주차)
-* **목표:** 공격 주입부터 탐지, 차단, 우회, 복구까지 전 자동화 시나리오 검증.
+* **목표:** 공격 주입부터 탐지, 차단, 우회, 복구까지 전 자동화 시나리오 하네스 검증.
 * **협업 작업:**
-  1. **공격 주입:** H_attacker에서 Scapy로 랜덤 IP 변조 SYN Flooding 발사.
-  2. **1차 감지:** Ryu가 S1 포트 통계에서 PPS/BPS 급증 수집 $\to$ Redis 발행.
-  3. **2차 정밀 분석:** AI Worker가 BPP 급감 및 PPS 폭증을 감지하여 `ANOMALY_DETECTED` 판정.
-  4. **Access In_port 격리:** Ryu가 공격자가 연결된 S1의 1번 포트에 `Priority 100 Drop` 규칙 설치 (정상 트렁크 포트는 영향 없음).
-  5. **다중 홉 우회 라우팅:** 혼잡 링크를 경유하던 H_legit의 통신 플로우를 대체 경로(S1-S3-S4)로 전환.
-  6. **웹 관제탑 시각화:** 대시보드 토폴로지에서 공격 포트가 붉은색 X로 표시되고, 우회 링크가 활성화되며, 실시간 PPS 차트가 피크 후 안정화되는 모습 확인.
-  7. **자가 복구 검증:** 공격 중단 $\to$ AI Worker가 트래픽 정상화 감지 $\to$ 차단 플로우 제거 및 원래 경로로 무중단 복귀.
+  1. **공격 주입 (유재민):** H_attacker에서 Scapy로 랜덤 IP 변조 SYN Flooding 발사 (BPP 54~74B, 3,000 PPS).
+  2. **1차 감지 (박시현):** Ryu가 S1 포트 통계에서 PPS/BPS 급증 수집 $\to$ Redis 발행.
+  3. **2차 정밀 분석 (유재민):** AI Worker가 BPP 급감 및 PPS 폭증을 감지하여 `ANOMALY_DETECTED` 판정.
+  4. **화이트리스트 검증 & In_port 격리 (박시현):** Trunk 링크 여부 검증 후, 공격자 유입 Access 포트에 `Priority 100 Drop` 규칙 설치.
+  5. **다중 홉 우회 라우팅 (박시현):** 정상 호스트(`H_legit`)의 통신 플로우를 선제적 `OFPFC_ADD`로 대체 경로(S1-S3-S4)로 무유실 전환.
+  6. **웹 관제탑 시각화 (김관우):** 대시보드 토폴로지에서 공격 포트가 적색으로 표시되고, 우회 링크가 활성화되며, 실시간 차트 안정화 확인.
+  7. **FSM 기반 자가 복구 (박시현 & 유재민):** 공격 중단 $\to$ AI Worker가 정상화 감지 $\to$ 10초 쿨다운 Heartbeat 후 차단 플로우 제거 및 원래 경로 복귀.
 
 ---
 
 ### Sprint 5: 성능 최적화, 예외 처리 및 최종 시연 준비 (5주차)
-* **목표:** 실패 없는 시연을 위한 방어 코드 작성 및 문서/발표자료 패키징.
-* **개발자 A:** 링크 장애(Link Down) 발생 시 자동 감지 및 페일오버 로직 보완, OVS 리셋 스크립트 작성.
-* **개발자 B:** 탐지 지연 시간 측정 (목표: 공격 시작 후 3초 이내 탐지 및 차단 명령 발송), F1-Score 95% 이상 검증.
-* **개발자 C:** UI 디테일 다듬기 (다크 테마, 통계 요약 카드, 수동 격리/복원 버튼 동작 애니메이션), 화면 녹화 영상 제작.
-* **공통:** 최종 발표 슬라이드 및 졸업작품 최종 보고서 작성, 시연 시나리오 리허설 3회 이상 수행.
+* **목표:** 실패 없는 시연을 위한 서킷 브레이커 장착, 정량 데이터셋 확보 및 최종 발표 패키징.
+* **Tech Lead (박시현):**
+  - 긴급 서킷 브레이커(`circuit_breaker.py`) 구현 (AI 장애 시 컨트롤러 안전 모드 전환).
+  - 원클릭 시연 자동화 스크립트(`demo_scenario.sh`) 및 환경 초기화 툴(`reset_env.sh`) 패키징.
+  - 전체 소스코드 릴리즈 태깅 (`v1.0.0`).
+* **Domain Dev & QA (유재민):**
+  - E2E 방어 반응시간($\le 100\text{ms}$), F1-Score($\ge 0.95$), 정상 트래픽 유실률($\le 2.0\%$) 정량 데이터셋 추출.
+  - 시연 발표용 공격 프로파일 프리셋 패키징 및 고화질 시연 백업 동영상 녹화.
+* **PM & Tech Writer (김관우):**
+  - **시연 발표용 PPT 슬라이드(10장 내외) 제작 총괄 및 최종 발표 대본 작성.**
+  - 3인 합동 라이브 시연 리허설 3회 이상 진행 및 시간 체크.
+  - A4 16주차 종합 진행 보고서 합본 및 최종 졸업작품 논문 완성.
 
 ---
 

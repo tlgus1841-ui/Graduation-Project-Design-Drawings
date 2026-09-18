@@ -1,0 +1,64 @@
+# 🛡️ Self-Defending SDN Tower: AI Agent Development Rules (.cursorrules)
+
+## 👤 1. 개발자 세션 자동 인식 프로토콜 (Developer Identity Protocol)
+
+사용자가 대화 시작 시 자신의 이름을 선언하면, AI 에이전트는 즉시 해당 개발자의 컴퓨터(환경)임을 인지하고 아래 명시된 **인식 인사말**, **전담 작업 디렉토리**, **핵심 업무**, **Phase 2 가이드북**을 기반으로 맞춤형 개발 지원을 제공하십시오.
+
+---
+
+### 🔹 [Case 1] "내가 박시현이야" (또는 "시현", "Tech Lead")
+* **AI 인식 응답:**  
+  `"아, Tech Lead 박시현 개발자님 컴퓨터(환경)이군요! 반갑습니다. 시스템 아키텍처 및 코어 하네스 개발 모드로 전환합니다."`
+* **공식 직책:** Tech Lead & 시스템 아키텍트 (학번: 22101489)
+* **전담 디렉토리 권한:**
+  - `harness/`: 계약 스키마(SSOT), 안전 가드레일, FSM 상태 머신
+  - `topo/`: Mininet 다중 경로 다이아몬드 토폴로지 (`diamond_topo.py`)
+  - `ryu/`: OpenFlow 1.3 코어 스위칭 & 텔레메트리 (`controller.py`), Dockerfile
+  - `tests/harness/`: Mock IPC 버스, Headless 토폴로지 시뮬레이터
+  - `scripts/`: 원클릭 실행 및 초기화 스크립트
+* **즉시 참조 가이드:** [`docs/guides/dev_a_tech_lead/phase2_core_mock_harness.md`](docs/guides/dev_a_tech_lead/phase2_core_mock_harness.md)
+* **핵심 수칙:** Ryu 컨트롤러 내부 동기 블로킹 연산 절대 금지, 다이아몬드 ARP Storm 차단, Trunk 포트 화이트리스트 보호.
+
+---
+
+### 🔹 [Case 2] "내가 유재민이야" (또는 "재민", "Domain Dev", "QA")
+* **AI 인식 응답:**  
+  `"아, Domain Dev & QA 유재민 개발자님 컴퓨터(환경)이군요! 반갑습니다. AI 모델 및 트래픽/보안 파이프라인 개발 모드로 전환합니다."`
+* **공식 직책:** Domain Dev & QA (AI/보안 엔지니어 & 품질 보증, 학번: 22101498)
+* **전담 디렉토리 권한:**
+  - `traffic/`: Scapy 가변 정상 트래픽(`traffic_normal.py`), 무작위 IP SYN Flood 공격기(`traffic_attack.py`)
+  - `pipeline/`: 실시간 5대 파생 피처 계산기(`feature_extractor.py`), CSV 로거
+  - `model/`: Scikit-learn Isolation Forest 이상 탐지 모델(`model.py`, `inference_worker.py`)
+  - `tests/benchmarks/`: 모델 평가 하네스, E2E 지연시간 프로파일러(`latency_profiler.py`)
+  - `dataset/`: 훈련 및 평가용 CSV 데이터셋
+* **즉시 참조 가이드:** [`docs/guides/dev_b_domain_qa/phase2_traffic_features_model.md`](docs/guides/dev_b_domain_qa/phase2_traffic_features_model.md)
+* **핵심 수칙:** Scapy 패킷 전송 시 Checksum 재계산 강제(`del pkt[IP].chksum`, `del pkt[TCP].chksum`), 모델 추론 지연 <10ms 보장, 무거운 80개 CIC 피처 대신 5대 파생 피처 사용.
+
+---
+
+### 🔹 [Case 3] "내가 김관우이야" (또는 "관우", "PM", "팀장")
+* **AI 인식 응답:**  
+  `"아, PM & Tech Writer 김관우 팀장님 컴퓨터(환경)이군요! 반갑습니다. 프로젝트 일정 관리 및 문서화/관제 UI 기획 모드로 전환합니다."`
+* **공식 직책:** PM & Tech Writer (팀장, 학번: 22102237)
+* **전담 디렉토리 권한:**
+  - `docs/planning/`: 16주차 마일스톤 추적 및 일정표
+  - `docs/specs/`: 4단계 방어 시나리오 명세서
+  - `reports/`: 학과 제출용 A4 주간 진행 보고서
+  - `ui/`: 웹 관제탑 대시보드(React 18 + Tailwind CSS) 레이아웃 기획 및 시각화 검수
+  - `docs/thesis/`, `docs/proposal/`: 최종 졸업논문 및 10장 PPT 슬라이드/시연 대본
+* **즉시 참조 가이드:** [`docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md`](docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md)
+* **핵심 수칙:** A4 주간 보고서 정량 지표 취합, 웹소켓 Stale 세션 정리 검수, vis-network 물리 안정화 검수.
+
+---
+
+## ⚙️ 2. 환경 및 패키지 관리 규칙 (Environment Rules)
+
+1. **`uv` 엄격 사용:**
+   - 절대 `pip install` 또는 `python -m venv` 명령을 사용하지 마십시오.
+   - 패키지 설치: `uv add <package>`
+   - 실행: `uv run <command>` (가상환경은 `./.venv` 단일 관리)
+2. **런타임 분리 (Golden Version Matrix):**
+   - **Ryu SDN 컨트롤러:** Python 3.8 공식 Docker (`python:3.8-slim`, `--net=host`). 호스트 Python 3.10에 직접 Ryu를 설치하지 마십시오.
+   - **AI / 웹 / 테스트:** 호스트 OS Python 3.10.12 및 `uv` 관리하에 실행.
+3. **Pydantic v2 계약 준수 (SSOT):**
+   - Redis IPC 채널(`sdn:stats:port`, `sdn:anomaly:alert`, `sdn:control:command`, `sdn:topology:sync`)의 메시지는 반드시 `harness/contracts/sdn_events.py`의 모델을 통해 직렬화/역직렬화하십시오.
