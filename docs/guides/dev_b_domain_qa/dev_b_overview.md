@@ -29,6 +29,7 @@ Domain Dev & QA는 현실적인 네트워크 공격을 모의하고, SDN 제어 
 
 * [Phase 1 (1~3주차): uv 환경 구축 및 피처 스펙 확립 (회고)](phase1_environment_setup.md)
 * [Phase 2 (4~7주차): 트래픽 생성기, 5대 피처, Isolation Forest (당면 과제)](phase2_traffic_features_model.md)
+  * [4주차 구현 계획서: `traffic_normal.py`](week04_traffic_normal_implementation_plan.md)
 * [Phase 3 (8주차): 모델 추론 레이턴시(<10ms) 및 1차 평가](phase3_midterm_evaluation.md)
 * [Phase 4 (9~11주차): IP 스푸핑 방어 검증 및 무유실 벤치마크](phase4_spoofing_defense_benchmark.md)
 * [Phase 5 & 6 (12~16주차): E2E 지연시간 프로파일링 및 최종 평가 데이터셋](phase5_6_latency_final_dataset.md)
