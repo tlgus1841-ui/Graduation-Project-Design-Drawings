@@ -526,12 +526,19 @@ wheels = [
 ]
 
 [[package]]
+name = "scapy"
+version = "2.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/67/a1/2a60d5b6f0fed297dd0c0311c887d5e8a30ba1250506585b897e5a662f4c/scapy-2.5.0.tar.gz", hash = "sha256:5b260c2b754fd8d409ba83ee7aee294ecdbb2c235f9f78fe90bc11cb6e5debc2", size = 1279162, upload-time = "2022-12-25T10:28:19.889Z" }
+
+[[package]]
 name = "self-defending-sdn-tower"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "pydantic" },
     { name = "redis" },
+    { name = "scapy" },
 ]
 
 [package.dev-dependencies]
@@ -546,6 +553,7 @@ dev = [
 requires-dist = [
     { name = "pydantic", specifier = "==2.6.1" },
     { name = "redis", specifier = "==5.0.1" },
+    { name = "scapy", specifier = "==2.5.0" },
 ]
 
 [package.metadata.requires-dev]

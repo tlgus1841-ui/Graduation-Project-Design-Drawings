@@ -37,11 +37,11 @@ class MockRedisBus:
     """
 
     def __init__(self):
-        self._subscribers: Dict[str, List[queue.Queue]] = {}
+        self._subscribers: Dict[str, List[queue.Queue[str]]] = {}
 
-    def subscribe(self, channel: str) -> queue.Queue:
+    def subscribe(self, channel: str) -> queue.Queue[str]:
         """Register a subscriber queue for a specific channel."""
-        q = queue.Queue()
+        q: queue.Queue[str] = queue.Queue()
         if channel not in self._subscribers:
             self._subscribers[channel] = []
         self._subscribers[channel].append(q)
