@@ -56,3 +56,24 @@
 * 🐙 **실전 Git & GitHub 3인 협업 가이드:** [`docs/guides/00_common/git_collaboration_guide.md`](docs/guides/00_common/git_collaboration_guide.md)
 * 📖 **8대 기술 스터디 종합 인덱스:** [`docs/study/README.md`](docs/study/README.md)
 * 🎯 **주제 선정 배경 및 당위성:** [`docs/proposal/why_self_defending_sdn.md`](docs/proposal/why_self_defending_sdn.md)
+
+---
+
+## 🚀 5. 빠른 시작 (Getting Started)
+
+다음 개발자가 저장소를 클론한 후 바로 테스트하고 개발을 시작할 수 있는 방법입니다.
+
+```bash
+# 1. 저장소 클론 및 이동
+git clone https://github.com/tlgus1841-ui/Graduation-Project-Design-Drawings.git
+cd Graduation-Project-Design-Drawings
+
+# 2. uv 패키지 환경 동기화 (Python 3.10 및 모든 의존성 자동 설치)
+uv sync
+
+# 3. Mock IPC 하네스 단위 테스트 실행 (0.1초 소요, 100% 통과 확인)
+uv run pytest tests/harness/test_mock_ipc.py -v
+
+# 4. 토폴로지 구조 검증
+uv run python -c "from topo.diamond_topo import DiamondTopo; topo = DiamondTopo(); print('Diamond Topo Loaded!')"
+```

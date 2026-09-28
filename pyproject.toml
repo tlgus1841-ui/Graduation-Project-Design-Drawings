@@ -1,0 +1,21 @@
+[project]
+name = "self-defending-sdn-tower"
+version = "0.1.0"
+description = "Self-Defending SDN Tower: AI-driven SDN Traffic Anomaly Detection & Autonomous Defense"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic==2.6.1",
+    "redis==5.0.1",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.5",
+    "flake8>=7.4.1",
+    "mypy>=2.3.1",
+]
