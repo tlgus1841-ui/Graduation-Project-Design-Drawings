@@ -25,13 +25,11 @@ Topology Layout:
             +---------------+
 """
 
-import sys
-
 try:
     from mininet.topo import Topo
 except ImportError:
     # Graceful fallback for non-Mininet environments (e.g., CI/test harnesses)
-    class Topo(object):
+    class Topo(object):  # type: ignore[no-redef]
         def __init__(self, *args, **params):
             self._switches = {}
             self._hosts = {}
@@ -155,6 +153,7 @@ def run():
         ip="127.0.0.1",
         port=6653,
     )
+    info(f"*** Controller {c0.name} registered\n")
 
     info("*** Starting Network\n")
     net.start()

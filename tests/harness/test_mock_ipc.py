@@ -7,11 +7,10 @@ Ensures 100% serialization integrity, schema validation, and bus pub/sub deliver
 without requiring Mininet, Ryu controller, or a live Redis instance.
 """
 
-import json
 import queue
 import time
 import uuid
-from typing import Callable, Dict, List
+from typing import Dict, List
 import pytest
 from pydantic import ValidationError
 
@@ -19,7 +18,6 @@ from harness.contracts import (
     REDIS_CHANNEL_ANOMALY_ALERT,
     REDIS_CHANNEL_CONTROL_COMMAND,
     REDIS_CHANNEL_PORT_STATS,
-    REDIS_CHANNEL_TOPOLOGY_SYNC,
     AnomalyAlertMessage,
     ControlCommandMessage,
     DefenseAction,
@@ -266,7 +264,10 @@ def test_multiple_subscribers_broadcast(mock_bus):
     msg = PortStatsMessage(
         dpid=1,
         stats=[
-            PortStatItem(dpid=1, port_no=1, rx_packets=100, tx_packets=90, rx_bytes=8000, tx_bytes=7200, duration_sec=10)
+            PortStatItem(
+                dpid=1, port_no=1, rx_packets=100, tx_packets=90,
+                rx_bytes=8000, tx_bytes=7200, duration_sec=10,
+            )
         ],
     )
     recipients = mock_bus.publish(REDIS_CHANNEL_PORT_STATS, msg.model_dump_json())
