@@ -88,10 +88,10 @@ def build_icmp_ping(profile: PacketProfile) -> Packet:
 
 def weighted_pattern_choice(rng: random.Random | None = None) -> str:
     """70/20/10 비율로 패턴 A/B/C 중 하나를 선택한다."""
-    rng = rng or random
     patterns = list(PATTERN_WEIGHTS.keys())
     weights = list(PATTERN_WEIGHTS.values())
-    return rng.choices(patterns, weights=weights, k=1)[0]
+    chooser = rng.choices if rng is not None else random.choices
+    return chooser(patterns, weights=weights, k=1)[0]
 
 
 def poisson_interval(mean_interval: float) -> float:
