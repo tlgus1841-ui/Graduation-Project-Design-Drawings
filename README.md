@@ -31,6 +31,8 @@
 │   │   ├── roadmap_v2.md                  # 3인 협업 설계서 및 골든 버전 매트릭스
 │   │   ├── environment_rules.md           # Python uv 패키지 매니저 및 환경 규칙
 │   │   └── schedule_and_milestones.md     # 주차별 일정 및 과제 관리표
+│   ├── specs/                             # 시스템 명세서
+│   │   └── defense_scenarios.md           # 4단계 자율 방어 시나리오 명세서 (FSM·임계치·UI 매핑)
 │   ├── proposal/                          # 주제 선정 배경 및 발표 자료
 │   │   ├── why_self_defending_sdn.md      # 주제 선정 당위성 보고서
 │   │   └── ppt_slide_deck_outline.md      # 10장 발표용 AI 프롬프트/대본
@@ -43,6 +45,10 @@
 │   │   └── archive_v1/                    # v1.0 초기 가이드 보관함
 │   ├── study/                             # 네트워크/SDN/AI/웹 8대 기술 학습서
 │   └── archive/                           # 이전 버전 기획서 보관함
+├── api/                                   # [김관우] FastAPI 관제탑 백엔드
+│   ├── main.py                            # REST(/api/health, /api/topology) + WebSocket(/ws)
+│   ├── websocket_hub.py                   # 연결 풀 및 Stale 세션 자동 정리
+│   └── mock_generator.py                  # 방어 시나리오 재생 더미 텔레메트리 송출기
 ```
 
 ---
@@ -76,4 +82,9 @@ uv run pytest tests/harness/test_mock_ipc.py -v
 
 # 4. 토폴로지 구조 검증
 uv run python -c "from topo.diamond_topo import DiamondTopo; topo = DiamondTopo(); print('Diamond Topo Loaded!')"
+
+# 5. 관제탑 백엔드 실행 (Mock 모드: 4단계 방어 시나리오 더미 텔레메트리 송출)
+uv run uvicorn api.main:app --reload --port 8000
+#    → http://localhost:8000/api/health , ws://localhost:8000/ws
+#    → 더미 송출 없이 허브만 띄우려면: SDN_MOCK=0 uv run uvicorn api.main:app --port 8000
 ```
