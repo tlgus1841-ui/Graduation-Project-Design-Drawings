@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. 메시지 브로커 (Redis 7.2)
   redis-broker:
