@@ -111,7 +111,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def handle_ipv4(self, datapath, in_port, eth, ip_pkt, data):
         dpid = datapath.id
-        dst_ip = ip_pkt.dst_ip
+        dst_ip = ip_pkt.dst
         parser = datapath.ofproto_parser
         ofproto = datapath.ofproto
 
