@@ -34,6 +34,13 @@ describe("applyEnvelope", () => {
     expect(s.events[0].detail).toBe("NORMAL → UNDER ATTACK");
   });
 
+  it("tracks the live Redis link state", () => {
+    let s = applyEnvelope(initialState, { type: "system:status", data: { phase: null, mode: "live", upstream: "disconnected", timestamp: 1 } });
+    expect(s.upstream).toBe("disconnected");
+    s = applyEnvelope(s, { type: "system:status", data: { phase: null, mode: "live", upstream: "connected", timestamp: 2 } });
+    expect(s.upstream).toBe("connected");
+  });
+
   it("adds alerts and commands newest-first and caps the feed", () => {
     let s = initialState;
     for (let i = 0; i < MAX_EVENTS + 5; i += 1) {

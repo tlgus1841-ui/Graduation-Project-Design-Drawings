@@ -15,6 +15,16 @@ export default function App() {
           {state.mode === "mock" && (
             <span className="rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-400">MOCK DATA</span>
           )}
+          {state.mode === "live" && (
+            <span
+              data-testid="upstream-badge"
+              className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                state.upstream === "connected" ? "bg-slate-800 text-emerald-300" : "bg-amber-500/15 text-amber-300"
+              }`}
+            >
+              {state.upstream === "connected" ? "LIVE · REDIS" : "REDIS OFFLINE"}
+            </span>
+          )}
           <PhaseBadge phase={state.phase} />
           <ConnectionBadge status={status} retries={retries} />
         </>

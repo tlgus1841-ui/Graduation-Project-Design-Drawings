@@ -15,6 +15,7 @@ export const PHASE_LABELS = {
 export const initialState = {
   phase: null,
   mode: null,
+  upstream: null,
   topology: { nodes: [], links: [] },
   ports: {},
   events: [],
@@ -66,7 +67,8 @@ export function applyEnvelope(state, envelope) {
 
   switch (type) {
     case "system:status": {
-      if (data.phase === state.phase) return { ...next, mode: data.mode };
+      const upstream = data.upstream ?? null;
+      if (data.phase === state.phase) return { ...next, mode: data.mode, upstream };
       const events = state.phase
         ? pushEvent(state.events, {
             id: `phase-${data.timestamp}-${data.phase}`,
@@ -76,7 +78,7 @@ export function applyEnvelope(state, envelope) {
             detail: `${PHASE_LABELS[state.phase] ?? state.phase} → ${PHASE_LABELS[data.phase] ?? data.phase}`,
           })
         : state.events;
-      return { ...next, phase: data.phase, mode: data.mode, events };
+      return { ...next, phase: data.phase, mode: data.mode, upstream, events };
     }
     case "sdn:stats:port":
       return applyPortStats(next, data);
