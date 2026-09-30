@@ -49,6 +49,8 @@
 │   ├── main.py                            # REST(/api/health, /api/topology) + WebSocket(/ws)
 │   ├── websocket_hub.py                   # 연결 풀 및 Stale 세션 자동 정리
 │   └── mock_generator.py                  # 방어 시나리오 재생 더미 텔레메트리 송출기
+├── ui/                                    # [김관우] React 18 + Vite + Tailwind 관제탑 대시보드
+└── reports/                               # [김관우] 학과 제출용 주간 진도 보고서
 ```
 
 ---
@@ -87,4 +89,8 @@ uv run python -c "from topo.diamond_topo import DiamondTopo; topo = DiamondTopo(
 uv run uvicorn api.main:app --reload --port 8000
 #    → http://localhost:8000/api/health , ws://localhost:8000/ws
 #    → 더미 송출 없이 허브만 띄우려면: SDN_MOCK=0 uv run uvicorn api.main:app --port 8000
+
+# 6. 관제탑 대시보드 실행 (Node 20+, 백엔드를 먼저 켜 두세요)
+cd ui && npm install && npm run dev      # → http://localhost:5173
+#    → WebSocket 주소 변경: ui/.env.example을 ui/.env로 복사 후 VITE_WS_URL 수정
 ```
