@@ -16,6 +16,8 @@ from scapy.layers.inet import ICMP, IP, TCP
 from scapy.packet import Packet
 from scapy.sendrecv import send
 
+from traffic.checksum_utils import finalize_checksum
+
 # 패턴 비율 (A: HTTP GET, B: 대용량 전송, C: ICMP Ping)
 PATTERN_WEIGHTS = {"A": 0.70, "B": 0.20, "C": 0.10}
 
@@ -40,19 +42,6 @@ class PacketProfile:
 def _random_payload(size: int) -> bytes:
     alphabet = string.ascii_letters + string.digits
     return "".join(random.choices(alphabet, k=size)).encode()
-
-
-def finalize_checksum(pkt: Packet) -> Packet:
-    """전송 직전 IP/TCP Checksum을 삭제해 커널이 재계산하도록 강제한다.
-
-    Checksum 필드를 남겨두면 Linux 커널 Checksum Offload 경로에서
-    스택/OVS가 패킷을 조용히 폐기하므로 반드시 이 함수를 거쳐야 한다.
-    """
-    if IP in pkt:
-        del pkt[IP].chksum
-    if TCP in pkt:
-        del pkt[TCP].chksum
-    return pkt
 
 
 def build_http_packet(profile: PacketProfile) -> Packet:
