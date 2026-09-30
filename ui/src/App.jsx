@@ -2,7 +2,8 @@ import ConnectionBadge from "./components/ConnectionBadge.jsx";
 import EventFeed from "./components/EventFeed.jsx";
 import PhaseBadge from "./components/PhaseBadge.jsx";
 import PortStatsPanel from "./components/PortStatsPanel.jsx";
-import TopologyPanel from "./components/TopologyPanel.jsx";
+import TopologyMap from "./components/TopologyMap.jsx";
+import TrafficCharts from "./components/TrafficCharts.jsx";
 import { useControlTowerSocket } from "./hooks/useControlTowerSocket.js";
 import DashboardLayout from "./layouts/DashboardLayout.jsx";
 
@@ -30,8 +31,9 @@ export default function App() {
         </>
       }
     >
-      <div className="lg:col-span-8"><TopologyPanel topology={state.topology} /></div>
+      <div className="lg:col-span-8"><TopologyMap topology={state.topology} ports={state.ports} /></div>
       <div className="lg:col-span-4"><EventFeed events={state.events} /></div>
+      <TrafficCharts history={state.history} />
       <div className="lg:col-span-12"><PortStatsPanel ports={state.ports} /></div>
     </DashboardLayout>
   );

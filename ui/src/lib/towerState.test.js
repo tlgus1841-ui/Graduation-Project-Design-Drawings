@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_EVENTS, applyEnvelope, initialState, portKey } from "./towerState.js";
+import { MAX_EVENTS, MAX_HISTORY, applyEnvelope, initialState, portKey } from "./towerState.js";
 
 const stats = (timestamp, rxPackets, rxBytes) => ({
   type: "sdn:stats:port",
@@ -18,6 +18,15 @@ describe("applyEnvelope", () => {
     expect(p.pps).toBe(3000);
     expect(p.bpp).toBe(64);
     expect(p.bps).toBe((384000 * 8) / 2);
+  });
+
+  it("keeps a bounded per-port history for charts", () => {
+    let s = initialState;
+    for (let i = 0; i <= MAX_HISTORY + 5; i += 1) s = applyEnvelope(s, stats(100 + 2 * i, 1000 + 6000 * i, 64000 * (i + 1)));
+    const h = s.history[portKey(1, 2)];
+    expect(h).toHaveLength(MAX_HISTORY);
+    expect(h.at(-1).pps).toBe(3000);
+    expect(h.at(-1).t).toBe(100 + 2 * (MAX_HISTORY + 5));
   });
 
   it("first sample has no rate yet", () => {

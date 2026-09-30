@@ -3,6 +3,7 @@
 // Kept free of React so it can be unit-tested with vitest.
 
 export const MAX_EVENTS = 50;
+export const MAX_HISTORY = 60; // 60 samples x 2 s = last 2 minutes per port
 
 export const PHASE_LABELS = {
   CALIBRATING: "SYSTEM CALIBRATING",
@@ -18,6 +19,7 @@ export const initialState = {
   upstream: null,
   topology: { nodes: [], links: [] },
   ports: {},
+  history: {},
   events: [],
   lastMessageAt: null,
 };
@@ -32,6 +34,7 @@ function pushEvent(events, event) {
 
 function applyPortStats(state, data) {
   const ports = { ...state.ports };
+  const history = { ...state.history };
   for (const item of data.stats ?? []) {
     const key = portKey(item.dpid, item.port_no);
     const prev = ports[key];
@@ -56,8 +59,11 @@ function applyPortStats(state, data) {
       bps,
       bpp,
     };
+    if (prev) {
+      history[key] = [...(history[key] ?? []), { t: data.timestamp, pps, bpp }].slice(-MAX_HISTORY);
+    }
   }
-  return { ...state, ports };
+  return { ...state, ports, history };
 }
 
 export function applyEnvelope(state, envelope) {

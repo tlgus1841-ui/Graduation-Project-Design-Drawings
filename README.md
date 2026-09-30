@@ -51,7 +51,7 @@
 │   ├── mock_generator.py                  # 방어 시나리오 재생 더미 텔레메트리 송출기
 │   ├── redis_bridge.py                    # Redis 4채널 구독 → 계약 검증 → WebSocket 중계 (live 모드)
 │   └── redis_replay.py                    # Ryu 없이 더미 시나리오를 실제 Redis로 발행하는 검증 도구
-├── ui/                                    # [김관우] React 18 + Vite + Tailwind 관제탑 대시보드
+├── ui/                                    # [김관우] React 18 + Vite + Tailwind 관제탑 (vis-network 토폴로지, ApexCharts 차트)
 └── reports/                               # [김관우] 학과 제출용 주간 진도 보고서
 ```
 

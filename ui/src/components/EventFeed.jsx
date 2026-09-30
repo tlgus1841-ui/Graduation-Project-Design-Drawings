@@ -14,7 +14,7 @@ function clock(ts) {
 
 export default function EventFeed({ events }) {
   return (
-    <Panel title="Security Events" subtitle={`최근 ${events.length}건`} className="h-[380px]">
+    <Panel title="Security Events" subtitle={`최근 ${events.length}건`} className="h-[420px]">
       {events.length === 0 ? (
         <p className="text-sm text-slate-400">아직 이벤트가 없습니다.</p>
       ) : (
