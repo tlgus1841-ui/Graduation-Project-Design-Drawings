@@ -1,0 +1,25 @@
+FROM python:3.8-slim
+
+WORKDIR /app
+
+# 빌드 필수 도구 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    git \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ryu 핵심 의존성 버전 고정 설치
+RUN pip install --no-cache-dir \
+    eventlet==0.30.2 \
+    greenlet==1.1.2 \
+    tinyrpc==1.0.4 \
+    routes==2.5.1 \
+    webob==1.8.7 \
+    networkx==2.5.1 \
+    redis==5.0.1 \
+    ryu==4.34
+
+EXPOSE 6653 8080

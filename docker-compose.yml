@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # 1. 메시지 브로커 (Redis 7.2)
+  redis-broker:
+    image: redis:7.2-alpine
+    container_name: sdn-redis
+    restart: always
+    network_mode: host
+    command: redis-server --port 6379 --appendonly no
+
+  # 2. SDN 제어 평면 (Ryu Controller 4.34)
+  ryu-controller:
+    build:
+      context: ./ryu
+      dockerfile: Dockerfile.ryu
+    container_name: sdn-ryu
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./ryu/app:/app
+    command: ryu-manager --ofp-tcp-listen-port 6653 --observe-links /app/controller.py
+    depends_on:
+      - redis-broker

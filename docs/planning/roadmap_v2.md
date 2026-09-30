@@ -11,7 +11,7 @@ SDN 프로젝트(Ryu + Mininet + FastAPI + ML + React)는 **버전 불일치로 
 
 | 계층 | 컴포넌트 | 확정 버전 | 런타임 환경 | 선정 및 버전 고정 이유 (핵심 기술 근거) |
 |---|---|---|---|---|
-| **OS** | **Host OS** | **Ubuntu 22.04.4 LTS** | Native Linux (Bare-metal / VM) | Mininet 2.3+과 OVS 2.17이 `apt`로 가장 안정적으로 빌드/구동되는 LTS 버전 |
+| **OS** | **Host OS** | **Ubuntu 22.04.4 LTS** | Native Linux (GCP e2-standard-4 VM) | Mininet 2.3+과 OVS 2.17이 `apt`로 가장 안정적으로 빌드/구동되는 LTS 버전 및 3인 원격 협업 환경 |
 | **Data Plane** | **Mininet** | **2.3.0+** | Host OS Native (`apt install mininet`) | SDN 가상 토폴로지 에뮬레이션 표준 |
 | | **Open vSwitch (OVS)** | **2.17.x** | Host OS Native | Ubuntu 22.04 기본 패키지로 커널 모듈 충돌 없음, OpenFlow 1.3 완벽 지원 |
 | | **OpenFlow** | **OpenFlow 1.3** | 프로토콜 표준 | 멀티 테이블, 포트/플로우 통계, Metering 기능 지원 |

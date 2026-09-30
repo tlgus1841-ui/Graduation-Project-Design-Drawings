@@ -153,7 +153,7 @@
 
 | 계층 | 컴포넌트 | 확정 버전 | 런타임 환경 | 선정 및 버전 고정 이유 |
 |:---|:---|:---:|:---|:---|
-| **OS** | Host OS | Ubuntu 22.04.4 LTS | Native Linux | Mininet 2.3+ 및 OVS 2.17 패키지 안정성 보장 |
+| **OS** | Host OS | Ubuntu 22.04.4 LTS | Native Linux (GCP e2-standard-4 VM) | Mininet 2.3+ 및 OVS 2.17 패키지 안정성 보장 및 3인 원격 협업 인프라 표준화 |
 | **Data Plane** | Mininet | 2.3.0+ | Host OS Native | SDN 가상 토폴로지 에뮬레이션 표준 |
 | | Open vSwitch | 2.17.x | Host OS Native | OpenFlow 1.3 완벽 지원 및 커널 모듈 충돌 없음 |
 | **Control Plane** | Ryu Controller | 4.34 | **Docker (`python:3.8-slim`)**<br>`--net=host` 모드 | Python 3.9+ 의존성 충돌 방지를 위한 독립 컨테이너 격리 |
