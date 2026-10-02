@@ -13,6 +13,18 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-03] docs(plan): 박시현(Tech Lead) 5주차 OpenFlow 1.3 L2/L3 스위칭 구현 계획서 작성
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Docs` / `Plan`
+* **주요 변경 파일:**
+  - `docs/writing/reports/weekly/week05_controller_switching_implementation_plan.md`: (신규 생성) Ryu 컨트롤러 OpenFlow 1.3 L2/L3 스위칭, Proxy ARP 스톰 방어, pingall 100% 무유실 검증 계획서 수립
+* **변경 사유 및 배경:**
+  - 4주차 다이아몬드 토폴로지 구축에 이어, 다중 경로 내 ARP 브로드캐스트 스톰을 차단하고 기본 경로(S1-S2-S4) 무루프 포워딩 및 pingall 무유실 달성을 위한 5주차 정밀 구현 로드맵 확립.
+* **영향 범위 및 주의사항:**
+  - 기존 소스코드 및 타 팀원 작업물에 영향 없음.
+* **다음 작업자 인수인계 메모:**
+  - 계획서에 명시된 4대 검증 시나리오(TC-1~TC-4)에 따라 Docker 기반 Ryu 컨트롤러와 Mininet 연동 테스트 착수.
+
 ### [2026-10-03] merge & refactor: 팀원 작업물(공격기, 관제탑 UI, Redis 브리지) 통합 및 신규 폴더 체계 재정리
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Merge` / `Refactor` / `Docs`
