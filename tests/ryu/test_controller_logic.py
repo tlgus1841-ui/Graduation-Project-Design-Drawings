@@ -39,6 +39,7 @@ def _setup_and_load_controller():
     mock_handler = types.ModuleType("ryu.controller.handler")
     mock_handler.CONFIG_DISPATCHER = "config"
     mock_handler.MAIN_DISPATCHER = "main"
+    mock_handler.DEAD_DISPATCHER = "dead"
     mock_handler.set_ev_cls = lambda *a, **k: lambda fn: fn
     mock_controller.handler = mock_handler
     mock_controller.ofp_event = MagicMock()
@@ -49,6 +50,10 @@ def _setup_and_load_controller():
     mock_ofproto.ofproto_v1_3 = mock_ofproto_v1_3
 
     mock_lib = types.ModuleType("ryu.lib")
+    mock_hub = types.ModuleType("ryu.lib.hub")
+    mock_hub.spawn = MagicMock(return_value=MagicMock())
+    mock_hub.sleep = MagicMock()
+    mock_lib.hub = mock_hub
     mock_packet = types.ModuleType("ryu.lib.packet")
     mock_ether_types = types.ModuleType("ryu.lib.packet.ether_types")
     mock_ether_types.ETH_TYPE_ARP = 0x0806
@@ -68,6 +73,7 @@ def _setup_and_load_controller():
     sys.modules["ryu.ofproto"] = mock_ofproto
     sys.modules["ryu.ofproto.ofproto_v1_3"] = mock_ofproto_v1_3
     sys.modules["ryu.lib"] = mock_lib
+    sys.modules["ryu.lib.hub"] = mock_hub
     sys.modules["ryu.lib.packet"] = mock_packet
     sys.modules["ryu.lib.packet.ether_types"] = mock_ether_types
     sys.modules["ryu.lib.packet.packet"] = MagicMock()

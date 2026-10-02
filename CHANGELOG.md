@@ -13,6 +13,24 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-03] feat(ryu): 박시현(Tech Lead) 6주차 2-Tier 텔레메트리 파이프라인 및 Redis 포트 통계 발행 구현 완료
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Feat` / `Test`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`: Eventlet 2초 주기 비차단 모니터 루프(`_monitor_loop`), `OFPPortStatsRequest` 발송 및 `OFPPortStatsReply` 파서 탑재, `OFPP_LOCAL` 필터링, Pydantic SSOT(`PortStatsMessage`) 직렬화 후 Redis `sdn:stats:port` 채널 실시간 발행, Redis 장애 격리 가드레일(`try-except` 및 비차단 복원) 완성
+  - `tests/ryu/test_telemetry.py`: (신규 생성) 6주차 텔레메트리 단위 테스트 4종 추가 (Datapath 등록/해제 FSM, 통계 요청 발송, 계약 모델 엄격 검증, Redis 장애 격리)
+  - `tests/ryu/test_controller_logic.py`: `DEAD_DISPATCHER` 및 `hub` 모킹 보강
+* **상세 변경 내용 및 성과:**
+  - Ryu Greenlet 코루틴 루프를 일체 블로킹하지 않고 2.0초 주기로 4개 스위치(S1~S4)의 포트 통계를 수집하여 Redis로 실시간 브로드캐스팅하는 2-Tier 수집 파이프라인 완성.
+  - 김관우 팀원의 `api/redis_bridge.py` 및 관제탑 웹(`towerState.js`) 실시간 차트 수신 규격과 100% 일치 확인.
+  - 전체 회귀 테스트 통과: **53 / 53 tests passed (100% Pass, 0.70s)**.
+  - flake8 (79자 준수) 및 mypy 0건 통과 (`Success: no issues found in 4 source files`).
+* **영향 범위 및 주의사항 (Breaking Changes):**
+  - 기존 5주차 L2/L3 스위칭 및 Proxy ARP 방어 로직에 영향 없음. 호환성 100% 유지.
+* **다음 작업자 인수인계 메모:**
+  - **유재민 (Domain Dev & QA):** Ryu가 2초마다 Redis `sdn:stats:port`로 `PortStatsMessage`를 발행하므로, 6주차 과제인 **5대 파생 피처 계산기 (`feature_extractor.py` — $\Delta$PPS, $\Delta$BPS, BPP)** 구현에 바로 착수 가능.
+  - **김관우 (PM & Tech Writer):** 6주차 텔레메트리 관통 성과를 바탕으로 주간 진도 보고서 #3 최종 마감 가능.
+
 ### [2026-10-03] docs(guides): 3인 Phase 실전 가이드북에 주차별(Weekly) 핵심 목표 & DoD 브레이크다운 명시
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Docs` / `Refactor`
