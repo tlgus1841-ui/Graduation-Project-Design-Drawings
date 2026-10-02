@@ -1,0 +1,59 @@
+# 📝 Project Changelog & Collaboration Worklog
+> **Self-Defending SDN Tower (SDN 기반 분산 트래픽 이상 탐지 및 자율 라우팅 관제 시스템)**  
+> 팀원(박시현, 유재민, 김관우) 및 AI 에이전트 간의 작업 변경 이력, 인수인계 메모, 브레이킹 체인지를 추적하는 공식 기록 문서(SSOT)입니다.
+
+---
+
+## 📌 AI 에이전트 & 팀원 작성 가이드 (Writing Rules)
+1. **기록 시점:** 코드 작성/수정, 아키텍처/폴더 변경, 인터페이스 수정 작업 완료 직후.
+2. **작성 위치:** 항상 아래 최신 항목 목록의 **맨 위(최상단)** 에 새로운 블록을 추가합니다.
+3. **필수 항목:** 날짜, 작업자(세션/에이전트명), 작업 유형, 변경 파일 목록, 상세 변경 내용, Breaking Changes 여부, 다음 작업자 인수인계 메모.
+
+---
+
+## 📋 변경 이력 (Latest Changes)
+
+### [2026-10-03] docs: 문서 및 집필 환경 폴더 구조 최적화 & 기획서 병합
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Refactor` / `Docs`
+* **주요 변경 파일:**
+  - `CHANGELOG.md`: (신규 생성) 팀원 & AI 에이전트 협업 추적 로그 파일 신설
+  - `.cursorrules`: AI 에이전트 작업 기록 강제 수칙 (§3) 추가 및 디렉토리 권한 최신화
+  - `docs/writing/proposal/project_proposal.md`: 공식 기획서 본문에 `why_self_defending_sdn.md`(선정 당위성, 후보군 비교, 심사위원 Q&A) 병합 통합
+  - `docs/writing/thesis/thesis_draft.md`: (신규 생성) PM/Writer용 졸업논문 초안 템플릿 생성
+  - `docs/writing/presentations/ppt_slide_deck_outline.md`: 발표 슬라이드 아웃라인 이동
+  - `docs/writing/reports/weekly/week04_traffic_normal_plan.md`: 4주차 완료 계획서 이동
+  - `docs/archive/v1_guides/*`: `docs/guides/archive_v1`에서 통합 아카이브 폴더로 격리
+  - `docs/archive/v1_proposal/*`: v1 제안서 및 병합 원본 파일(`why_self_defending_sdn_raw.md`) 격리
+* **변경 사유 및 배경:**
+  - 분산되어 있던 기획/제안서, 발표자료, 보고서, 논문 문서를 `docs/writing/` 아래로 일원화하여 집필 속도 및 접근성 극대화.
+  - 레거시 v1 문서들을 `docs/archive/` 단일 디렉토리로 격리하여 최신 문서와의 혼동 방지.
+  - 다수의 AI 에이전트가 코딩을 수행할 때 작업 맥락이 유실되지 않도록 표준 로깅 체계 정립.
+* **영향 범위 및 주의사항 (Breaking Changes):**
+  - **소스코드 영향 없음:** `api/`, `harness/`, `ryu/`, `topo/`, `traffic/`, `tests/` 등 모든 소스코드 및 가상환경은 무변경 유지됨.
+* **확정된 디렉토리 구조:**
+  ```text
+  Self_Defending_SDN_Tower/
+  ├── CHANGELOG.md                           # 팀원 & AI 에이전트 변경 이력/인수인계 SSOT
+  ├── .cursorrules                           # AI 에이전트 작업 기록 강제 수칙 연동
+  ├── docs/
+  │   ├── writing/                           # [집필 전용] 기획서, 주간보고서, 논문, 발표
+  │   │   ├── proposal/                      # 공식 졸업작품 기획서 (project_proposal.md)
+  │   │   ├── reports/weekly/                # 주간 계획/보고서 (week04_traffic_normal_plan.md)
+  │   │   ├── thesis/                        # 학술 논문 초안 (thesis_draft.md)
+  │   │   └── presentations/                 # 발표 PPT 아웃라인 (ppt_slide_deck_outline.md)
+  │   ├── planning/                          # 아키텍처 로드맵, 16주차 일정, 하네스 계획
+  │   ├── specs/                             # 4대 공격 및 방어 시나리오 명세서
+  │   ├── guides/                            # 3인 역할별 Phase 1~6 실전 가이드북
+  │   ├── study/                             # CS/SDN/보안 8대 기술 학습서
+  │   └── archive/                           # 구버전 v1 파일 격리 보관소
+  │       ├── v1_proposal/                   # v1 제안서 및 병합 원본 파일
+  │       └── v1_guides/                     # v1 초기 가이드
+  └── (api / harness / ryu / topo / traffic / tests)  # 소스코드 영역 (무변경)
+  ```
+* **다음 작업자/에이전트 인수인계 메모:**
+  - **김관우 (PM & Writer):** `docs/writing/proposal/project_proposal.md`를 단일 기획서로 참조 가능하며, `docs/writing/thesis/thesis_draft.md`에서 논문 작성 시작 가능.
+  - **유재민 (Domain Dev & QA):** 4주차 정상 트래픽 생성이 완료되었으므로, 5주차 공격기(`traffic_attack.py`) 작성 착수 시 `docs/guides/dev_b_domain_qa/` 참조.
+  - **박시현 (Tech Lead):** 5주차 Ryu L2/L3 스위칭 및 다이아몬드 무루프 포워딩 착수.
+
+---

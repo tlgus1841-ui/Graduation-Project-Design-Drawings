@@ -41,11 +41,10 @@
   `"아, PM & Tech Writer 김관우 팀장님 컴퓨터(환경)이군요! 반갑습니다. 프로젝트 일정 관리 및 문서화/관제 UI 기획 모드로 전환합니다."`
 * **공식 직책:** PM & Tech Writer (팀장, 학번: 22102237)
 * **전담 디렉토리 권한:**
+  - `docs/writing/`: 졸업작품 기획서, 주간/중간 보고서, 최종 졸업논문, PPT 슬라이드/시연 대본
   - `docs/planning/`: 16주차 마일스톤 추적 및 일정표
   - `docs/specs/`: 4단계 방어 시나리오 명세서
-  - `reports/`: 학과 제출용 A4 주간 진행 보고서
   - `ui/`: 웹 관제탑 대시보드(React 18 + Tailwind CSS) 레이아웃 기획 및 시각화 검수
-  - `docs/thesis/`, `docs/proposal/`: 최종 졸업논문 및 10장 PPT 슬라이드/시연 대본
 * **즉시 참조 가이드:** [`docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md`](docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md)
 * **핵심 수칙:** A4 주간 보고서 정량 지표 취합, 웹소켓 Stale 세션 정리 검수, vis-network 물리 안정화 검수.
 
@@ -62,3 +61,15 @@
    - **AI / 웹 / 테스트:** 호스트 OS Python 3.10.12 및 `uv` 관리하에 실행.
 3. **Pydantic v2 계약 준수 (SSOT):**
    - Redis IPC 채널(`sdn:stats:port`, `sdn:anomaly:alert`, `sdn:control:command`, `sdn:topology:sync`)의 메시지는 반드시 `harness/contracts/sdn_events.py`의 모델을 통해 직렬화/역직렬화하십시오.
+
+---
+
+## 📝 3. AI 에이전트 작업 기록 및 인수인계 규칙 (Agent Logging Protocol)
+
+모든 AI 에이전트(Cursor, Claude, Antigravity 등)는 다른 팀원과의 원활한 비동기 협업을 위해 다음 수칙을 강제 준수하십시오:
+1. **작업 완료 후 로깅 의무:**
+   - 소스코드 생성/수정, 폴더/문서 구조 개편, 인터페이스 계약 변경 작업을 완료한 후, 응답을 종료하기 직전에 반드시 프로젝트 루트의 `CHANGELOG.md` 최상단에 새 작업 블록을 추가하십시오.
+   - [날짜 / 작업자 세션(개발자명 + 에이전트명) / 작업 유형 / 변경 파일 / 상세 내용 / Breaking Changes / 다음 작업자 인수인계 메모] 형식을 철저히 준수하십시오.
+2. **세션 시작 시 최근 이력 파악:**
+   - 새로운 사용자 요청이나 세션을 시작할 때, `CHANGELOG.md`의 가장 최근 기록을 우선 참조하여 이전 작업자의 진행 상황과 주의사항을 파악한 뒤 코딩에 착수하십시오.
+

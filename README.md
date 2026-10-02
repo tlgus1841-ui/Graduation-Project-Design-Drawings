@@ -22,46 +22,69 @@
 ## 📂 3. 프로젝트 디렉토리 구조
 
 ```text
-.
-├── README.md                              # 프로젝트 종합 안내서 (대문)
+Self_Defending_SDN_Tower/
+├── CHANGELOG.md                           # 🌟 팀원 & AI 에이전트 변경 이력 및 협업 인수인계 SSOT
+├── .cursorrules                           # AI 에이전트 개발 규칙 및 자동 로깅 프로토콜
+│
 ├── docs/                                  # 프로젝트 기술 및 기획 문서 일원화
-│   ├── planning/                          # 로드맵, 공식 기획서, 환경 규칙, 일정 관리
-│   │   ├── ai_harness_engineering_plan.md # [공식] AI 하네스 엔지니어링 개발 계획서
-│   │   ├── project_proposal.md            # [공식] 졸업작품 개발 기획서 (제출/심사용)
+│   ├── writing/                           # ✍️ [집필 전용] 제출/발표 공식 산출물
+│   │   ├── proposal/                      # 공식 졸업작품 개발 기획서 (선정 당위성 통합)
+│   │   │   └── project_proposal.md
+│   │   ├── reports/                       # 주간 및 중간 진행 보고서
+│   │   │   └── weekly/week04_traffic_normal_plan.md
+│   │   ├── thesis/                        # 최종 학술 논문 초안 및 챕터 원고
+│   │   │   └── thesis_draft.md
+│   │   └── presentations/                 # 발표 PPT 슬라이드 덱 아웃라인 및 대본
+│   │       └── ppt_slide_deck_outline.md
+│   │
+│   ├── planning/                          # 📐 [설계/일정] 아키텍처 로드맵, 일정, 하네스 계획
 │   │   ├── roadmap_v2.md                  # 3인 협업 설계서 및 골든 버전 매트릭스
-│   │   ├── environment_rules.md           # Python uv 패키지 매니저 및 환경 규칙
-│   │   └── schedule_and_milestones.md     # 주차별 일정 및 과제 관리표
-│   ├── specs/                             # 시스템 명세서
-│   │   └── defense_scenarios.md           # 4단계 자율 방어 시나리오 명세서 (FSM·임계치·UI 매핑)
-│   ├── proposal/                          # 주제 선정 배경 및 발표 자료
-│   │   ├── why_self_defending_sdn.md      # 주제 선정 당위성 보고서
-│   │   └── ppt_slide_deck_outline.md      # 10장 발표용 AI 프롬프트/대본
-│   ├── guides/                            # 3인 실전 바이브 코딩 가이드북 (Phase 1~6)
-│   │   ├── README.md                      # 가이드 종합 인덱스 및 대문
+│   │   ├── schedule_and_milestones.md     # 16주차 일정 및 주차별 마일스톤 (DoD)
+│   │   ├── ai_harness_engineering_plan.md # AI 하네스 엔지니어링 개발 계획서
+│   │   └── environment_rules.md           # Python uv 패키지 매니저 및 환경 규칙
+│   │
+│   ├── specs/                             # 🔍 [기술 명세]
+│   │   └── defense_scenarios.md           # 4단계 자율 방어 시나리오 명세서
+│   │
+│   ├── guides/                            # 🛠️ [3인 가이드] 실전 개발 가이드북 (Phase 1~6)
 │   │   ├── 00_common/                     # 공통 uv 규칙, 프롬프트 표준, 계약 스키마
 │   │   ├── dev_a_tech_lead/               # [박시현] Tech Lead 가이드
 │   │   ├── dev_b_domain_qa/               # [유재민] Domain Dev & QA 가이드
-│   │   ├── dev_c_pm_writer/               # [김관우] PM & Tech Writer 가이드
-│   │   └── archive_v1/                    # v1.0 초기 가이드 보관함
-│   ├── study/                             # 네트워크/SDN/AI/웹 8대 기술 학습서
-│   └── archive/                           # 이전 버전 기획서 보관함
+│   │   └── dev_c_pm_writer/               # [김관우] PM & Tech Writer 가이드
+│   │
+│   ├── study/                             # 📚 [이론 스터디] 네트워크/SDN/AI/웹 8대 기술 학습서
+│   │   ├── 01_Network_and_SDN_Fundamentals.md ~ 08_Environment_and_Troubleshooting.md
+│   │   └── README.md
+│   │
+│   └── archive/                           # 🗄️ [통합 아카이브] 구버전 v1 파일 격리 보관소
+│       ├── v1_proposal/                   # v1 제안서 및 병합 원본 파일
+│       └── v1_guides/                     # v1 초기 가이드 보관함
+│
 ├── api/                                   # [김관우] FastAPI 관제탑 백엔드
 │   ├── main.py                            # REST(/api/health, /api/topology) + WebSocket(/ws)
 │   ├── websocket_hub.py                   # 연결 풀 및 Stale 세션 자동 정리
 │   └── mock_generator.py                  # 방어 시나리오 재생 더미 텔레메트리 송출기
+├── harness/                               # [박시현] Pydantic v2 계약 스키마 (sdn_events.py)
+├── ryu/                                   # [박시현] Ryu 4.34 OpenFlow 1.3 컨트롤러 (Docker)
+├── topo/                                  # [박시현] Mininet 다이아몬드 토폴로지 (diamond_topo.py)
+├── traffic/                               # [유재민] Scapy 트래픽 생성기 (traffic_normal.py)
+└── tests/                                 # 30개 단위/통합 테스트 (100% Pass)
 ```
 
 ---
 
 ## 📚 4. 주요 문서 바로가기
 
-* 🛡️ **[공식] AI 하네스 엔지니어링 개발 계획서:** [`docs/planning/ai_harness_engineering_plan.md`](docs/planning/ai_harness_engineering_plan.md)
-* 📑 **공식 졸업작품 개발 기획서:** [`docs/planning/project_proposal.md`](docs/planning/project_proposal.md)
+* 📑 **공식 졸업작품 개발 기획서 (통합본):** [`docs/writing/proposal/project_proposal.md`](docs/writing/proposal/project_proposal.md)
 * 📋 **종합 로드맵 및 기술 스택 규격:** [`docs/planning/roadmap_v2.md`](docs/planning/roadmap_v2.md)
-* ⚙️ **개발 환경 및 패키지 룰:** [`docs/planning/environment_rules.md`](docs/planning/environment_rules.md)
+* 📅 **16주차 상세 일정 및 마일스톤:** [`docs/planning/schedule_and_milestones.md`](docs/planning/schedule_and_milestones.md)
+* 🛡️ **[공식] AI 하네스 엔지니어링 개발 계획서:** [`docs/planning/ai_harness_engineering_plan.md`](docs/planning/ai_harness_engineering_plan.md)
+* 🔍 **4단계 자율 방어 시나리오 명세서:** [`docs/specs/defense_scenarios.md`](docs/specs/defense_scenarios.md)
+* 🎓 **최종 학술 논문 초안 (작성용):** [`docs/writing/thesis/thesis_draft.md`](docs/writing/thesis/thesis_draft.md)
+* 📊 **발표 슬라이드 덱 아웃라인:** [`docs/writing/presentations/ppt_slide_deck_outline.md`](docs/writing/presentations/ppt_slide_deck_outline.md)
 * 🐙 **실전 Git & GitHub 3인 협업 가이드:** [`docs/guides/00_common/git_collaboration_guide.md`](docs/guides/00_common/git_collaboration_guide.md)
 * 📖 **8대 기술 스터디 종합 인덱스:** [`docs/study/README.md`](docs/study/README.md)
-* 🎯 **주제 선정 배경 및 당위성:** [`docs/proposal/why_self_defending_sdn.md`](docs/proposal/why_self_defending_sdn.md)
+* 📝 **팀원 & AI 에이전트 협업 로그:** [`CHANGELOG.md`](CHANGELOG.md)
 
 ---
 
