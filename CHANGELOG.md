@@ -13,6 +13,18 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-03] docs(plan): 박시현(Tech Lead) 6주차 2-Tier 텔레메트리 파이프라인 및 Redis 통계 발행 구현 계획서 작성
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Docs` / `Plan`
+* **주요 변경 파일:**
+  - `docs/writing/reports/weekly/week06_telemetry_pipeline_implementation_plan.md`: (신규 생성) Ryu 2초 주기 비차단 포트 통계 수집(`OFPPortStatsRequest`), Pydantic SSOT(`PortStatsMessage`) 직렬화, Redis `sdn:stats:port` 채널 발행 및 장애 격리 가드레일 계획서 수립
+* **변경 사유 및 배경:**
+  - 5주차 스위칭 완료에 이어, AI Worker(유재민의 피처 추출기) 및 관제탑 웹(김관우의 실시간 차트)으로 실시간 포트 통계를 무중단 스트리밍하기 위한 6주차 텔레메트리 설계 확립.
+* **영향 범위 및 주의사항:**
+  - 기존 소스코드에 영향 없음.
+* **다음 작업자 인수인계 메모:**
+  - 유재민 (Domain Dev)은 본 계획서의 `PortStatsMessage` 규격을 기반으로 6주차 `feature_extractor.py` 구독기 개발 가능.
+
 ### [2026-10-03] feat(ryu): 박시현(Tech Lead) 5주차 OpenFlow 1.3 L2/L3 스위칭 및 다이아몬드 무루프 포워딩 구현 완료
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Feat` / `Test`
