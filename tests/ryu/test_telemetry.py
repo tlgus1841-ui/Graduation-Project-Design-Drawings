@@ -205,3 +205,37 @@ def test_redis_failure_fault_tolerance():
     # Should not raise exception
     controller._publish_port_stats(payload)
     assert controller.redis_client is None  # Resets for next cycle retry
+
+
+def test_state_change_updates_datapath_on_reconnect():
+    """Verify datapath instance is refreshed upon switch reconnection."""
+    controller = SelfDefendingSDNController()
+
+    old_dp = MagicMock(id=1, name="old_dp")
+    ev1 = MagicMock(datapath=old_dp, state="main")
+    controller.state_change_handler(ev1)
+    assert controller.datapaths[1] is old_dp
+
+    # Reconnection event with fresh datapath socket
+    new_dp = MagicMock(id=1, name="new_dp")
+    ev2 = MagicMock(datapath=new_dp, state="main")
+    controller.state_change_handler(ev2)
+    assert controller.datapaths[1] is new_dp
+
+
+def test_port_stats_reply_with_empty_body():
+    """Verify empty stats body still publishes valid contract message."""
+    controller = SelfDefendingSDNController()
+    controller.redis_client = MagicMock()
+
+    datapath = MagicMock(id=3)
+    ev = MagicMock()
+    ev.msg.datapath = datapath
+    ev.msg.body = []
+
+    controller.port_stats_reply_handler(ev)
+    controller.redis_client.publish.assert_called_once()
+    _, published_json = controller.redis_client.publish.call_args[0]
+    parsed = PortStatsMessage.model_validate_json(published_json)
+    assert parsed.dpid == 3
+    assert parsed.stats == []

@@ -89,9 +89,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         """스위치 연결 및 단절 시 Datapath 맵 동적 관리"""
         datapath = ev.datapath
         if ev.state == MAIN_DISPATCHER:
-            if datapath.id not in self.datapaths:
-                self.datapaths[datapath.id] = datapath
-                self.logger.info(f"[Topo] Registered switch: S{datapath.id}")
+            self.datapaths[datapath.id] = datapath
+            self.logger.info(f"[Topo] Registered switch: S{datapath.id}")
         elif ev.state == DEAD_DISPATCHER:
             if datapath.id in self.datapaths:
                 del self.datapaths[datapath.id]
@@ -104,7 +103,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         while True:
             hub.sleep(2.0)
             for dp in list(self.datapaths.values()):
-                self._request_stats(dp)
+                try:
+                    self._request_stats(dp)
+                except Exception as e:
+                    self.logger.warning(
+                        f"[Telemetry] Stats request failed for S{dp.id}: {e}"
+                    )
 
     def _request_stats(self, datapath):
         """OFPPortStatsRequest 메시지 발송"""
