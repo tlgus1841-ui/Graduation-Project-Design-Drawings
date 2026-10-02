@@ -13,6 +13,31 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-03] merge & refactor: 팀원 작업물(공격기, 관제탑 UI, Redis 브리지) 통합 및 신규 폴더 체계 재정리
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Merge` / `Refactor` / `Docs`
+* **주요 변경 및 병합 내역:**
+  - **유재민 (Domain Dev & QA) 작업 병합 (`origin/main`):**
+    - `traffic/checksum_utils.py`: Scapy IP/TCP 체크섬 강제 재계산 공용 유틸 추가 및 `traffic_normal.py` 리팩토링
+    - `traffic/traffic_attack.py`: 5주차 H_attacker $\rightarrow$ H_server 무작위 IP 스푸핑 SYN Flood(1,000~5,000 PPS) 공격기 추가
+    - `tests/traffic/test_traffic_attack.py`: 공격기 단위 테스트 6종 추가
+  - **김관우 (PM & 관제탑 웹) 작업 병합 (`origin/claude/quirky-cerf-h51gg3`):**
+    - `ui/`: React 18 + Vite 5 + Tailwind CSS 3.4 기반 관제탑 웹 프론트엔드 (토폴로지 vis-network, 실시간 차트 ApexCharts)
+    - `api/redis_bridge.py`: Redis Pub/Sub 4개 채널을 WebSocket으로 실시간 중계하는 Live 모드 브리지
+    - `api/redis_replay.py`: Ryu 미구동 상태에서 Redis 더미 시나리오를 발행하는 시뮬레이터
+    - `tests/api/test_redis_bridge.py`: fakeredis 기반 브리지 단위 테스트
+  - **폴더 구조 표준화 재정리 (신규 docs 규칙 적용):**
+    - `reports/week05_progress_report.md` $\rightarrow$ `docs/writing/reports/weekly/week05_progress_report.md`
+    - `reports/week06_progress_report.md` $\rightarrow$ `docs/writing/reports/weekly/week06_progress_report.md`
+    - `reports/week07_progress_report.md` $\rightarrow$ `docs/writing/reports/weekly/week07_progress_report.md`
+    - `docs/guides/dev_b_domain_qa/week05_traffic_attack_implementation_plan.md` $\rightarrow$ `docs/writing/reports/weekly/week05_traffic_attack_implementation_plan.md`
+    - 루트의 불필요한 `reports/` 임시 디렉토리 정리 삭제
+    - `README.md`: 프로젝트 트리 및 실행 가이드 최신화 완료 (충돌 해결)
+* **영향 범위 및 주의사항 (Breaking Changes):**
+  - 소스코드 로직 파괴 없음. 주간 보고서 파일들이 일원화된 `docs/writing/reports/weekly/`로 이동됨.
+* **다음 작업자 인수인계 메모:**
+  - 팀원들의 코드가 로컬 작업 트리에 정상 통합되었으므로, 정리된 표준 폴더 구조 기준으로 5주차 Ryu 스위칭 및 E2E 연동 작업 진행 가능.
+
 ### [2026-10-03] docs: 문서 및 집필 환경 폴더 구조 최적화 & 기획서 병합
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Refactor` / `Docs`

@@ -23,6 +23,7 @@ dev = [
     "flake8>=7.4.1",
     "mypy>=2.3.1",
     "httpx>=0.26.0,<0.28",
+    "fakeredis>=2.20",
 ]
 
 [tool.mypy]

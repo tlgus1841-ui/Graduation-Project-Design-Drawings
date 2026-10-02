@@ -63,12 +63,15 @@ Self_Defending_SDN_Tower/
 ├── api/                                   # [김관우] FastAPI 관제탑 백엔드
 │   ├── main.py                            # REST(/api/health, /api/topology) + WebSocket(/ws)
 │   ├── websocket_hub.py                   # 연결 풀 및 Stale 세션 자동 정리
-│   └── mock_generator.py                  # 방어 시나리오 재생 더미 텔레메트리 송출기
+│   ├── mock_generator.py                  # 방어 시나리오 재생 더미 텔레메트리 송출기
+│   ├── redis_bridge.py                    # Redis 4채널 구독 → 계약 검증 → WebSocket 중계 (live 모드)
+│   └── redis_replay.py                    # Ryu 없이 더미 시나리오를 실제 Redis로 발행하는 검증 도구
+├── ui/                                    # [김관우] React 18 + Vite + Tailwind 관제탑 (vis-network 토폴로지, ApexCharts 차트)
 ├── harness/                               # [박시현] Pydantic v2 계약 스키마 (sdn_events.py)
 ├── ryu/                                   # [박시현] Ryu 4.34 OpenFlow 1.3 컨트롤러 (Docker)
 ├── topo/                                  # [박시현] Mininet 다이아몬드 토폴로지 (diamond_topo.py)
-├── traffic/                               # [유재민] Scapy 트래픽 생성기 (traffic_normal.py)
-└── tests/                                 # 30개 단위/통합 테스트 (100% Pass)
+├── traffic/                               # [유재민] Scapy 트래픽 생성기 및 공격기 (traffic_normal.py, traffic_attack.py)
+└── tests/                                 # 단위/통합 테스트 스위트
 ```
 
 ---
@@ -110,4 +113,12 @@ uv run python -c "from topo.diamond_topo import DiamondTopo; topo = DiamondTopo(
 uv run uvicorn api.main:app --reload --port 8000
 #    → http://localhost:8000/api/health , ws://localhost:8000/ws
 #    → 더미 송출 없이 허브만 띄우려면: SDN_MOCK=0 uv run uvicorn api.main:app --port 8000
+
+# 5-1. 실제 Redis 연동(live) 모드: Redis 4채널을 구독해 브라우저로 중계
+SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000
+uv run python -m api.redis_replay --speed 4   # Ryu 대신 더미 시나리오를 Redis로 발행 (검증용)
+
+# 6. 관제탑 대시보드 실행 (Node 20+, 백엔드를 먼저 켜 두세요)
+cd ui && npm install && npm run dev      # → http://localhost:5173
+#    → WebSocket 주소 변경: ui/.env.example을 ui/.env로 복사 후 VITE_WS_URL 수정
 ```

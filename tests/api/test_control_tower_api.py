@@ -190,7 +190,7 @@ def test_topology_snapshot_reflects_mitigation():
 # =====================================================================
 @pytest.fixture
 def client():
-    with TestClient(create_app(enable_mock=False)) as test_client:
+    with TestClient(create_app(enable_mock=False, start_source=False)) as test_client:
         yield test_client
 
 
