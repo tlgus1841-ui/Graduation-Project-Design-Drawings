@@ -13,6 +13,19 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-03] docs(guides): 3인 Phase 실전 가이드북에 주차별(Weekly) 핵심 목표 & DoD 브레이크다운 명시
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Docs` / `Refactor`
+* **주요 변경 파일:**
+  - `docs/guides/README.md`: 16주차 전 주차 3인 주차별 핵심 목표 퀵 매트릭스(Weekly Quick Roadmap) 신설
+  - `docs/guides/dev_a_tech_lead/phase2_core_mock_harness.md`: 박시현 Phase 2(4~7주차) 한 줄 핵심 미션, 대상 파일, 정량적 DoD, 팀원 연계 포인트 표 신설
+  - `docs/guides/dev_b_domain_qa/phase2_traffic_features_model.md`: 유재민 Phase 2(4~7주차) 한 줄 핵심 미션, 대상 파일, 정량적 DoD, 팀원 연계 포인트 표 신설
+  - `docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md`: 김관우 Phase 2(4~7주차) 한 줄 핵심 미션, 대상 파일, 정량적 DoD, 팀원 연계 포인트 표 신설
+* **변경 사유 및 배경:**
+  - 4주 단위 묶음(Phase) 서술로 인해 주차별(Weekly) 실행 타임라인과 팀원별 필수 목표가 흐려지던 문제를 해결하고, 팀원 누구나 접속 시 "이번 주차에 정확히 무엇을 완료해야 하는지" 1초 만에 파악할 수 있도록 표준화.
+* **영향 범위 및 주의사항:**
+  - 소스코드 영향 없음. 문서 가독성 및 팀원 간 주차별 협업 명확성 대폭 향상.
+
 ### [2026-10-03] docs(plan): 박시현(Tech Lead) 6주차 2-Tier 텔레메트리 파이프라인 및 Redis 통계 발행 구현 계획서 작성
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Docs` / `Plan`

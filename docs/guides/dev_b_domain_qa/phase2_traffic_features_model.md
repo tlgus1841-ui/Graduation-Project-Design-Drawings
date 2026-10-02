@@ -6,25 +6,27 @@
 
 ---
 
-## 1. Phase 2 개발 목표 및 완료 기준 (Definition of Done)
+## 1. Phase 2 개발 목표 및 주차별 상세 완료 기준 (Weekly DoD)
 
-- [ ] **4주차 DoD:** Scapy 정상 트래픽 생성기(`traffic_normal.py`) 구현, Poisson 간격 HTTP GET/대용량 전송 모사, Wireshark 기준 TCP Checksum 무결성 100% 검증
-- [ ] **5주차 DoD:** Scapy 랜덤 IP 변조 SYN Flooding 공격기(`traffic_attack.py`) 구현, 초당 1,000~5,000 PPS 주입 및 `del pkt[IP].chksum` 커널 재계산 적용
-- [ ] **6주차 DoD:** Redis `sdn:stats:port`를 비동기 구독하여 5대 파생 피처($\Delta \text{PPS}$, $\Delta \text{BPS}$, $\text{BPP}$ 등)를 실시간 계산하는 `feature_extractor.py` 및 CSV 로거 완성
-- [ ] **7주차 DoD:** Scikit-learn Isolation Forest 이상 탐지 모델(`model.py`) 학습 파이프라인 구축 및 단위 평가 하네스(`model_evaluator.py`) 통과
+> **💡 Phase 2 도메인/AI 미션:** 4주차부터 7주차까지 **정상 트래픽 기준선 ➔ L4 DDoS 공격기 ➔ 5대 실시간 피처 추출 ➔ Isolation Forest 모델 구축**으로 이어지는 AI 위협 탐지 파이프라인을 완성합니다.
+
+| 주차 | 주차별 한 줄 핵심 미션 | 대상 파일 | 정량적 완료 기준 (DoD) | 팀원(A/C) 연계 포인트 |
+|:---:|:---|:---|:---|:---|
+| **4주차** | **Scapy 정상 트래픽 생성기 & 체크섬 검증** | `traffic/traffic_normal.py` | • Poisson 분포 기반 현실적 웹/다운로드/Ping 모사<br>• Wireshark 기준 TCP Checksum 무결성 100% 검증 | 박시현(다이아몬드 토폴로지 H_legit)에서 구동 검증 |
+| **5주차** | **무작위 IP 스푸핑 SYN Flood 고속 공격기** | `traffic/traffic_attack.py`<br>`traffic/checksum_utils.py` | • 사설 대역 제외 무작위 공인 IP 스푸핑<br>• 1,000~5,000 PPS 가변 주입 및 54~74B 초소형 패킷<br>• 체크섬 공용 유틸(`finalize_checksum`) 추출 | 박시현(5주차 컨트롤러) 제어 평면 안정성 및 유입 검증 |
+| **6주차** | **Redis 통계 구독 & 5대 실시간 피처 계산기** | `traffic/feature_extractor.py`<br>`traffic/logger.py` | • Redis `sdn:stats:port` 비동기 구독<br>• 5대 파생 피처($\Delta \text{PPS}$, $\Delta \text{BPS}$, $\text{BPP}$ 등) 계산 지연 <5ms<br>• 정상/공격 레이블링 CSV 로거 파이프라인 구축 | 박시현(Ryu 2초 통계 발행) 수신 ➔ 김관우(웹 차트 연동) |
+| **7주차** | **Isolation Forest 모델 훈련 & 평가 하네스** | `model/model.py`<br>`tests/harness/model_evaluator.py` | • Scikit-learn Isolation Forest 단일 샘플 이상치 스코어링<br>• 단일 추론 지연 <10ms 달성<br>• F1-Score 90% 이상 1차 기준선 검증 | 박시현(AI 이상치 스코어 기반 9주차 차단 트리거 기초) |
 
 ---
 
-## 2. 주차별 작업 위치 및 파일 매트릭스
+## 2. 주차별 작업 위치 및 산출물 매트릭스
 
-| 주차 | 대상 파일 경로 | 역할 및 설명 |
-|:---:|:---|:---|
-| **4주차** | `traffic/traffic_normal.py` | H_legit(10.0.0.1)에서 H_server(10.0.0.4)로 현실적 웹 트래픽/핑을 전송하는 Scapy 생성기 |
-| **5주차** | `traffic/traffic_attack.py` | H_attacker(10.0.0.2)에서 임의 위조 IP로 SYN 패킷을 폭주시키는 고속 공격기 |
-| **6주차** | `pipeline/feature_extractor.py` | Ryu 포트 누적 통계에서 델타값 및 패킷당 평균 바이트(BPP)를 계산하는 실시간 엔진 |
-| **6주차** | `pipeline/logger.py` | 피처를 레이블(Normal=0, Attack=1)과 함께 `dataset/traffic_data.csv`로 저장하는 모듈 |
-| **7주차** | `model/model.py` | Isolation Forest 학습 및 직렬화(`model.joblib`), 단일 샘플 이상치 스코어링 클래스 |
-| **7주차** | `tests/harness/model_evaluator.py` | 모델의 추론 시간(<10ms)과 F1-Score를 측정하는 테스트 하네스 러너 |
+| 주차 | 생성/수정 대상 파일 | 산출물 성격 | 연계 계획서/보고서 |
+|:---:|:---|:---|:---|
+| **4주차** | `traffic/traffic_normal.py` | 정상 트래픽 생성기 | `docs/writing/reports/weekly/week04_traffic_normal_plan.md` |
+| **5주차** | `traffic/traffic_attack.py`<br>`traffic/checksum_utils.py` | SYN Flood 공격기 / 유틸 | `docs/writing/reports/weekly/week05_traffic_attack_implementation_plan.md` |
+| **6주차** | `traffic/feature_extractor.py`<br>`traffic/logger.py` | 실시간 피처 파이프라인 | 6주차 피처 추출 구현 계획서 및 진도 보고서 #3 |
+| **7주차** | `model/model.py`<br>`tests/harness/model_evaluator.py` | 머신러닝 모델 / 평가 하네스 | 7주차 AI 모델 구현 계획서 및 진도 보고서 #4 |
 
 ---
 

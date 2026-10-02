@@ -6,24 +6,27 @@
 
 ---
 
-## 1. Phase 2 개발 목표 및 완료 기준 (Definition of Done)
+## 1. Phase 2 개발 목표 및 주차별 상세 완료 기준 (Weekly DoD)
 
-- [ ] **4주차 DoD:** Mininet 4-스위치 다이아몬드 토폴로지(S1, S2, S3, S4) 에뮬레이션 성공 및 `test_mock_ipc.py` 하네스 테스트 100% 통과
-- [ ] **5주차 DoD:** Ryu OpenFlow 1.3 스위칭 애플리케이션 탑재, 다이아몬드 구조 내 ARP Broadcast Storm 차단, `pingall` 100% 무유실 달성
-- [ ] **6주차 DoD:** Ryu 백그라운드 2초 주기 `OFPPortStatsRequest` 폴링 루프 가동, 파싱된 통계 데이터를 Redis `sdn:stats:port`에 안전하게 Publish (Eventlet 블로킹 0건)
-- [ ] **7주차 DoD:** 트래픽 급증 시 세부 플로우 질의 트리거 연동 및 토폴로지 동적 상태 관리 스켈레톤 완성
+> **💡 Phase 2 코어 미션:** 4주차부터 7주차까지 **인프라 ➔ 스위칭 ➔ 텔레메트리 ➔ 세부 플로우 관리**로 이어지는 SDN 제어 평면의 수집/포워딩 파이프라인을 단계별로 완성합니다.
+
+| 주차 | 주차별 한 줄 핵심 미션 | 대상 파일 | 정량적 완료 기준 (DoD) | 팀원(B/C) 연계 포인트 |
+|:---:|:---|:---|:---|:---|
+| **4주차** | **4-스위치 가상 토폴로지 & Mock 하네스 구축** | `topo/diamond_topo.py`<br>`tests/harness/test_mock_ipc.py` | • S1~S4 포트 핀닝 정적 링크 구축 완료<br>• Mock IPC 계약 테스트 100% Pass | 유재민(정상 트래픽), 김관우(방어 명세서)와 인터페이스 동결 |
+| **5주차** | **OpenFlow 1.3 스위칭 & Proxy ARP 스톰 차단** | `ryu/app/controller.py`<br>`tests/ryu/test_controller_logic.py` | • 다이아몬드 구조 내 브로드캐스트 스톰 0건<br>• Mininet `pingall` 100% 무유실(Loss 0%)<br>• 단위 테스트 7종 Pass | 유재민(5주차 SYN Flood 공격기)을 주입받을 수 있는 환경 완성 |
+| **6주차** | **2-Tier 텔레메트리 수집 & Redis 통계 발행** | `ryu/app/controller.py`<br>`tests/ryu/test_telemetry.py` | • Eventlet 2초 주기 `OFPPortStatsRequest` 비차단 폴링<br>• Pydantic SSOT `sdn:stats:port` JSON 발행<br>• Redis 다운 시 Ryu 무중단 스위칭 보장 | 유재민(`feature_extractor.py`), 김관우(`redis_bridge.py`)로 실시간 전달 |
+| **7주차** | **세부 플로우 질의 트리거 & 토폴로지 동적 관리** | `ryu/app/controller.py`<br>`tests/harness/test_headless_topology.py` | • 포트 트래픽 급증 시 세부 플로우(`OFPFlowStatsRequest`) 질의<br>• 스위치 포트별 MAC/IP 매핑 테이블 갱신 | 유재민(Isolation Forest 탐지 모델)의 2차 세부 플로우 분석 기반 제공 |
 
 ---
 
-## 2. 주차별 작업 위치 및 파일 매트릭스
+## 2. 주차별 작업 위치 및 산출물 매트릭스
 
-| 주차 | 생성/수정 대상 파일 | 역할 및 설명 |
-|:---:|:---|:---|
-| **4주차** | `topo/diamond_topo.py` | S1(Ingress), S2(기본), S3(우회), S4(Egress) 및 호스트군 포트 번호 명시적 고정 토폴로지 |
-| **4주차** | `tests/harness/test_mock_ipc.py` | Mininet 없이 0.1초 만에 Redis 채널 직렬화/역직렬화를 검증하는 Mock 테스트 하네스 |
-| **5주차** | `ryu/app/controller.py` | OpenFlow 1.3 기반 L2/L3 스위칭, `handle_arp` 루프 차단, 최단 경로 flow_mod 주입 |
-| **6주차** | `ryu/app/telemetry.py` | Eventlet 비차단 소켓 모드로 2초마다 포트 통계를 수집하여 Redis에 브로드캐스팅하는 모듈 |
-| **7주차** | `tests/harness/test_headless_topology.py` | Headless 환경에서 5-스위치 토폴로지 플로우 테이블 주입 로직을 가상 검증하는 하네스 |
+| 주차 | 생성/수정 대상 파일 | 산출물 성격 | 연계 계획서/보고서 |
+|:---:|:---|:---|:---|
+| **4주차** | `topo/diamond_topo.py`<br>`tests/harness/test_mock_ipc.py` | 가상 인프라 / Mock 하네스 | `docs/writing/reports/weekly/week04_traffic_normal_plan.md` |
+| **5주차** | `ryu/app/controller.py`<br>`tests/ryu/test_controller_logic.py` | 코어 스위칭 / 단위 테스트 | `docs/writing/reports/weekly/week05_controller_switching_implementation_plan.md` |
+| **6주차** | `ryu/app/controller.py` (텔레메트리 확장)<br>`tests/ryu/test_telemetry.py` | 텔레메트리 파이프라인 | `docs/writing/reports/weekly/week06_telemetry_pipeline_implementation_plan.md` |
+| **7주차** | `ryu/app/controller.py` (세부 플로우 질의)<br>`tests/harness/test_headless_topology.py` | 플로우 질의 엔진 | 7주차 주간 계획서 및 진도 보고서 #4 |
 
 ---
 

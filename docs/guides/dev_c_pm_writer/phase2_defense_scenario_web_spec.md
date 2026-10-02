@@ -6,26 +6,27 @@
 
 ---
 
-## 1. Phase 2 관리 목표 및 완료 기준 (Definition of Done)
+## 1. Phase 2 관리 목표 및 주차별 상세 완료 기준 (Weekly DoD)
 
-- [ ] **4주차 DoD:** 4단계 방어 시나리오(정상 ➔ 공격 ➔ 격리/우회 ➔ 복원) 명세서 확정 및 FastAPI 기본 WebSocket Hub 연동 규격 확인
-- [ ] **5주차 DoD:** A4 주간 보고서 #2 제출 및 Tailwind CSS 3.4 기반 관제탑 다크 테마 레이아웃 검수 (WebSocket 연결 상태 배지 확인)
-- [ ] **6주차 DoD:** A4 주간 보고서 #3 제출 및 Redis 수신 통계의 브라우저 콘솔 실시간 출력 검수
-- [ ] **7주차 DoD:** A4 주간 보고서 #4 제출 및 vis-network 토폴로지 노드(S1~S4, 호스트) 시각화 및 ApexCharts 차트 연동 확인
+> **💡 Phase 2 PM/웹 미션:** 4주차부터 7주차까지 **방어 명세서 확정 ➔ 관제탑 UI 레이아웃 ➔ Redis-WS 라이브 중계 ➔ 토폴로지/시계열 차트 렌더링**으로 이어지는 관제 시스템을 구축하고 주간 진도 보고서(#2~#4)를 총괄 제출합니다.
+
+| 주차 | 주차별 한 줄 핵심 미션 | 대상 파일 | 정량적 완료 기준 (DoD) | 팀원(A/B) 연계 포인트 |
+|:---:|:---|:---|:---|:---|
+| **4주차** | **4단계 자율 방어 시나리오 명세서 확정** | `docs/specs/defense_scenarios.md`<br>`api/websocket_hub.py` | • 4단계 상태 전이표 및 임계치(DoD) 동결<br>• FastAPI WebSocket Hub F5 10회 안정성 검증 | 박시현(토폴로지/하네스), 유재민(정상 트래픽) 연동 규격 제공 |
+| **5주차** | **관제탑 웹 다크 테마 레이아웃 & 보고서 #2** | `ui/src/layouts/DashboardLayout.jsx`<br>`docs/writing/reports/weekly/week05_progress_report.md` | • Tailwind CSS 3.4 다크 테마 대시보드 스켈레톤<br>• WebSocket 연결 상태 배지 동작<br>• A4 주간 진도 보고서 #2 제출 | 박시현(스위칭 결과) + 유재민(공격기 데이터) 취합 보고 |
+| **6주차** | **Redis Pub/Sub ➔ WebSocket 라이브 브리지** | `api/redis_bridge.py`<br>`docs/writing/reports/weekly/week06_progress_report.md` | • Redis 4채널 구독 ➔ 브라우저 실시간 중계<br>• fakeredis 기반 브리지 단위 테스트 통과<br>• A4 주간 진도 보고서 #3 제출 | 박시현(Ryu 포트 통계) 수신 ➔ ApexCharts 실시간 렌더링 |
+| **7주차** | **토폴로지 지도 시각화 & 실시간 트래픽 차트** | `ui/src/components/TopologyMap.jsx`<br>`ui/src/components/TrafficCharts.jsx`<br>`docs/writing/reports/weekly/week07_progress_report.md` | • `vis-network` 다이아몬드(S1~S4) 동적 시각화<br>• `ApexCharts` 실시간 PPS·BPP 시계열 차트 스트리밍<br>• A4 주간 진도 보고서 #4 (중간점검 대비) 제출 | 유재민(AI 이상치 스코어) 연동 시 적색 경보 렌더링 준비 |
 
 ---
 
 ## 2. 주차별 작업 위치 및 산출물 매트릭스
 
-| 주차 | 생성/검수 대상 파일 | 역할 및 세부 작업 내용 |
-|:---:|:---|:---|
-| **4주차** | `docs/specs/defense_scenarios.md` | 4단계 자율 방어/우회/복구 시나리오의 상태 전이 조건 및 임계치 명세서 |
-| **4주차** | `api/main.py`, `api/websocket_hub.py` | FastAPI 백엔드 WebSocket 연결 풀 및 Stale Session 안전성 검수 |
-| **5주차** | `reports/week05_progress_report.md` | 학과 제출용 A4 제5주차 진도 보고서 (박시현, 유재민 수행 데이터 취합) |
-| **5주차** | `ui/src/layouts/DashboardLayout.jsx` | SOC 다크 테마 대시보드 그리드 구조 및 배지 UI 감수 |
-| **6주차** | `reports/week06_progress_report.md` | 학과 제출용 A4 제6주차 진도 보고서 (5대 피처 연동 및 텔레메트리 관통 보고) |
-| **7주차** | `reports/week07_progress_report.md` | 학과 제출용 A4 제7주차 진도 보고서 및 중간고사 대비 현황 점검 |
-| **7주차** | `ui/src/components/TopologyMap.jsx` | vis-network 기반 다이아몬드 토폴로지 렌더링 정상 동작 검수 |
+| 주차 | 생성/검수 대상 파일 | 산출물 성격 | 연계 계획서/보고서 |
+|:---:|:---|:---|:---|
+| **4주차** | `docs/specs/defense_scenarios.md`<br>`api/websocket_hub.py` | 방어 시나리오 명세 / 백엔드 허브 | `docs/writing/reports/weekly/week04_traffic_normal_plan.md` |
+| **5주차** | `ui/src/layouts/DashboardLayout.jsx`<br>`docs/writing/reports/weekly/week05_progress_report.md` | 관제탑 UI 스켈레톤 / 주간 보고서 | `docs/writing/reports/weekly/week05_progress_report.md` |
+| **6주차** | `api/redis_bridge.py`<br>`docs/writing/reports/weekly/week06_progress_report.md` | 실시간 중계 브리지 / 주간 보고서 | `docs/writing/reports/weekly/week06_progress_report.md` |
+| **7주차** | `ui/src/components/TopologyMap.jsx`<br>`ui/src/components/TrafficCharts.jsx`<br>`docs/writing/reports/weekly/week07_progress_report.md` | 토폴로지 지도 & 차트 / 주간 보고서 | `docs/writing/reports/weekly/week07_progress_report.md` |
 
 ---
 
