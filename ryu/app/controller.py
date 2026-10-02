@@ -53,6 +53,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             instructions=inst,
             idle_timeout=idle_timeout,
             hard_timeout=hard_timeout,
+            buffer_id=ofproto.OFP_NO_BUFFER,
         )
         datapath.send_msg(mod)
 
