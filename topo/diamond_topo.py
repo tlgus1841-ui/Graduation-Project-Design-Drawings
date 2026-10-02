@@ -51,6 +51,12 @@ except ImportError:
             self._links.append((node1, node2, opts))
             return (node1, node2)
 
+        def switches(self):
+            return list(self._switches.keys())
+
+        def hosts(self):
+            return list(self._hosts.keys())
+
 
 class DiamondTopo(Topo):
     """

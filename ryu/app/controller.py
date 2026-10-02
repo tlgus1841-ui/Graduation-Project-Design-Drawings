@@ -86,7 +86,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             if target_ip in self.arp_table:
                 reply_mac = self.arp_table[target_ip]["mac"]
                 self.send_arp_reply(datapath, reply_mac, target_ip, eth.src, arp_pkt.src_ip, in_port)
-                self.logger.info(f"[Proxy ARP] S{datapath.id}:P{in_port} Answered for {target_ip}")
+                self.logger.info(f"[Proxy ARP] S{datapath.id}:P{in_port} Answered for {target_ip} (MAC: {reply_mac})")
+            else:
+                self.logger.debug(f"[Proxy ARP] S{datapath.id}: Unknown target IP {target_ip}, suppressed to prevent storm")
 
     def send_arp_reply(self, datapath, src_mac, src_ip, dst_mac, dst_ip, out_port):
         pkt = packet.Packet()
@@ -116,12 +118,19 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         ofproto = datapath.ofproto
 
         if dpid not in self.routing_table or dst_ip not in self.routing_table[dpid]:
+            self.logger.debug(f"[IPv4 Drop] S{dpid}: unknown destination {dst_ip} from port {in_port}")
             return
 
         out_port = self.routing_table[dpid][dst_ip]
+
+        # [방어 4] 유입 포트 동일 루프백(Hairpinning) 방어
+        if out_port == in_port:
+            self.logger.warning(f"[Guard] S{dpid}: out_port equals in_port ({in_port}), dropping packet to prevent loop")
+            return
+
         actions = [parser.OFPActionOutput(out_port)]
 
-        # [필수 조건] eth_type=0x0800 반드시 선언
+        # [필수 조건] eth_type=0x0800 반드시 선언 (OpenFlow 1.3 표준 준수)
         match = parser.OFPMatch(eth_type=0x0800, ipv4_dst=dst_ip)
         self.add_flow(datapath, priority=10, match=match, actions=actions, idle_timeout=60)
         self.logger.info(f"[Flow Mod] S{dpid}: dst {dst_ip} -> OutPort {out_port}")

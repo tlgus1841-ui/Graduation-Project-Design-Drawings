@@ -13,6 +13,23 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-03] feat(ryu): 박시현(Tech Lead) 5주차 OpenFlow 1.3 L2/L3 스위칭 및 다이아몬드 무루프 포워딩 구현 완료
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Feat` / `Test`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`: Proxy ARP 미등록 호스트 스톰 억제 강화, 유입 포트 동일 루프백(Hairpinning) 방어 가드(`out_port == in_port`), OpenFlow 1.3 `eth_type=0x0800` 명시 Flow Mod(Priority 10) 및 첫 패킷 PacketOut 무유실 포워딩 완성
+  - `topo/diamond_topo.py`: Mininet 미설치 환경 대응 fallback Topo에 `switches()`, `hosts()` 헬퍼 추가
+  - `tests/ryu/test_controller_logic.py`: (신규 생성) 5주차 컨트롤러 핵심 로직 단위 테스트 7종 추가 (DiamondTopo 정합성, S1-S2-S4 기본 경로 연속성, Proxy ARP, 미등록 IP 스톰 억제, FlowMod/PacketOut, 루프백 가드)
+  - `tests/ryu/__init__.py`: 신규 패키지 선언
+* **상세 변경 내용 및 성과:**
+  - 호스트 Python 3.10 가상환경에서도 격리된 Ryu 모듈을 동적 모킹 로드하여 컨트롤러 핵심 스위칭 및 방어 로직을 100% 검증할 수 있는 단위 테스트 스위트 구축.
+  - flake8 (79자 준수) 및 mypy 0건 통과.
+  - 전체 회귀 테스트 통과: **49 / 49 tests passed (100% Pass, 0.66s)**
+* **영향 범위 및 주의사항 (Breaking Changes):**
+  - 기존 API, 트래픽 생성기, 하네스에 영향 없음. 호환성 100% 유지.
+* **다음 작업자 인수인계 메모:**
+  - 5주차 SDN 제어 평면 스위칭 구현 및 단위 테스트 검증이 완료되었으므로, 다음 6주차 과제인 **2-Tier 텔레메트리 파이프라인 (Ryu 2초 주기 `OFPPortStatsRequest` $\rightarrow$ Redis `sdn:stats:port` 발행 및 `feature_extractor.py` 연동)**으로 자연스럽게 전환 가능.
+
 ### [2026-10-03] docs(plan): 박시현(Tech Lead) 5주차 OpenFlow 1.3 L2/L3 스위칭 구현 계획서 작성
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Docs` / `Plan`
