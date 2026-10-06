@@ -16,7 +16,10 @@ from scapy.layers.inet import ICMP, IP, TCP
 from scapy.packet import Packet
 from scapy.sendrecv import send
 
-from traffic.checksum_utils import finalize_checksum
+try:
+    from traffic.checksum_utils import finalize_checksum
+except ImportError:  # `python traffic/traffic_normal.py`로 직접 실행될 때 (패키지 컨텍스트 없음)
+    from checksum_utils import finalize_checksum  # type: ignore[no-redef]
 
 # 패턴 비율 (A: HTTP GET, B: 대용량 전송, C: ICMP Ping)
 PATTERN_WEIGHTS = {"A": 0.70, "B": 0.20, "C": 0.10}
