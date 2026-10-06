@@ -16,7 +16,10 @@ from scapy.layers.inet import IP, TCP
 from scapy.packet import Packet
 from scapy.sendrecv import send
 
-from traffic.checksum_utils import finalize_checksum
+try:
+    from traffic.checksum_utils import finalize_checksum
+except ImportError:  # `python traffic/traffic_attack.py`로 직접 실행될 때 (패키지 컨텍스트 없음)
+    from checksum_utils import finalize_checksum  # type: ignore[no-redef]
 
 # Ethernet 헤더(14B)는 send() 시 OS/드라이버가 부착하며 Scapy 객체 길이엔 포함되지 않는다.
 WIRE_OVERHEAD = 14
