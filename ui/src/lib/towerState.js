@@ -21,8 +21,25 @@ export const initialState = {
   ports: {},
   history: {},
   events: [],
+  incident: null,
   lastMessageAt: null,
 };
+
+// An incident opens on the first alert and closes when the FSM is back to NORMAL (or recalibrates).
+const CLOSED_PHASES = new Set(["NORMAL", "CALIBRATING"]);
+
+function openIncident(incident, data) {
+  if (incident) return { ...incident, score: data.score, pps: data.pps, bpp: data.bpp };
+  return {
+    dpid: data.dpid,
+    inPort: data.in_port,
+    threatType: data.threat_type,
+    score: data.score,
+    pps: data.pps,
+    bpp: data.bpp,
+    detectedAt: data.timestamp,
+  };
+}
 
 export function portKey(dpid, portNo) {
   return `${dpid}:${portNo}`;
@@ -75,6 +92,7 @@ export function applyEnvelope(state, envelope) {
     case "system:status": {
       const upstream = data.upstream ?? null;
       if (data.phase === state.phase) return { ...next, mode: data.mode, upstream };
+      const incident = CLOSED_PHASES.has(data.phase) ? null : state.incident;
       const events = state.phase
         ? pushEvent(state.events, {
             id: `phase-${data.timestamp}-${data.phase}`,
@@ -84,13 +102,14 @@ export function applyEnvelope(state, envelope) {
             detail: `${PHASE_LABELS[state.phase] ?? state.phase} → ${PHASE_LABELS[data.phase] ?? data.phase}`,
           })
         : state.events;
-      return { ...next, phase: data.phase, mode: data.mode, upstream, events };
+      return { ...next, phase: data.phase, mode: data.mode, upstream, events, incident };
     }
     case "sdn:stats:port":
       return applyPortStats(next, data);
     case "sdn:anomaly:alert":
       return {
         ...next,
+        incident: openIncident(state.incident, data),
         events: pushEvent(state.events, {
           id: `alert-${data.timestamp}-${data.dpid}-${data.in_port}`,
           kind: "alert",

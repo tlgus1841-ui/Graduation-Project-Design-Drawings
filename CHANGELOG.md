@@ -13,6 +13,28 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] feat(ui,verification): 김관우 9주차 적색 경보 UI 및 플로우 테이블 폭발 방어 실증
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/IncidentStrip.jsx`: (신규) 헤더 아래 상태 스트립. `ATTACK_DETECTED` 동안 적색 경보 점멸(유입 포트, 위협 유형, score·PPS·BPP, 탐지 시각 ms), 평상시에는 단계별 안내 문구. 레이아웃 흔들림 방지를 위해 항상 같은 자리에 표시
+  - `ui/src/lib/towerState.js`: `incident` 상태 추가 (첫 알림에서 열리고 NORMAL·CALIBRATING에서 닫힘)
+  - `ui/src/lib/format.js`: (신규) `clockMs`(HH:MM:SS.mmm), `PORT_NAMES`, `fmt` 공용화
+  - `ui/src/components/EventFeed.jsx`: 보안 이벤트 시각을 밀리초 단위로 표시
+  - `ui/src/components/PortStatsPanel.jsx`: 공격 유입 포트 행 적색 점멸
+  - `ui/tailwind.config.js`: `animate-alert-blink` 키프레임 추가 (`motion-reduce` 시 정지)
+  - `harness/verification/flow_table_check.py`: (신규) Mininet에서 공격 중 스위치별 플로우 개수를 1초마다 측정하는 실증 스크립트
+  - `tests/harness/test_flow_table_check.py`, `ui/src/lib/format.test.js`, `ui/src/lib/towerState.test.js`: 테스트 추가
+  - `docs/writing/reports/verification/week09_flow_table_verification.md`: (신규) 9주차 실증 검증서 + 원본 데이터 JSON
+* **상세 변경 내용 및 성과:**
+  - 실측: IP 스푸핑 SYN Flood 18,103패킷 동안 S1~S4 플로우 증가 **0** (S1 4개 유지, 공격 패킷 전부 `nw_dst=10.0.0.4` 규칙 1개에 매칭). pingall 0%.
+  - 브라우저 검수: 공격 단계에서 적색 경보 점멸, S1:2 행 강조, 이벤트 시각 ms 표시, 격리 후 경보 해제, 모바일 가로 넘침 없음, 콘솔 오류 0.
+  - Python 69 / 웹 10 테스트 통과, flake8(120자)·mypy 통과.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 백엔드·계약 스키마 변경 없음.
+* **다음 작업자 인수인계 메모:**
+  - Tech Lead의 In_port 차단 규칙(Priority 100)이 들어오면 같은 스크립트로 "플로우 +1, 차단 규칙 n_packets 증가"를 재검증 (검증서 §5).
+  - live 모드의 적색 경보는 AI 워커가 `sdn:anomaly:alert`를 발행해야 표시됨 (7주차 이후).
+
 ### [2026-10-06] fix & sync: 유재민 팀원 트래픽 버그픽스 통합 및 main 브랜치 최신화
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Fix` / `Merge` / `Chore`

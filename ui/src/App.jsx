@@ -1,5 +1,6 @@
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
 import EventFeed from "./components/EventFeed.jsx";
+import IncidentStrip from "./components/IncidentStrip.jsx";
 import PhaseBadge from "./components/PhaseBadge.jsx";
 import PortStatsPanel from "./components/PortStatsPanel.jsx";
 import TopologyMap from "./components/TopologyMap.jsx";
@@ -31,10 +32,11 @@ export default function App() {
         </>
       }
     >
+      <div className="lg:col-span-12"><IncidentStrip phase={state.phase} incident={state.incident} /></div>
       <div className="lg:col-span-8"><TopologyMap topology={state.topology} ports={state.ports} /></div>
       <div className="lg:col-span-4"><EventFeed events={state.events} /></div>
       <TrafficCharts history={state.history} />
-      <div className="lg:col-span-12"><PortStatsPanel ports={state.ports} /></div>
+      <div className="lg:col-span-12"><PortStatsPanel ports={state.ports} phase={state.phase} incident={state.incident} /></div>
     </DashboardLayout>
   );
 }

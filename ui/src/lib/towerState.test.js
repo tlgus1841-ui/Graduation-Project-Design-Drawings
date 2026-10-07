@@ -69,6 +69,23 @@ describe("applyEnvelope", () => {
     expect(s.events[0].title).toContain("S1:2");
   });
 
+  it("opens an incident on the first alert and closes it back in NORMAL", () => {
+    const status = (phase, timestamp) => ({ type: "system:status", data: { phase, mode: "mock", timestamp } });
+    const alert = (timestamp, score) => ({
+      type: "sdn:anomaly:alert",
+      data: { timestamp, dpid: 1, in_port: 2, threat_type: "SYN_FLOOD_SPOOFING", score, pps: 3000, bps: 192000, bpp: 64, metadata: {} },
+    });
+    let s = applyEnvelope(initialState, status("NORMAL", 1));
+    s = applyEnvelope(s, status("ATTACK_DETECTED", 10.123));
+    s = applyEnvelope(s, alert(10.123, -0.8));
+    s = applyEnvelope(s, alert(12.5, -0.9));
+    expect(s.incident).toMatchObject({ dpid: 1, inPort: 2, detectedAt: 10.123, score: -0.9 });
+    s = applyEnvelope(s, status("MITIGATED", 13));
+    expect(s.incident.inPort).toBe(2);
+    s = applyEnvelope(s, status("NORMAL", 40));
+    expect(s.incident).toBeNull();
+  });
+
   it("replaces topology on sync and ignores unknown types", () => {
     const topo = { nodes: [{ id: "s1", status: "ATTACKED" }], links: [] };
     let s = applyEnvelope(initialState, { type: "sdn:topology:sync", data: { timestamp: 1, ...topo } });
