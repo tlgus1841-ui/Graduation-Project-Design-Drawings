@@ -90,8 +90,15 @@ describe("applyEnvelope", () => {
     s = applyEnvelope(s, command("ISOLATE", 13.006));
     s = applyEnvelope(s, command("ISOLATE", 20)); // a repeat must not move the first stamp
     expect(s.incident).toMatchObject({ reroutedAt: 13.004, isolatedAt: 13.006 });
-    s = applyEnvelope(s, status("NORMAL", 40));
+    s = applyEnvelope(s, status("COOLDOWN_VERIFY", 30));
+    expect(s.incident.cooldownAt).toBe(30);
+    s = applyEnvelope(s, status("MITIGATED", 34)); // re-attack during cooldown (T4)
+    s = applyEnvelope(s, status("COOLDOWN_VERIFY", 38));
+    expect(s.incident.cooldownAt).toBe(38); // countdown restarts
+    expect(s.recovery).toBeNull();
+    s = applyEnvelope(s, status("NORMAL", 48.25));
     expect(s.incident).toBeNull();
+    expect(s.recovery).toMatchObject({ inPort: 2, detectedAt: 10.123, cooldownAt: 38, restoredAt: 48.25 });
   });
 
   it("replaces topology on sync and ignores unknown types", () => {

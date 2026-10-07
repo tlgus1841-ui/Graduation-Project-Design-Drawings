@@ -1,4 +1,37 @@
+import { useEffect, useState } from "react";
 import { PORT_NAMES, clockMs, elapsedMs, fmt } from "../lib/format.js";
+import { COOLDOWN_SEC } from "../lib/towerState.js";
+
+function CooldownStrip({ incident }) {
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now() / 1000), 250);
+    return () => clearInterval(id);
+  }, []);
+  const left = Math.min(COOLDOWN_SEC, Math.max(0, COOLDOWN_SEC - (now - incident.cooldownAt)));
+  const done = ((COOLDOWN_SEC - left) / COOLDOWN_SEC) * 100;
+  return (
+    <div
+      role="status"
+      data-testid="incident-strip"
+      data-state="cooldown"
+      className="flex flex-col gap-2 rounded-xl border-2 border-teal-500 bg-teal-950/60 px-4 py-3"
+    >
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+        <span className="font-mono text-sm font-bold tracking-widest text-teal-200">● RESTORING</span>
+        <span className="text-base font-bold text-teal-50">
+          공격 소멸 확인 중 · S{incident.dpid}:{incident.inPort} 격리와 우회는 유지
+        </span>
+        <span className="ml-auto font-mono text-sm text-teal-200" data-testid="cooldown-left">
+          복구까지 {left.toFixed(1)}초
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-teal-900" aria-hidden="true">
+        <div className="h-full bg-teal-400 transition-[width] duration-200" style={{ width: `${done}%` }} />
+      </div>
+    </div>
+  );
+}
 
 // Always-present status strip under the header, so the layout never jumps when an alert opens.
 // Week 9 review item: red alert flashes while the FSM is in ATTACK_DETECTED (spec §5 colour mapping).
@@ -45,6 +78,11 @@ export default function IncidentStrip({ phase, incident }) {
         <span className="ml-auto font-mono text-sm text-blue-200">격리 {clockMs(incident.isolatedAt)}</span>
       </div>
     );
+  }
+
+  // Week 11 review item: the cooldown shows how much of the 10 s clean window is left.
+  if (phase === "COOLDOWN_VERIFY" && incident?.cooldownAt != null) {
+    return <CooldownStrip incident={incident} />;
   }
 
   const quiet = {

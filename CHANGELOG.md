@@ -13,6 +13,25 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] feat(ui,verification,docs): 김관우 11주차 자가 복구 알림 UI, 플래핑 수용 시험, 논문 4장 초안
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/IncidentStrip.jsx`: COOLDOWN_VERIFY 청록색 스트립 + 10초 카운트다운·진행 막대
+  - `ui/src/components/RecoveryNotice.jsx`: (신규) 자가 복구 완료 알림 (탐지·우회·격리·복구 확인·복구 완료 ms 타임라인, 총 소요 시간, 확인 버튼/15초 자동 닫힘)
+  - `ui/src/lib/towerState.js`: `incident.cooldownAt`(재진입 시 리셋), `recovery` 보고서, `COOLDOWN_SEC`
+  - `harness/verification/fsm_acceptance.py`: (신규) 명세 FSM 참조 구현(`SpecFSM`) + 5개 시나리오 수용 시험, 비교용 타임아웃식 FSM
+  - `tests/harness/test_fsm_acceptance.py`: (신규) 9건
+  - `docs/writing/reports/verification/week11_self_healing_verification.md`: (신규) 11주차 검증서 + 원본 JSON
+  - `docs/writing/thesis/thesis_draft.md`: 제4장(4.1~4.4) 본문 초안 v0.1
+* **상세 변경 내용 및 성과:**
+  - 명세 FSM: 5개 시나리오 모두 플래핑 0회 (V5 충족), 지속 공격 종료 후 12초 내 복구. 타임아웃식 FSM은 맥동 공격에서 플래핑 7회로 실패 → 시험 도구의 검출력 확인.
+  - 브라우저 검수: 카운트다운 9.9→6.9초 감소, 복구 확인 시작→완료 10.0초, 알림 표시·닫힘, 모바일 넘침 없음, 오류 0.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - Tech Lead `flapping_fsm.py` 구현 시 `step(sample) -> [명령]` 형태로 감싸 `fsm_acceptance.run_all()`에 넣으면 같은 기준으로 판정됨.
+  - 논문 초록의 "FSM 타임아웃을 통해 자가 복구" 표현은 명세(타임아웃 없이 쿨다운 후 명시적 RESTORE)와 다름. 초록 작성자 확인 필요.
+
 ### [2026-10-07] feat(ui,verification): 김관우 10주차 청색 우회 경로 UI 및 무유실 경로 전환 실증
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Feat` / `Test` / `Docs`

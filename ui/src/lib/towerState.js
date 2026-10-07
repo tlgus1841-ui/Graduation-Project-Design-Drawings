@@ -22,8 +22,11 @@ export const initialState = {
   history: {},
   events: [],
   incident: null,
+  recovery: null,
   lastMessageAt: null,
 };
+
+export const COOLDOWN_SEC = 10; // spec §3.4, COOLDOWN_SEC (confirmed)
 
 // An incident opens on the first alert and closes when the FSM is back to NORMAL (or recalibrates).
 const CLOSED_PHASES = new Set(["NORMAL", "CALIBRATING"]);
@@ -40,6 +43,7 @@ function openIncident(incident, data) {
     detectedAt: data.timestamp,
     isolatedAt: null,
     reroutedAt: null,
+    cooldownAt: null,
   };
 }
 
@@ -103,7 +107,13 @@ export function applyEnvelope(state, envelope) {
     case "system:status": {
       const upstream = data.upstream ?? null;
       if (data.phase === state.phase) return { ...next, mode: data.mode, upstream };
-      const incident = CLOSED_PHASES.has(data.phase) ? null : state.incident;
+      let incident = CLOSED_PHASES.has(data.phase) ? null : state.incident;
+      // Every (re-)entry into COOLDOWN_VERIFY restarts the 10 s countdown (T4 resets the timer).
+      if (incident && data.phase === "COOLDOWN_VERIFY") incident = { ...incident, cooldownAt: data.timestamp };
+      // T5: the incident that just closed becomes the recovery report for the notice.
+      const recovery = state.incident && state.phase === "COOLDOWN_VERIFY" && data.phase === "NORMAL"
+        ? { ...state.incident, restoredAt: data.timestamp }
+        : state.recovery;
       const events = state.phase
         ? pushEvent(state.events, {
             id: `phase-${data.timestamp}-${data.phase}`,
@@ -113,7 +123,7 @@ export function applyEnvelope(state, envelope) {
             detail: `${PHASE_LABELS[state.phase] ?? state.phase} → ${PHASE_LABELS[data.phase] ?? data.phase}`,
           })
         : state.events;
-      return { ...next, phase: data.phase, mode: data.mode, upstream, events, incident };
+      return { ...next, phase: data.phase, mode: data.mode, upstream, events, incident, recovery };
     }
     case "sdn:stats:port":
       return applyPortStats(next, data);
