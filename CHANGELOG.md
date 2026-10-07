@@ -13,6 +13,24 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] feat(ui,verification): 김관우 10주차 청색 우회 경로 UI 및 무유실 경로 전환 실증
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/IncidentStrip.jsx`: MITIGATED 단계 청색 스트립 (격리 포트, 우회 경로, 탐지→격리·우회 ms, 격리 시각)
+  - `ui/src/lib/towerState.js`: ISOLATE·REROUTE 명령 시각을 `incident`에 기록 (첫 명령만)
+  - `ui/src/lib/format.js`: `elapsedMs` 추가
+  - `ui/src/components/TopologyMap.jsx`: REROUTED 링크 청색 발광 효과
+  - `harness/verification/reroute_loss_check.py`: (신규) ping 도중 우회 규칙을 S3→S4→S1 순서로 주입하고 손실률·우회 규칙 카운터 측정
+  - `tests/harness/test_reroute_loss_check.py`, `ui/src/lib/*.test.js`: 테스트 추가
+  - `docs/writing/reports/verification/week10_reroute_loss_verification.md`: (신규) 10주차 실증 검증서 + 원본 데이터 4회분
+* **상세 변경 내용 및 성과:**
+  - 실측: 경로 전환 중 정상 ping **4,000 / 4,000 수신 (손실 0%)**, 회당 약 800개가 우회 규칙 통과.
+  - 브라우저 검수: MITIGATED 청색 스트립, 우회 링크 발광, NORMAL 복귀 시 해제, 콘솔 오류 0.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - 컨트롤러 REROUTE 구현 시 `BYPASS_FLOWS`와 같은 규칙·순서(S1을 마지막에)로 설치하면 무유실이 유지됨. 같은 스크립트로 재검증 가능.
+
 ### [2026-10-07] feat(ui,verification): 김관우 9주차 적색 경보 UI 및 플로우 테이블 폭발 방어 실증
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Feat` / `Test` / `Docs`

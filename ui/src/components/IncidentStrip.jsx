@@ -1,4 +1,4 @@
-import { PORT_NAMES, clockMs, fmt } from "../lib/format.js";
+import { PORT_NAMES, clockMs, elapsedMs, fmt } from "../lib/format.js";
 
 // Always-present status strip under the header, so the layout never jumps when an alert opens.
 // Week 9 review item: red alert flashes while the FSM is in ATTACK_DETECTED (spec §5 colour mapping).
@@ -21,6 +21,28 @@ export default function IncidentStrip({ phase, incident }) {
           score {incident.score.toFixed(2)} · {fmt(incident.pps)} PPS · BPP {fmt(incident.bpp)}B
         </span>
         <span className="ml-auto font-mono text-sm text-red-200">탐지 {clockMs(incident.detectedAt)}</span>
+      </div>
+    );
+  }
+
+  // Week 10 review item: after mitigation the strip turns blue and names the bypass path.
+  if (phase === "MITIGATED" && incident) {
+    return (
+      <div
+        role="status"
+        data-testid="incident-strip"
+        data-state="mitigated"
+        className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border-2 border-blue-500 bg-blue-950/70 px-4 py-3"
+      >
+        <span className="font-mono text-sm font-bold tracking-widest text-blue-200">● MITIGATED</span>
+        <span className="text-base font-bold text-blue-50">
+          S{incident.dpid}:{incident.inPort} 격리 · 정상 트래픽 S1 → S3 → S4 우회
+        </span>
+        <span className="font-mono text-sm text-blue-200">
+          탐지→격리 {elapsedMs(incident.detectedAt, incident.isolatedAt)} · 탐지→우회{" "}
+          {elapsedMs(incident.detectedAt, incident.reroutedAt)}
+        </span>
+        <span className="ml-auto font-mono text-sm text-blue-200">격리 {clockMs(incident.isolatedAt)}</span>
       </div>
     );
   }

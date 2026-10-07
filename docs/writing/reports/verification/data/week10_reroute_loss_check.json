@@ -1,0 +1,208 @@
+{
+  "runs": [
+    {
+      "pingall_loss_percent": 0.0,
+      "ping": {
+        "count": 1000,
+        "interval_s": 0.01,
+        "switch_after_s": 3.0
+      },
+      "baseline": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "rerouted": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "bypass_rule_hits": {
+        "s1_to_s3": 801,
+        "s3_to_s4": 800,
+        "s4_return_via_s3": 802
+      },
+      "install_order": [
+        {
+          "switch": "s3",
+          "dst": "10.0.0.4",
+          "port": 2,
+          "t": 1791352816.619
+        },
+        {
+          "switch": "s3",
+          "dst": "10.0.0.1",
+          "port": 1,
+          "t": 1791352816.63
+        },
+        {
+          "switch": "s4",
+          "dst": "10.0.0.1",
+          "port": 3,
+          "t": 1791352816.641
+        },
+        {
+          "switch": "s1",
+          "dst": "10.0.0.4",
+          "port": 4,
+          "t": 1791352816.652
+        }
+      ],
+      "switched": true,
+      "zero_loss": true
+    },
+    {
+      "pingall_loss_percent": 0.0,
+      "ping": {
+        "count": 1000,
+        "interval_s": 0.01,
+        "switch_after_s": 3.0
+      },
+      "baseline": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "rerouted": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "bypass_rule_hits": {
+        "s1_to_s3": 794,
+        "s3_to_s4": 793,
+        "s4_return_via_s3": 796
+      },
+      "install_order": [
+        {
+          "switch": "s3",
+          "dst": "10.0.0.4",
+          "port": 2,
+          "t": 1791352861.955
+        },
+        {
+          "switch": "s3",
+          "dst": "10.0.0.1",
+          "port": 1,
+          "t": 1791352861.967
+        },
+        {
+          "switch": "s4",
+          "dst": "10.0.0.1",
+          "port": 3,
+          "t": 1791352861.983
+        },
+        {
+          "switch": "s1",
+          "dst": "10.0.0.4",
+          "port": 4,
+          "t": 1791352861.999
+        }
+      ],
+      "switched": true,
+      "zero_loss": true
+    },
+    {
+      "pingall_loss_percent": 0.0,
+      "ping": {
+        "count": 1000,
+        "interval_s": 0.01,
+        "switch_after_s": 3.0
+      },
+      "baseline": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "rerouted": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "bypass_rule_hits": {
+        "s1_to_s3": 794,
+        "s3_to_s4": 793,
+        "s4_return_via_s3": 795
+      },
+      "install_order": [
+        {
+          "switch": "s3",
+          "dst": "10.0.0.4",
+          "port": 2,
+          "t": 1791352898.648
+        },
+        {
+          "switch": "s3",
+          "dst": "10.0.0.1",
+          "port": 1,
+          "t": 1791352898.662
+        },
+        {
+          "switch": "s4",
+          "dst": "10.0.0.1",
+          "port": 3,
+          "t": 1791352898.674
+        },
+        {
+          "switch": "s1",
+          "dst": "10.0.0.4",
+          "port": 4,
+          "t": 1791352898.685
+        }
+      ],
+      "switched": true,
+      "zero_loss": true
+    },
+    {
+      "pingall_loss_percent": 0.0,
+      "ping": {
+        "count": 1000,
+        "interval_s": 0.01,
+        "switch_after_s": 3.0
+      },
+      "baseline": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "rerouted": {
+        "transmitted": 1000,
+        "received": 1000,
+        "loss_percent": 0.0
+      },
+      "bypass_rule_hits": {
+        "s1_to_s3": 790,
+        "s3_to_s4": 789,
+        "s4_return_via_s3": 791
+      },
+      "install_order": [
+        {
+          "switch": "s3",
+          "dst": "10.0.0.4",
+          "port": 2,
+          "t": 1791352935.391
+        },
+        {
+          "switch": "s3",
+          "dst": "10.0.0.1",
+          "port": 1,
+          "t": 1791352935.403
+        },
+        {
+          "switch": "s4",
+          "dst": "10.0.0.1",
+          "port": 3,
+          "t": 1791352935.415
+        },
+        {
+          "switch": "s1",
+          "dst": "10.0.0.4",
+          "port": 4,
+          "t": 1791352935.426
+        }
+      ],
+      "switched": true,
+      "zero_loss": true
+    }
+  ]
+}

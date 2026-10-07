@@ -82,6 +82,14 @@ describe("applyEnvelope", () => {
     expect(s.incident).toMatchObject({ dpid: 1, inPort: 2, detectedAt: 10.123, score: -0.9 });
     s = applyEnvelope(s, status("MITIGATED", 13));
     expect(s.incident.inPort).toBe(2);
+    const command = (action, timestamp) => ({
+      type: "sdn:control:command",
+      data: { timestamp, command_id: `${action}-${timestamp}`, action, target_dpid: 1, target_port: 2, reason: "t", priority: 100 },
+    });
+    s = applyEnvelope(s, command("REROUTE", 13.004));
+    s = applyEnvelope(s, command("ISOLATE", 13.006));
+    s = applyEnvelope(s, command("ISOLATE", 20)); // a repeat must not move the first stamp
+    expect(s.incident).toMatchObject({ reroutedAt: 13.004, isolatedAt: 13.006 });
     s = applyEnvelope(s, status("NORMAL", 40));
     expect(s.incident).toBeNull();
   });

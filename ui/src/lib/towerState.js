@@ -38,7 +38,18 @@ function openIncident(incident, data) {
     pps: data.pps,
     bpp: data.bpp,
     detectedAt: data.timestamp,
+    isolatedAt: null,
+    reroutedAt: null,
   };
+}
+
+// Mitigation commands stamp the open incident so the UI can show detection-to-action time.
+const COMMAND_STAMP = { ISOLATE: "isolatedAt", REROUTE: "reroutedAt" };
+
+function stampIncident(incident, data) {
+  const field = COMMAND_STAMP[data.action];
+  if (!incident || !field || incident[field] != null) return incident;
+  return { ...incident, [field]: data.timestamp };
 }
 
 export function portKey(dpid, portNo) {
@@ -121,6 +132,7 @@ export function applyEnvelope(state, envelope) {
     case "sdn:control:command":
       return {
         ...next,
+        incident: stampIncident(state.incident, data),
         events: pushEvent(state.events, {
           id: data.command_id,
           kind: "command",

@@ -47,6 +47,10 @@ function toVisEdge(l) {
     color: { color: s.color, highlight: s.color },
     width: s.width,
     dashes: s.dashes,
+    // Week 10 review item: the live bypass path glows so it reads at a glance from across the room.
+    shadow: l.status === "REROUTED"
+      ? { enabled: true, color: "rgba(59,130,246,0.85)", size: 14, x: 0, y: 0 }
+      : { enabled: false },
     title: `${l.source.toUpperCase()}:${l.src_port} ↔ ${l.target.toUpperCase()}:${l.dst_port} · ${l.status}`,
   };
 }

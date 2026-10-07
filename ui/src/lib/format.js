@@ -14,4 +14,10 @@ export function clockMs(ts) {
   return `${hms}.${String(d.getMilliseconds()).padStart(3, "0")}`;
 }
 
-export const fmt = (n) => Math.round(n).toLocaleString("ko-KR");
+// Gap between two unix-second stamps as "1,234 ms"; "-" until both exist.
+export function elapsedMs(from, to) {
+  if (from == null || to == null) return "-";
+  return `${Math.max(0, Math.round((to - from) * 1000)).toLocaleString("ko-KR")} ms`;
+}
+
+export const fmt =(n) => Math.round(n).toLocaleString("ko-KR");

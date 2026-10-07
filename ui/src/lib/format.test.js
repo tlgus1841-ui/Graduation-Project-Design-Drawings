@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { clockMs } from "./format.js";
+import { clockMs, elapsedMs } from "./format.js";
+
+describe("elapsedMs", () => {
+  it("returns the gap in whole milliseconds", () => {
+    expect(elapsedMs(10.123, 10.2005)).toBe("78 ms");
+    expect(elapsedMs(10, 16.0414)).toBe("6,041 ms");
+  });
+
+  it("is a dash until both stamps exist", () => {
+    expect(elapsedMs(10, null)).toBe("-");
+  });
+});
 
 describe("clockMs", () => {
   it("formats unix seconds as HH:MM:SS.mmm in local time", () => {
