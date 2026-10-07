@@ -13,6 +13,24 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] test(e2e) + docs: 김관우 14주차 E2E 통합 검증, 차단·우회 우선순위 충돌 발견
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Test` / `Docs` / `Spec`
+* **주요 변경 파일:**
+  - `harness/verification/e2e_scenario.py`: ping 출력을 파일로 기록(호스트 pty 버퍼 포화로 ping이 멈추던 문제 수정), 응답 시각 기반 구간 손실, S1 우회 규칙 카운터 추가
+  - `harness/verification/e2e_defense_standin.py`: `--drop-priority` 옵션, 비정상 카운터(ΔPPS > 1e7) 무시
+  - `docs/writing/reports/verification/week14_e2e_verification.md`: (신규) E2E 보고서 + 원본 JSON·실데이터 관제탑 화면
+  - `docs/specs/defense_scenarios.md`: v1.1, Q5 추가 (차단·우회 규칙 우선순위 충돌)
+  - `docs/writing/thesis/thesis_draft.md`: 4.2 우선순위 서술, 5.4 결과 표(반응 78.4ms, 손실 0%), 5.5 E2E 절
+* **상세 변경 내용 및 성과 (3회):**
+  - 4단계 루프 완결, 정상 ping 손실 **0 / 4,312** (공격 구간 0 / 1,123), 격리 후 서버 도달 공격 0, 플래핑 0, 공격 종료 → 복구 평균 12.73초, 탐지 확정 → 규칙 설치 평균 78.4ms
+  - 관제탑 live 모드에서 UNDER ATTACK → MITIGATED → NORMAL 전환과 S1:3 → S1:4 트래픽 이동이 실데이터로 확인됨
+* **영향 범위 및 주의사항 (Breaking Changes):** 명세 변경 제안(Q5). 코드 인터페이스 변경 없음.
+* **다음 작업자 인수인계 메모:**
+  - **[박시현] 명세 Q5:** 차단과 우회가 둘 다 Priority 100이면 차단이 무력화됨(실측: 차단 적중 0, 공격 27,607패킷이 우회로로 서버 도달). ISOLATE drop을 200으로 올리거나 REROUTE 일치 조건에 `in_port=1` 추가 필요.
+  - **[유재민]** Mininet 종료 시 포트 카운터 리셋으로 ΔPPS ≈ 9.2e18이 계산됨. `feature_extractor`에 비정상 값 무시 처리 권장.
+  - 임시 구성요소(규칙 스코어, SpecFSM, ovs-ofctl)는 실제 AI·FSM·컨트롤러가 들어오면 같은 시나리오로 교체 측정.
+
 ### [2026-10-07] feat(api,ui) + docs: 김관우 13주차 비상 수동 제어, 관제 매뉴얼, 논문 구현 절
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Feat` / `Test` / `Docs`

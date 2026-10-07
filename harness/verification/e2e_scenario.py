@@ -102,6 +102,7 @@ def analyze(run: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, Any]
 
     flows = run["flow_samples"]
     dst_rule = [s["s1_dst_server_p10"] for s in flows if t_iso <= s["t"] <= a1]
+    bypass = [s.get("s1_bypass_p100", 0) for s in flows if t_iso <= s["t"] <= a1]
     drop_rule = [s["s1_drop_in2"] for s in flows if t_iso <= s["t"] <= a1]
     return {
         "attack_seconds": round(a1 - a0, 1),
@@ -116,6 +117,8 @@ def analyze(run: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, Any]
         "recovery_after_attack_s": round(res["t"] - a1, 2) if res else None,
         "dropped_at_s1_while_isolated": (drop_rule[-1] - drop_rule[0]) if len(drop_rule) > 1 else 0,
         "leaked_to_server_while_isolated": (dst_rule[-1] - dst_rule[0]) if len(dst_rule) > 1 else 0,
+        # S1 bypass rule hits while isolated: normal pings plus any attack packets that slipped past the drop
+        "s1_bypass_hits_while_isolated": (bypass[-1] - bypass[0]) if len(bypass) > 1 else 0,
         "normal_loss": {
             "whole_run": loss(p["start"] - 1, t_end),
             "before_attack": loss(p["start"], a0),
@@ -157,7 +160,8 @@ def run(before: int, attack: int, after: int, userspace: bool) -> Dict[str, Any]
             d = _dump("s1")
             samples.append({"t": time.time(),
                             "s1_drop_in2": rule_packets(d, "actions=drop"),
-                            "s1_dst_server_p10": rule_packets(d, "priority=10,ip,nw_dst=10.0.0.4")})
+                            "s1_dst_server_p10": rule_packets(d, "priority=10,ip,nw_dst=10.0.0.4"),
+                            "s1_bypass_p100": rule_packets(d, "priority=100,ip,nw_dst=10.0.0.4")})
             stop.wait(1.0)
 
     try:
@@ -169,8 +173,11 @@ def run(before: int, attack: int, after: int, userspace: bool) -> Dict[str, Any]
         total = before + attack + after
         threading.Thread(target=sample_flows, daemon=True).start()
 
+        # ping writes to a file: left on the host's pty, unread output fills the buffer and ping stops
+        # sending (seen in the first run as a 32 s gap with consecutive sequence numbers).
+        ping_log = f"/tmp/e2e_ping_{int(time.time())}.txt"
         ping_start = time.time()
-        legit.sendCmd(f"ping -D -i {PING_INTERVAL} -w {total} 10.0.0.4")
+        legit.cmd(f"ping -D -i {PING_INTERVAL} -w {total} 10.0.0.4 > {ping_log} 2>&1 &")
         time.sleep(before)
         port_before = s1.cmd("ovs-ofctl -O OpenFlow13 dump-ports s1 2")
         attack_start = time.time()
@@ -178,7 +185,8 @@ def run(before: int, attack: int, after: int, userspace: bool) -> Dict[str, Any]
             f"cd {REPO_ROOT} && .venv/bin/python -m traffic.traffic_attack --dst 10.0.0.4 --duration {attack}")
         attack_end = time.time()
         port_after = s1.cmd("ovs-ofctl -O OpenFlow13 dump-ports s1 2")
-        ping_out = legit.waitOutput()
+        legit.cmd("wait")
+        ping_out = legit.cmd(f"cat {ping_log}")
         stop.set()
     finally:
         net.stop()

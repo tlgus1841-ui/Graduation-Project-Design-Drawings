@@ -1,0 +1,462 @@
+{
+  "tie_priority_100": {
+    "metrics": {
+      "attack_seconds": 20.3,
+      "attack_packets": 32679,
+      "detect_after_attack_s": 1.34,
+      "first_alert_to_isolate_ms": 2071.5,
+      "decision_to_isolated_ms": 70.5,
+      "flow_install_ms": {
+        "REROUTE": 55.3,
+        "ISOLATE": 14.1
+      },
+      "isolate_count": 1,
+      "restore_count": 1,
+      "recovery_after_attack_s": 13.15,
+      "dropped_at_s1_while_isolated": 0,
+      "leaked_to_server_while_isolated": 0,
+      "s1_bypass_hits_while_isolated": 27607,
+      "normal_loss": {
+        "whole_run": {
+          "sent": 1438,
+          "lost": 0,
+          "loss_percent": 0.0
+        },
+        "before_attack": {
+          "sent": 455,
+          "lost": 0,
+          "loss_percent": 0.0
+        },
+        "attack_until_isolated": {
+          "sent": 60,
+          "lost": 0,
+          "loss_percent": 0.0
+        },
+        "attack_while_isolated": {
+          "sent": 300,
+          "lost": 0,
+          "loss_percent": 0.0
+        },
+        "after_attack": {
+          "sent": 623,
+          "lost": 0,
+          "loss_percent": 0.0
+        }
+      }
+    },
+    "ui_phases": [
+      {
+        "t": 1791358813.637,
+        "phase": "WAITING FOR DATA"
+      },
+      {
+        "t": 1791358814.695,
+        "phase": "NORMAL"
+      },
+      {
+        "t": 1791358842.848,
+        "phase": "UNDER ATTACK"
+      },
+      {
+        "t": 1791358844.827,
+        "phase": "MITIGATED"
+      },
+      {
+        "t": 1791358874.956,
+        "phase": "NORMAL"
+      }
+    ],
+    "events": [
+      {
+        "t": 1791358806.018772,
+        "kind": "start",
+        "watch": "S1:2"
+      },
+      {
+        "t": 1791358842.6748874,
+        "kind": "alert",
+        "stats_ts": 1791358842.6718392
+      },
+      {
+        "t": 1791358844.6760807,
+        "kind": "alert",
+        "stats_ts": 1791358844.6754045
+      },
+      {
+        "t": 1791358844.7317238,
+        "kind": "command",
+        "action": "REROUTE",
+        "stats_ts": 1791358844.6754045,
+        "apply_ms": 55.3
+      },
+      {
+        "t": 1791358844.7463586,
+        "kind": "command",
+        "action": "ISOLATE",
+        "stats_ts": 1791358844.6754045,
+        "apply_ms": 14.1
+      },
+      {
+        "t": 1791358874.7630327,
+        "kind": "command",
+        "action": "RESTORE",
+        "stats_ts": 1791358874.693524,
+        "apply_ms": 68.5
+      },
+      {
+        "t": 1791358905.2266262,
+        "kind": "stop"
+      }
+    ]
+  },
+  "drop_priority_200": [
+    {
+      "metrics": {
+        "attack_seconds": 20.4,
+        "attack_packets": 34201,
+        "detect_after_attack_s": 2.99,
+        "first_alert_to_isolate_ms": 2077.9,
+        "decision_to_isolated_ms": 78.4,
+        "flow_install_ms": {
+          "REROUTE": 59.1,
+          "ISOLATE": 18.0
+        },
+        "isolate_count": 1,
+        "restore_count": 1,
+        "recovery_after_attack_s": 12.64,
+        "dropped_at_s1_while_isolated": 26095,
+        "leaked_to_server_while_isolated": 0,
+        "s1_bypass_hits_while_isolated": 267,
+        "normal_loss": {
+          "whole_run": {
+            "sent": 1432,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "before_attack": {
+            "sent": 449,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "attack_until_isolated": {
+            "sent": 90,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "attack_while_isolated": {
+            "sent": 274,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "after_attack": {
+            "sent": 619,
+            "lost": 0,
+            "loss_percent": 0.0
+          }
+        }
+      },
+      "ui_phases": [
+        {
+          "t": 1791358922.297,
+          "phase": "WAITING FOR DATA"
+        },
+        {
+          "t": 1791358923.94,
+          "phase": "NORMAL"
+        },
+        {
+          "t": 1791358954.068,
+          "phase": "UNDER ATTACK"
+        },
+        {
+          "t": 1791358956.07,
+          "phase": "MITIGATED"
+        },
+        {
+          "t": 1791358984.229,
+          "phase": "NORMAL"
+        }
+      ],
+      "events": [
+        {
+          "t": 1791358915.7529664,
+          "kind": "start",
+          "watch": "S1:2"
+        },
+        {
+          "t": 1791358953.9423544,
+          "kind": "alert",
+          "stats_ts": 1791358953.9399865
+        },
+        {
+          "t": 1791358955.942191,
+          "kind": "alert",
+          "stats_ts": 1791358955.9411736
+        },
+        {
+          "t": 1791358956.0016289,
+          "kind": "command",
+          "action": "REROUTE",
+          "stats_ts": 1791358955.9411736,
+          "apply_ms": 59.1
+        },
+        {
+          "t": 1791358956.0202155,
+          "kind": "command",
+          "action": "ISOLATE",
+          "stats_ts": 1791358955.9411736,
+          "apply_ms": 18.0
+        },
+        {
+          "t": 1791358984.0368512,
+          "kind": "command",
+          "action": "RESTORE",
+          "stats_ts": 1791358983.9636865,
+          "apply_ms": 72.1
+        },
+        {
+          "t": 1791359005.9845145,
+          "kind": "discarded",
+          "stats_ts": 1791359005.9830854,
+          "pps": 9.217515361125627e+18
+        },
+        {
+          "t": 1791359014.4956224,
+          "kind": "stop"
+        }
+      ]
+    },
+    {
+      "metrics": {
+        "attack_seconds": 21.6,
+        "attack_packets": 35632,
+        "detect_after_attack_s": 1.01,
+        "first_alert_to_isolate_ms": 2079.0,
+        "decision_to_isolated_ms": 78.6,
+        "flow_install_ms": {
+          "REROUTE": 62.8,
+          "ISOLATE": 13.6
+        },
+        "isolate_count": 1,
+        "restore_count": 1,
+        "recovery_after_attack_s": 13.49,
+        "dropped_at_s1_while_isolated": 30517,
+        "leaked_to_server_while_isolated": 0,
+        "s1_bypass_hits_while_isolated": 321,
+        "normal_loss": {
+          "whole_run": {
+            "sent": 1442,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "before_attack": {
+            "sent": 455,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "attack_until_isolated": {
+            "sent": 54,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "attack_while_isolated": {
+            "sent": 330,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "after_attack": {
+            "sent": 603,
+            "lost": 0,
+            "loss_percent": 0.0
+          }
+        }
+      },
+      "ui_phases": [
+        {
+          "t": 1791359032.568,
+          "phase": "WAITING FOR DATA"
+        },
+        {
+          "t": 1791359034.406,
+          "phase": "NORMAL"
+        },
+        {
+          "t": 1791359062.394,
+          "phase": "UNDER ATTACK"
+        },
+        {
+          "t": 1791359064.531,
+          "phase": "MITIGATED"
+        },
+        {
+          "t": 1791359096.383,
+          "phase": "NORMAL"
+        }
+      ],
+      "events": [
+        {
+          "t": 1791359026.067757,
+          "kind": "start",
+          "watch": "S1:2"
+        },
+        {
+          "t": 1791359062.2553477,
+          "kind": "alert",
+          "stats_ts": 1791359062.2533681
+        },
+        {
+          "t": 1791359064.2572227,
+          "kind": "alert",
+          "stats_ts": 1791359064.255037
+        },
+        {
+          "t": 1791359064.320375,
+          "kind": "command",
+          "action": "REROUTE",
+          "stats_ts": 1791359064.255037,
+          "apply_ms": 62.8
+        },
+        {
+          "t": 1791359064.334357,
+          "kind": "command",
+          "action": "ISOLATE",
+          "stats_ts": 1791359064.255037,
+          "apply_ms": 13.6
+        },
+        {
+          "t": 1791359096.342598,
+          "kind": "command",
+          "action": "RESTORE",
+          "stats_ts": 1791359096.2835836,
+          "apply_ms": 57.8
+        },
+        {
+          "t": 1791359116.3017936,
+          "kind": "discarded",
+          "stats_ts": 1791359116.3007002,
+          "pps": 9.219139760508347e+18
+        },
+        {
+          "t": 1791359124.8160667,
+          "kind": "stop"
+        }
+      ]
+    },
+    {
+      "metrics": {
+        "attack_seconds": 21.1,
+        "attack_packets": 35643,
+        "detect_after_attack_s": 1.03,
+        "first_alert_to_isolate_ms": 2079.5,
+        "decision_to_isolated_ms": 78.1,
+        "flow_install_ms": {
+          "REROUTE": 61.8,
+          "ISOLATE": 15.3
+        },
+        "isolate_count": 1,
+        "restore_count": 1,
+        "recovery_after_attack_s": 12.06,
+        "dropped_at_s1_while_isolated": 27742,
+        "leaked_to_server_while_isolated": 0,
+        "s1_bypass_hits_while_isolated": 295,
+        "normal_loss": {
+          "whole_run": {
+            "sent": 1438,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "before_attack": {
+            "sent": 451,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "attack_until_isolated": {
+            "sent": 56,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "attack_while_isolated": {
+            "sent": 319,
+            "lost": 0,
+            "loss_percent": 0.0
+          },
+          "after_attack": {
+            "sent": 612,
+            "lost": 0,
+            "loss_percent": 0.0
+          }
+        }
+      },
+      "ui_phases": [
+        {
+          "t": 1791359135.71,
+          "phase": "WAITING FOR DATA"
+        },
+        {
+          "t": 1791359137.546,
+          "phase": "NORMAL"
+        },
+        {
+          "t": 1791359165.462,
+          "phase": "UNDER ATTACK"
+        },
+        {
+          "t": 1791359167.589,
+          "phase": "MITIGATED"
+        },
+        {
+          "t": 1791359197.585,
+          "phase": "NORMAL"
+        }
+      ],
+      "events": [
+        {
+          "t": 1791359129.229199,
+          "kind": "start",
+          "watch": "S1:2"
+        },
+        {
+          "t": 1791359165.3853943,
+          "kind": "alert",
+          "stats_ts": 1791359165.3840735
+        },
+        {
+          "t": 1791359167.387036,
+          "kind": "alert",
+          "stats_ts": 1791359167.385928
+        },
+        {
+          "t": 1791359167.4492693,
+          "kind": "command",
+          "action": "REROUTE",
+          "stats_ts": 1791359167.385928,
+          "apply_ms": 61.8
+        },
+        {
+          "t": 1791359167.4648542,
+          "kind": "command",
+          "action": "ISOLATE",
+          "stats_ts": 1791359167.385928,
+          "apply_ms": 15.3
+        },
+        {
+          "t": 1791359197.48528,
+          "kind": "command",
+          "action": "RESTORE",
+          "stats_ts": 1791359197.4115613,
+          "apply_ms": 72.9
+        },
+        {
+          "t": 1791359219.4305644,
+          "kind": "discarded",
+          "stats_ts": 1791359219.4301314,
+          "pps": 9.219654987117015e+18
+        },
+        {
+          "t": 1791359227.942431,
+          "kind": "stop"
+        }
+      ]
+    }
+  ]
+}

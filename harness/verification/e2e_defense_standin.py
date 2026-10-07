@@ -45,6 +45,7 @@ WATCH = (1, 2)  # S1:2, H_attacker access port
 RULE_BPP_MAX = 80.0
 RULE_PPS_MIN = 500.0
 PRIORITY = 100
+DROP_PRIORITY = PRIORITY  # overridden by --drop-priority; see week-14 report on the tie with REROUTE
 MAX_PLAUSIBLE_PPS = 1e7  # far above any link in the testbed; larger means a counter reset
 
 
@@ -57,12 +58,12 @@ def flow_commands(action: str) -> List[List[str]]:
     """ISOLATE / REROUTE / RESTORE 를 ovs-ofctl 호출 목록으로 바꾼다."""
     of = ["ovs-ofctl", "-O", "OpenFlow13"]
     if action == "ISOLATE":
-        return [of + ["add-flow", "s1", f"priority={PRIORITY},in_port={WATCH[1]},actions=drop"]]
+        return [of + ["add-flow", "s1", f"priority={DROP_PRIORITY},in_port={WATCH[1]},actions=drop"]]
     if action == "REROUTE":  # 하류부터 설치, S1은 마지막 (10주차 검증)
         return [of + ["add-flow", sw, f"priority={PRIORITY},ip,nw_dst={dst},actions=output:{port}"]
                 for sw, dst, port in BYPASS_FLOWS]
     if action == "RESTORE":  # 입구 S1부터 되돌리고 하류를 나중에 지운다
-        cmds = [of + ["--strict", "del-flows", "s1", f"priority={PRIORITY},in_port={WATCH[1]}"]]
+        cmds = [of + ["--strict", "del-flows", "s1", f"priority={DROP_PRIORITY},in_port={WATCH[1]}"]]
         cmds += [of + ["--strict", "del-flows", sw, f"priority={PRIORITY},ip,nw_dst={dst}"]
                  for sw, dst, _ in reversed(BYPASS_FLOWS)]
         return cmds
@@ -132,7 +133,11 @@ def main() -> None:
     parser.add_argument("--log", type=Path, default=Path("e2e_events.jsonl"))
     parser.add_argument("--redis-url", default="redis://localhost:6379/0")
     parser.add_argument("--dry-run", action="store_true", help="ovs-ofctl 대신 명령만 기록")
+    parser.add_argument("--drop-priority", type=int, default=PRIORITY,
+                        help="ISOLATE drop 규칙 우선순위 (명세 기본 100, 우회 규칙과 같음)")
     args = parser.parse_args()
+    global DROP_PRIORITY
+    DROP_PRIORITY = args.drop_priority
     applied: Dict[str, int] = {"n": 0}
 
     def apply(argv: List[str]) -> None:
