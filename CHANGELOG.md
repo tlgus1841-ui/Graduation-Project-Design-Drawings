@@ -13,6 +13,20 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] docs: 김관우 16주차 주간 보고서 합본, 논문 결론 장, 심사 피드백 정리서
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Docs`
+* **주요 변경 파일:**
+  - `docs/writing/reports/weekly/semester_weekly_report_compilation.md`: (신규) 1~16주차 합본 — 학기 요약, 주차별 한눈표, 주차별 팀원 보고, 산출물 목록
+  - `docs/writing/reports/final_review_feedback.md`: (신규) 심사 당일 기록 · 질의응답 · 피드백 양식, 방학 개선 과제 9건 사전 도출
+  - `docs/writing/thesis/thesis_draft.md`: 지도교수 기입, 초록 복구 방식(타임아웃 → 10초 쿨다운 검증)과 실측 수치 반영, 6장 결론 · 한계 · 향후 과제 작성
+  - `docs/writing/presentations/final_demo_runbook.md`: §8 심사 당일 진행 · 역할 분담
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - **[박시현 · 유재민]** 합본의 7~15주차 `진행중` 항목은 저장소 기준. 각자 결과가 반영되면 합본 해당 칸과 결과 수치를 갱신해 주세요.
+  - **[박시현]** 논문 초록 · 4.3절은 "Dijkstra 기반 우회"라고 쓰지만 현재 검증은 고정 우회 경로(S1→S3→S4) 기준. 경로 계산 엔진이 들어오면 그대로, 아니면 문구 조정 필요.
+  - **[유재민]** 논문 5.4 표의 F1 · 추론 지연 `[ ]` 칸.
+
 ### [2026-10-07] docs: 김관우 15주차 최종 발표 10장 덱, 시연 진행표 · 리허설 기록지
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Docs`
