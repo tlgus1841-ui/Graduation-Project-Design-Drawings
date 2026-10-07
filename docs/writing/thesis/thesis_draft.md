@@ -171,12 +171,27 @@ IP 스푸핑 공격은 패킷마다 출발지 IP를 바꾼다. 출발지 IP나 5
 | 웹 | FastAPI 0.109, React 18 + Vite 5, vis-network 9, ApexCharts 3 |
 | 실행 환경 | Ubuntu (WSL2 포함). 커널 모듈이 없는 환경은 OVS 유저스페이스 데이터패스 사용 |
 
-### 5.2 모의 트래픽 주입 시나리오
+### 5.2 구성 요소별 구현
+
+| 구성 요소 | 구현 | 주요 파일 |
+|:---|:---|:---|
+| 토폴로지 | 포트 번호를 고정한 4-스위치 다이아몬드 (OpenFlow 1.3, DPID 1~4) | `topo/diamond_topo.py` |
+| 컨트롤러 | Table-Miss, Proxy ARP, 목적지 기반 최단 경로, 루프백 가드, 2초 주기 포트 통계 발행 | `ryu/app/controller.py` |
+| 메시지 규격 | 4개 채널 Pydantic v2 모델 (SSOT) | `harness/contracts/sdn_events.py` |
+| 피처 계산 | 포트별 직전 관측치 대비 5대 피처, CSV 기록 | `pipeline/feature_extractor.py`, `pipeline/csv_logger.py` |
+| 트래픽 생성 | Scapy 정상 트래픽(3패턴 혼합), IP 스푸핑 SYN Flood | `traffic/traffic_normal.py`, `traffic/traffic_attack.py` |
+| 관제 백엔드 | Redis 4채널 구독·검증 후 WebSocket 중계, 운영자 수동 제어 API(트렁크 포트 거부, 사유 필수, 선택적 관리자 토큰) | `api/main.py`, `api/redis_bridge.py`, `api/manual_control.py` |
+| 관제탑 화면 | 상태 스트립(적색 경보·청색 격리·청록 카운트다운), 토폴로지 지도, PPS·BPP 차트, ms 타임라인, 자가 복구 알림, 비상 수동 제어 대화상자 | `ui/src/` |
+| 검증 도구 | 플로우 테이블·무유실 우회·FSM 수용 시험·UI 프레임률 측정 | `harness/verification/`, `ui/scripts/fps-check.mjs` |
+
+관제탑은 메시지를 애니메이션 프레임 단위로 모아 한 번에 반영해, 2초마다 들어오는 6개 메시지가 화면을 한 번만 다시 그리게 했다. 이 처리로 일반 CPU에서 60fps를 유지한다(12주차 검수서). 운영자 수동 명령은 자동 방어 명령과 같은 `sdn:control:command` 채널·같은 형식으로 발행되며, 사유 앞에 `[MANUAL]`이 붙어 이벤트 기록에서 구분된다.
+
+### 5.3 모의 트래픽 주입 시나리오
 
 - **정상 트래픽** (`traffic/traffic_normal.py`): H_legit → H_server. 웹 요청 70%(500~1,000B), 대용량 전송 20%(1,400B), ICMP 10%(64B)를 지수 분포 간격으로 혼합한다.
 - **공격 트래픽** (`traffic/traffic_attack.py`): H_attacker → H_server:80. 출발지 IP(사설·예약 대역 제외)와 포트를 패킷마다 무작위로 바꾼 SYN 패킷(54~74B)을 초당 1,000~5,000개 범위에서 주입한다.
 
-### 5.3 성능 평가 지표 및 실험 결과
+### 5.4 성능 평가 지표 및 실험 결과
 
 | 구분 | 지표 | 목표 | 결과 | 근거 |
 |:---|:---|:---:|:---:|:---|

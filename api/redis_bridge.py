@@ -127,6 +127,17 @@ class RedisBridge:
     # ------------------------------------------------------------------
     # Subscription loop
     # ------------------------------------------------------------------
+    async def publish(self, channel: str, message: BaseModel) -> int:
+        """Publish one contract message (week 13 manual control). Returns the subscriber count.
+
+        The bridge's own subscription receives it back, so the UI sees exactly what Ryu sees.
+        """
+        client = self._redis_factory()
+        try:
+            return int(await client.publish(channel, message.model_dump_json()))
+        finally:
+            await client.aclose()
+
     async def _set_connected(self, hub: ConnectionManager, connected: bool) -> None:
         if self.connected != connected:
             self.connected = connected

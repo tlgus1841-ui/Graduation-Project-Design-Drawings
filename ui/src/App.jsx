@@ -1,6 +1,7 @@
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
 import EventFeed from "./components/EventFeed.jsx";
 import IncidentStrip from "./components/IncidentStrip.jsx";
+import ManualControl from "./components/ManualControl.jsx";
 import PhaseBadge from "./components/PhaseBadge.jsx";
 import PortStatsPanel from "./components/PortStatsPanel.jsx";
 import RecoveryNotice from "./components/RecoveryNotice.jsx";
@@ -30,6 +31,7 @@ export default function App() {
           )}
           <PhaseBadge phase={state.phase} />
           <ConnectionBadge status={status} retries={retries} />
+          <ManualControl />
         </>
       }
     >

@@ -101,6 +101,15 @@ describe("applyEnvelope", () => {
     expect(s.recovery).toMatchObject({ inPort: 2, detectedAt: 10.123, cooldownAt: 38, restoredAt: 48.25 });
   });
 
+  it("labels operator commands as manual in the feed", () => {
+    const s = applyEnvelope(initialState, {
+      type: "sdn:control:command",
+      data: { timestamp: 5, command_id: "manual-isolate-1", action: "ISOLATE", target_dpid: 1, target_port: 2,
+        reason: "[MANUAL] admin: test", priority: 100 },
+    });
+    expect(s.events[0].kind).toBe("manual");
+  });
+
   it("applies a batch of envelopes in order as one update", () => {
     const one = applyEnvelope(applyEnvelope(initialState, stats(100, 1000, 800000)), stats(102, 7000, 1184000));
     const batched = applyEnvelope(initialState, { type: "batch", data: [stats(100, 1000, 800000), stats(102, 7000, 1184000)] });

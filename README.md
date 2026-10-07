@@ -83,6 +83,8 @@ Self_Defending_SDN_Tower/
 * 📅 **16주차 상세 일정 및 마일스톤:** [`docs/planning/schedule_and_milestones.md`](docs/planning/schedule_and_milestones.md)
 * 🛡️ **[공식] AI 하네스 엔지니어링 개발 계획서:** [`docs/planning/ai_harness_engineering_plan.md`](docs/planning/ai_harness_engineering_plan.md)
 * 🔍 **4단계 자율 방어 시나리오 명세서:** [`docs/specs/defense_scenarios.md`](docs/specs/defense_scenarios.md)
+* 🖥️ **관제탑 사용자 매뉴얼:** [`docs/writing/manual/operator_manual.md`](docs/writing/manual/operator_manual.md)
+* ✅ **실증 검증서 (9~12주차):** [`docs/writing/reports/verification/`](docs/writing/reports/verification/)
 * 🎓 **최종 학술 논문 초안 (작성용):** [`docs/writing/thesis/thesis_draft.md`](docs/writing/thesis/thesis_draft.md)
 * 📊 **발표 슬라이드 덱 아웃라인:** [`docs/writing/presentations/ppt_slide_deck_outline.md`](docs/writing/presentations/ppt_slide_deck_outline.md)
 * 🐙 **실전 Git & GitHub 3인 협업 가이드:** [`docs/guides/00_common/git_collaboration_guide.md`](docs/guides/00_common/git_collaboration_guide.md)
@@ -121,4 +123,6 @@ uv run python -m api.redis_replay --speed 4   # Ryu 대신 더미 시나리오�
 # 6. 관제탑 대시보드 실행 (Node 20+, 백엔드를 먼저 켜 두세요)
 cd ui && npm install && npm run dev      # → http://localhost:5173
 #    → WebSocket 주소 변경: ui/.env.example을 ui/.env로 복사 후 VITE_WS_URL 수정
+#    → 비상 수동 제어 보호: 백엔드 실행 전 export SDN_ADMIN_TOKEN=<비밀값>
+#    → 화면 성능 측정: cd ui && npm run build && npm run perf
 ```

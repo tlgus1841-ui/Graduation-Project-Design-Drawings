@@ -7,6 +7,8 @@ Endpoints:
 - GET /api/health   : liveness + active WebSocket session count
 - GET /api/topology : current topology snapshot (TopologySyncMessage)
 - WS  /ws           : real-time envelope stream (docs/specs/defense_scenarios.md §5.1)
+- POST /api/control/manual : operator emergency ISOLATE/RESTORE (week 13, api/manual_control.py).
+                             If SDN_ADMIN_TOKEN is set, the X-Admin-Token header must match.
 
 Data source:
 - mock (default): api/mock_generator.py replays the defense scenario in-process
@@ -24,13 +26,14 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, Optional, Union
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.manual_control import ManualControlRejected, ManualControlRequest, build_manual_command
 from api.mock_generator import SYSTEM_STATUS_TYPE, MockTelemetryGenerator
 from api.redis_bridge import RedisBridge, RedisFactory
 from api.websocket_hub import ConnectionManager, make_envelope
-from harness.contracts import REDIS_CHANNEL_TOPOLOGY_SYNC
+from harness.contracts import REDIS_CHANNEL_CONTROL_COMMAND, REDIS_CHANNEL_TOPOLOGY_SYNC
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +94,29 @@ def create_app(enable_mock: Optional[bool] = None, *, start_source: bool = True,
     @app.get("/api/topology")
     async def topology() -> Dict[str, Any]:
         return source.topology_snapshot().model_dump(mode="json")
+
+    @app.post("/api/control/manual")
+    async def manual_control(
+        req: ManualControlRequest, x_admin_token: Optional[str] = Header(default=None)
+    ) -> Dict[str, Any]:
+        expected = os.getenv("SDN_ADMIN_TOKEN")
+        if expected and x_admin_token != expected:
+            raise HTTPException(status_code=401, detail="관리자 토큰이 올바르지 않습니다.")
+        try:
+            command = build_manual_command(req)
+        except ManualControlRejected as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        payload = command.model_dump(mode="json")
+        if isinstance(source, RedisBridge):
+            try:
+                receivers = await source.publish(REDIS_CHANNEL_CONTROL_COMMAND, command)
+            except Exception as exc:
+                logger.warning("Manual command publish failed: %s", exc)
+                raise HTTPException(status_code=503, detail="Redis에 연결할 수 없어 명령을 보내지 못했습니다.") from exc
+            # The bridge's subscription echoes it to the UI; no direct broadcast (avoids duplicates).
+            return {"accepted": True, "delivered_to": "redis", "receivers": receivers, "command": payload}
+        await hub.broadcast(make_envelope(REDIS_CHANNEL_CONTROL_COMMAND, payload))
+        return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload}
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

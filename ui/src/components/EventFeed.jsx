@@ -5,6 +5,7 @@ import Panel from "./Panel.jsx";
 const KIND = {
   alert: { label: "ALERT", cls: "bg-red-500/20 text-red-300" },
   command: { label: "COMMAND", cls: "bg-sky-500/20 text-sky-300" },
+  manual: { label: "MANUAL", cls: "bg-amber-500/20 text-amber-300" },
   phase: { label: "STATE", cls: "bg-slate-600/60 text-slate-200" },
 };
 

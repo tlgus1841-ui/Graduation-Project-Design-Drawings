@@ -146,7 +146,7 @@ export function applyEnvelope(state, envelope) {
         incident: stampIncident(state.incident, data),
         events: pushEvent(state.events, {
           id: data.command_id,
-          kind: "command",
+          kind: String(data.reason ?? "").startsWith("[MANUAL]") ? "manual" : "command",
           ts: data.timestamp,
           title: `${data.action} · S${data.target_dpid}:${data.target_port}`,
           detail: data.reason,

@@ -13,6 +13,26 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] feat(api,ui) + docs: 김관우 13주차 비상 수동 제어, 관제 매뉴얼, 논문 구현 절
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `api/manual_control.py`: (신규) 수동 ISOLATE/RESTORE 요청 검증 → `ControlCommandMessage` 생성 (트렁크·존재하지 않는 포트 거부, 사유 필수, `[MANUAL] 운영자: 사유`)
+  - `api/main.py`: `POST /api/control/manual` (선택적 `SDN_ADMIN_TOKEN` → `X-Admin-Token`), live 모드는 Redis `sdn:control:command`로 발행(구독 에코로 UI 반영), mock 모드는 WebSocket 직접 브로드캐스트, Redis 장애 시 503
+  - `api/redis_bridge.py`: `publish()` 추가
+  - `ui/src/components/ManualControl.jsx`: (신규) 헤더 "비상 수동 제어" 버튼 + 확인 대화상자 (동작·대상 포트·사유·운영자·토큰, 확인 체크 후 실행, 정상 호스트 격리 경고, Esc 닫기, 포커스 복귀). body 포털 렌더링
+  - `ui/src/lib/api.js`: (신규) `sendManualControl`, `VITE_API_URL`
+  - `ui/src/lib/towerState.js`, `EventFeed.jsx`: `[MANUAL]` 명령을 주황 `MANUAL` 이벤트로 표시
+  - `tests/api/test_manual_control.py`: (신규) 14건
+  - `docs/writing/manual/operator_manual.md`: (신규) 관제탑 사용자 매뉴얼
+  - `docs/writing/thesis/thesis_draft.md`: 5.2 구성 요소별 구현 절 추가 (5.2→5.3, 5.3→5.4)
+  - `README.md`: 매뉴얼·검증서 링크, 관리자 토큰·성능 측정 안내
+* **상세 변경 내용 및 성과:**
+  - 브라우저 검수: 대화상자 열림·포커스, 확인 전 실행 비활성, 정상 호스트 경고, 전송 후 알림·MANUAL 이벤트, Esc 닫기, 모바일 넘침 없음, 오류 0. 트렁크 포트 API 직접 요청 409.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 새 엔드포인트 추가.
+* **다음 작업자 인수인계 메모:**
+  - Tech Lead 컨트롤러가 `sdn:control:command`를 구독해 ISOLATE(Priority 100 in_port drop)/RESTORE를 실행하면 수동 제어가 실제 스위치에 반영됨. 서킷 브레이커(`harness/safety/circuit_breaker.py`)가 수동 모드로 전환할 때도 이 API를 그대로 사용 가능.
+
 ### [2026-10-07] perf(ui) + docs(thesis): 김관우 12주차 관제탑 60fps 성능 검수 및 논문 본문 집필 착수
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Perf` / `Test` / `Docs`
