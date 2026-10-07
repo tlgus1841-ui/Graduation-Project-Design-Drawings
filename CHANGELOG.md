@@ -13,6 +13,23 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-07] perf(ui) + docs(thesis): 김관우 12주차 관제탑 60fps 성능 검수 및 논문 본문 집필 착수
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Perf` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/hooks/useControlTowerSocket.js`, `ui/src/lib/towerState.js`: 한 애니메이션 프레임에 들어온 WebSocket 메시지를 모아 `batch`로 한 번에 반영 (주기당 리렌더 6회 → 1회)
+  - `ui/src/components/TrafficCharts.jsx`: 차트 옵션 고정, 점별 dataLabels 제거(빈 라벨 240개 생성·측정 비용 제거) → 차트 위 최신값 행(`LatestValues`)으로 대체
+  - `ui/src/components/TopologyMap.jsx`, `EventFeed.jsx`: `memo` 적용
+  - `ui/scripts/fps-check.mjs` + `npm run perf`: (신규) 한 사이클 FPS·p95/p99·끊김 비율·Long Task 측정, CPU 1배/4배 조건. `playwright` devDependency 추가
+  - `docs/writing/reports/verification/week12_ui_performance_verification.md`: (신규) 개선 전후 검수서 + 원본 JSON
+  - `docs/writing/thesis/thesis_draft.md`: 1장(서론), 2장(2.1·2.2), 3장(아키텍처), 5장(환경·시나리오·결과 표) 초안
+* **상세 변경 내용 및 성과:**
+  - 일반 CPU: 평균 58.6 → **60.0fps**, p99 33.4 → **16.8ms**, 끊김 1.0 → **0%**
+  - CPU 4배 감속: 47.4 → **56.6fps**, p99 233 → **16.8ms**, Long Task 79 → 40회
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 차트 범례가 ApexCharts 내장 범례에서 최신값 행으로 바뀜 (같은 색·이름).
+* **다음 작업자 인수인계 메모:**
+  - 논문 5.3 표의 [ ] (F1, 추론 지연, 반응 시간, 종합 손실률)는 AI 모델·E2E 측정 후 채움. 2.3 선행 연구 비교는 문헌 조사 필요.
+
 ### [2026-10-07] feat(ui,verification,docs): 김관우 11주차 자가 복구 알림 UI, 플래핑 수용 시험, 논문 4장 초안
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Feat` / `Test` / `Docs`

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { clockMs } from "../lib/format.js";
 import Panel from "./Panel.jsx";
 
@@ -7,7 +8,7 @@ const KIND = {
   phase: { label: "STATE", cls: "bg-slate-600/60 text-slate-200" },
 };
 
-export default function EventFeed({ events }) {
+function EventFeed({ events }) {
   return (
     <Panel title="Security Events" subtitle={`최근 ${events.length}건`} className="h-[420px]">
       {events.length === 0 ? (
@@ -32,3 +33,5 @@ export default function EventFeed({ events }) {
     </Panel>
   );
 }
+
+export default memo(EventFeed);

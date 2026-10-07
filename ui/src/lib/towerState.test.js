@@ -101,6 +101,13 @@ describe("applyEnvelope", () => {
     expect(s.recovery).toMatchObject({ inPort: 2, detectedAt: 10.123, cooldownAt: 38, restoredAt: 48.25 });
   });
 
+  it("applies a batch of envelopes in order as one update", () => {
+    const one = applyEnvelope(applyEnvelope(initialState, stats(100, 1000, 800000)), stats(102, 7000, 1184000));
+    const batched = applyEnvelope(initialState, { type: "batch", data: [stats(100, 1000, 800000), stats(102, 7000, 1184000)] });
+    expect(batched.ports).toEqual(one.ports);
+    expect(batched.history).toEqual(one.history);
+  });
+
   it("replaces topology on sync and ignores unknown types", () => {
     const topo = { nodes: [{ id: "s1", status: "ATTACKED" }], links: [] };
     let s = applyEnvelope(initialState, { type: "sdn:topology:sync", data: { timestamp: 1, ...topo } });

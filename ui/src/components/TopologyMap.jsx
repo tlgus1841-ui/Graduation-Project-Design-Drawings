@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { DataSet } from "vis-data/peer";
 import { Network } from "vis-network/peer";
 import "vis-network/styles/vis-network.css";
@@ -62,7 +62,7 @@ function syncDataSet(ds, items) {
   ds.update(items);
 }
 
-export default function TopologyMap({ topology, ports }) {
+function TopologyMap({ topology, ports }) {
   const containerRef = useRef(null);
   const networkRef = useRef(null);
   const nodesRef = useRef(new DataSet());
@@ -133,6 +133,8 @@ export default function TopologyMap({ topology, ports }) {
     </Panel>
   );
 }
+
+export default memo(TopologyMap);
 
 function Legend({ color, label, line = false, dashed = false }) {
   return (

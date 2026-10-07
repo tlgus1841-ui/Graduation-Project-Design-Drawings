@@ -25,6 +25,16 @@ export function useControlTowerSocket(url = resolveWsUrl()) {
     let attempt = 0;
     let retryTimer = null;
     let pingTimer = null;
+    // One telemetry tick arrives as ~6 frames (a stats message per switch + status + topology).
+    // Queue them and apply once per animation frame so charts and the map redraw once, not six times.
+    let pending = [];
+    let frame = null;
+    const flush = () => {
+      frame = null;
+      const batch = pending;
+      pending = [];
+      if (batch.length) dispatch({ type: "batch", data: batch });
+    };
 
     const connect = () => {
       const ws = new WebSocket(url);
@@ -40,10 +50,11 @@ export function useControlTowerSocket(url = resolveWsUrl()) {
       ws.onmessage = (event) => {
         if (event.data === "pong") return;
         try {
-          dispatch(JSON.parse(event.data));
+          pending.push(JSON.parse(event.data));
         } catch {
-          // Ignore malformed frames; the backend only sends contract-validated JSON.
+          return; // Ignore malformed frames; the backend only sends contract-validated JSON.
         }
+        if (frame == null) frame = requestAnimationFrame(flush);
       };
 
       ws.onclose = () => {
@@ -61,6 +72,7 @@ export function useControlTowerSocket(url = resolveWsUrl()) {
     connect();
     return () => {
       closedByUs = true;
+      if (frame != null) cancelAnimationFrame(frame);
       clearTimeout(retryTimer);
       clearInterval(pingTimer);
       socketRef.current?.close();

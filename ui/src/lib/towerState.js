@@ -101,6 +101,7 @@ function applyPortStats(state, data) {
 export function applyEnvelope(state, envelope) {
   const { type, data } = envelope ?? {};
   if (!type || !data) return state;
+  if (type === "batch") return data.reduce(applyEnvelope, state);
   const next = { ...state, lastMessageAt: data.timestamp ?? state.lastMessageAt };
 
   switch (type) {
