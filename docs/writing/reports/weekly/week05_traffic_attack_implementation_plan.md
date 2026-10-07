@@ -1,7 +1,7 @@
 # 📗 [Domain Dev & QA] 5주차 구현 계획서 — 랜덤 IP 스푸핑 SYN Flood 공격기 (`traffic/traffic_attack.py`)
 > **담당자:** 유재민 (22101498 / Domain Dev & QA)
 > **해당 기간:** 5주차 (2026.09.28 ~ 2026.10.04)
-> **상위 근거 문서:** [`schedule_and_milestones.md`](../../planning/schedule_and_milestones.md), [`phase2_traffic_features_model.md`](phase2_traffic_features_model.md), [`week04_traffic_normal_implementation_plan.md`](week04_traffic_normal_implementation_plan.md) §6(체크섬 유틸 중복 리스크)
+> **상위 근거 문서:** [`schedule_and_milestones.md`](../../../planning/schedule_and_milestones.md), [`phase2_traffic_features_model.md`](../../../guides/dev_b_domain_qa/phase2_traffic_features_model.md), [`week04_traffic_normal_plan.md`](week04_traffic_normal_plan.md) §6(체크섬 유틸 중복 리스크)
 
 ---
 

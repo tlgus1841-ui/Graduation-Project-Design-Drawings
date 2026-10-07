@@ -1,6 +1,6 @@
 """Self-Defending SDN Tower - H_legit(10.0.0.1) -> H_server(10.0.0.4) 정상 트래픽 생성기.
 
-주간 계획: docs/guides/dev_b_domain_qa/week04_traffic_normal_implementation_plan.md
+주간 계획: docs/writing/reports/weekly/week04_traffic_normal_plan.md
 실행 예: sudo uv run python traffic/traffic_normal.py --src 10.0.0.1 --dst 10.0.0.4
 """
 

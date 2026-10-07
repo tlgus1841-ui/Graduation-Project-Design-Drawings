@@ -1,7 +1,7 @@
 # 📗 [Domain Dev & QA] 6주차 구현 계획서 — 실시간 5대 파생 피처 계산기 (`pipeline/feature_extractor.py`)
 > **담당자:** 유재민 (22101498 / Domain Dev & QA)
 > **해당 기간:** 6주차 (2026.10.05 ~ 2026.10.11)
-> **상위 근거 문서:** [`schedule_and_milestones.md`](../../planning/schedule_and_milestones.md), [`phase2_traffic_features_model.md`](../../guides/dev_b_domain_qa/phase2_traffic_features_model.md), [`week06_telemetry_pipeline_implementation_plan.md`](week06_telemetry_pipeline_implementation_plan.md)(박시현, 선행 의존성)
+> **상위 근거 문서:** [`schedule_and_milestones.md`](../../../planning/schedule_and_milestones.md), [`phase2_traffic_features_model.md`](../../../guides/dev_b_domain_qa/phase2_traffic_features_model.md), [`week06_telemetry_pipeline_implementation_plan.md`](week06_telemetry_pipeline_implementation_plan.md)(박시현, 선행 의존성)
 
 ---
 

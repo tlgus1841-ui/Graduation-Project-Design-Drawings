@@ -1,6 +1,6 @@
 """Self-Defending SDN Tower - H_attacker(10.0.0.2) -> H_server(10.0.0.4) 랜덤 IP 스푸핑 SYN Flood 공격기.
 
-주간 계획: docs/guides/dev_b_domain_qa/week05_traffic_attack_implementation_plan.md
+주간 계획: docs/writing/reports/weekly/week05_traffic_attack_implementation_plan.md
 실행 예: sudo uv run python traffic/traffic_attack.py --dst 10.0.0.4 --dport 80
 """
 
