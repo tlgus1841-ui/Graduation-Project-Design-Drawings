@@ -69,15 +69,17 @@ class AnomalyModel:
     def predict_single(self, feature_dict: Dict[str, float]) -> Tuple[bool, float]:
         """단일 포트 통계 피처에 대해 (이상 여부, 이상치 점수)를 반환한다.
 
-        점수가 낮을수록(음수로 갈수록) 이상치에 가깝다.
+        점수가 낮을수록(음수로 갈수록) 이상치에 가깝다. `decision_function()`만
+        호출한다 — IsolationForest.predict()는 내부적으로 decision_function을
+        다시 계산하므로 둘 다 부르면 100개 트리를 두 번 순회하게 되어, 실측상
+        단일 추론 지연이 요구사항(<10ms)의 2배 가까이 걸리는 문제가 있었다.
         """
         if not self._fitted:
             raise RuntimeError("모델이 아직 학습되지 않았습니다. fit()을 먼저 호출하세요.")
 
         row = np.array([[feature_dict[col] for col in FEATURE_COLUMNS]])
-        prediction = self.pipeline.predict(row)[0]
-        score = self.pipeline.decision_function(row)[0]
-        return bool(prediction == -1), float(score)
+        score = float(self.pipeline.decision_function(row)[0])
+        return score < 0, score
 
     def save(self, path: str = DEFAULT_MODEL_PATH) -> None:
         directory = Path(path).parent
