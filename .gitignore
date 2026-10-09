@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 dataset/*.csv
+model/*.joblib

@@ -1,0 +1,121 @@
+"""model.py 평가 하네스 (week07 계획서 §4).
+
+Mininet/Ryu가 없는 환경이라 docs/specs/defense_scenarios.md §3.1/§3.2의
+정상/공격 통계 특성을 따르는 합성 데이터셋으로 학습·평가한다.
+"""
+
+import random
+import time
+
+import pytest
+from sklearn.metrics import f1_score
+
+from model.model import FEATURE_COLUMNS, AnomalyModel
+from pipeline.csv_logger import FIELDNAMES, log_features
+
+random.seed(42)
+
+
+def _normal_sample() -> dict:
+    return {
+        "timestamp": time.time(),
+        "dpid": 1,
+        "port_no": 1,
+        "delta_pps": random.uniform(10, 100),
+        "delta_bps": random.uniform(5_000, 15_000),
+        "bpp": random.uniform(700, 1200),
+        "err_rate": random.uniform(0, 0.001),
+        "duration_sec": random.randint(10, 300),
+    }
+
+
+def _attack_sample() -> dict:
+    return {
+        "timestamp": time.time(),
+        "dpid": 1,
+        "port_no": 2,
+        "delta_pps": random.uniform(1000, 5000),
+        "delta_bps": random.uniform(500_000, 2_500_000),
+        "bpp": random.uniform(54, 74),
+        "err_rate": random.uniform(0, 0.001),
+        "duration_sec": random.randint(10, 300),
+    }
+
+
+def _build_dataset_csv(path: str, n_normal: int = 360, n_attack: int = 40) -> None:
+    """IsolationForest는 '희귀한 이상치'를 가정하는 모델이라, 실제 운영 환경처럼
+    정상이 다수(90%)·공격이 소수(10%)인 비율로 학습 데이터를 구성한다.
+    R1(contamination=0.1) 요구사항과도 맞춘 비율이다.
+    """
+    log_features(path, [_normal_sample() for _ in range(n_normal)], label=0)
+    log_features(path, [_attack_sample() for _ in range(n_attack)], label=1)
+
+
+@pytest.fixture
+def trained_model(tmp_path):
+    csv_path = str(tmp_path / "traffic_data.csv")
+    _build_dataset_csv(csv_path)
+    model = AnomalyModel()  # R1 기본값(contamination=0.1) 그대로 사용
+    model.fit(csv_path)
+    return model
+
+
+def test_model_detects_synthetic_attacks_f1_above_baseline(trained_model):
+    y_true = []
+    y_pred = []
+    for _ in range(100):
+        is_anomaly, _score = trained_model.predict_single(_normal_sample())
+        y_true.append(0)
+        y_pred.append(1 if is_anomaly else 0)
+    for _ in range(100):
+        is_anomaly, _score = trained_model.predict_single(_attack_sample())
+        y_true.append(1)
+        y_pred.append(1 if is_anomaly else 0)
+
+    assert f1_score(y_true, y_pred) >= 0.90
+
+
+def test_attack_score_lower_than_normal_score(trained_model):
+    _, normal_score = trained_model.predict_single(_normal_sample())
+    _, attack_score = trained_model.predict_single(_attack_sample())
+    assert attack_score < normal_score
+
+
+def test_predict_single_latency_under_10ms(trained_model):
+    sample = _attack_sample()
+    iterations = 100
+
+    start = time.perf_counter()
+    for _ in range(iterations):
+        trained_model.predict_single(sample)
+    elapsed = time.perf_counter() - start
+
+    avg_ms = (elapsed / iterations) * 1000
+    assert avg_ms < 10.0
+
+
+def test_save_and_load_roundtrip(trained_model, tmp_path):
+    model_path = str(tmp_path / "isolation_forest.joblib")
+    trained_model.save(model_path)
+
+    loaded = AnomalyModel.load(model_path)
+    sample = _attack_sample()
+    assert trained_model.predict_single(sample) == loaded.predict_single(sample)
+
+
+def test_predict_before_fit_raises():
+    model = AnomalyModel()
+    with pytest.raises(RuntimeError):
+        model.predict_single(_normal_sample())
+
+
+def test_fit_on_empty_csv_raises(tmp_path):
+    empty_csv = tmp_path / "empty.csv"
+    empty_csv.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError):
+        AnomalyModel().fit(str(empty_csv))
+
+
+def test_feature_columns_match_csv_logger_schema():
+    for col in FEATURE_COLUMNS:
+        assert col in FIELDNAMES
