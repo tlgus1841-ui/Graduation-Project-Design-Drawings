@@ -1,7 +1,8 @@
 """model.py 평가 하네스 (week07 계획서 §4).
 
 Mininet/Ryu가 없는 환경이라 docs/specs/defense_scenarios.md §3.1/§3.2의
-정상/공격 통계 특성을 따르는 합성 데이터셋으로 학습·평가한다.
+정상/공격 통계 특성을 따르는 합성 데이터셋으로 학습·평가한다. 합성 데이터
+생성기 자체는 15주차에 model/synthetic_samples.py로 옮겨 재사용한다.
 """
 
 import random
@@ -11,44 +12,12 @@ import pytest
 from sklearn.metrics import f1_score
 
 from model.model import FEATURE_COLUMNS, AnomalyModel
-from pipeline.csv_logger import FIELDNAMES, log_features
+from model.synthetic_samples import attack_sample as _attack_sample
+from model.synthetic_samples import build_labeled_dataset_csv as _build_dataset_csv
+from model.synthetic_samples import normal_sample as _normal_sample
+from pipeline.csv_logger import FIELDNAMES
 
 random.seed(42)
-
-
-def _normal_sample() -> dict:
-    return {
-        "timestamp": time.time(),
-        "dpid": 1,
-        "port_no": 1,
-        "delta_pps": random.uniform(10, 100),
-        "delta_bps": random.uniform(5_000, 15_000),
-        "bpp": random.uniform(700, 1200),
-        "err_rate": random.uniform(0, 0.001),
-        "duration_sec": random.randint(10, 300),
-    }
-
-
-def _attack_sample() -> dict:
-    return {
-        "timestamp": time.time(),
-        "dpid": 1,
-        "port_no": 2,
-        "delta_pps": random.uniform(1000, 5000),
-        "delta_bps": random.uniform(500_000, 2_500_000),
-        "bpp": random.uniform(54, 74),
-        "err_rate": random.uniform(0, 0.001),
-        "duration_sec": random.randint(10, 300),
-    }
-
-
-def _build_dataset_csv(path: str, n_normal: int = 360, n_attack: int = 40) -> None:
-    """IsolationForest는 '희귀한 이상치'를 가정하는 모델이라, 실제 운영 환경처럼
-    정상이 다수(90%)·공격이 소수(10%)인 비율로 학습 데이터를 구성한다.
-    R1(contamination=0.1) 요구사항과도 맞춘 비율이다.
-    """
-    log_features(path, [_normal_sample() for _ in range(n_normal)], label=0)
-    log_features(path, [_attack_sample() for _ in range(n_attack)], label=1)
 
 
 @pytest.fixture

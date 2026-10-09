@@ -17,8 +17,10 @@ from scapy.packet import Packet
 from scapy.sendrecv import send
 
 try:
+    from traffic.attack_profiles import PRESETS, get_preset
     from traffic.checksum_utils import finalize_checksum
 except ImportError:  # `python traffic/traffic_attack.py`로 직접 실행될 때 (패키지 컨텍스트 없음)
+    from attack_profiles import PRESETS, get_preset  # type: ignore[no-redef]
     from checksum_utils import finalize_checksum  # type: ignore[no-redef]
 
 # Ethernet 헤더(14B)는 send() 시 OS/드라이버가 부착하며 Scapy 객체 길이엔 포함되지 않는다.
@@ -101,14 +103,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--duration", type=float, default=10.0, help="총 실행 시간(초)")
     parser.add_argument("--min-pps", type=int, default=PPS_RANGE[0], help="초당 최소 패킷 수")
     parser.add_argument("--max-pps", type=int, default=PPS_RANGE[1], help="초당 최대 패킷 수")
+    parser.add_argument(
+        "--preset", choices=sorted(PRESETS), default=None,
+        help="시연용 프리셋 (지정 시 --min-pps/--max-pps 대신 사용)",
+    )
     parser.add_argument("--verbose", action="store_true", help="Scapy 전송 로그 출력")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.preset:
+        preset = get_preset(args.preset)
+        pps_range = (preset.min_pps, preset.max_pps)
+    else:
+        pps_range = (args.min_pps, args.max_pps)
+
     profile = AttackProfile(dst=args.dst, dport=args.dport)
-    result = run(profile, args.duration, (args.min_pps, args.max_pps), verbose=args.verbose)
+    result = run(profile, args.duration, pps_range, verbose=args.verbose)
     avg_pps = result["sent"] / result["seconds"] if result["seconds"] else 0
     print(f"[traffic_attack] 전송 완료: 총 {result['sent']}건, {result['seconds']}초간 평균 {avg_pps:.0f} PPS")
 
