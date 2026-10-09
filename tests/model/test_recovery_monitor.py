@@ -3,9 +3,11 @@
 from model.recovery_monitor import ATTACK_CEASE_PPS, RecoveryMonitor, RecoveryPhase
 
 ATTACK_PPS = 3000.0
-ATTACK_SCORE = -0.85
+# model/detection_guard.py 보정 노트 참고: 실측 AnomalyModel 점수는
+# 공격 -0.15~-0.05, 정상 +0.02~+0.15 범위라 그 범위 안의 값을 쓴다.
+ATTACK_SCORE = -0.1
 NORMAL_PPS = 50.0
-NORMAL_SCORE = -0.1
+NORMAL_SCORE = 0.08
 
 
 def test_stays_mitigated_while_attack_continues():

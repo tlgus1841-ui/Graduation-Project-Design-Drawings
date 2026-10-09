@@ -6,6 +6,13 @@ docs/specs/defense_scenarios.md §2, §3.4의 FSM 중 MITIGATED <-> COOLDOWN_VER
 -> NORMAL 구간을 AI Worker 쪽에서 판단한다. 차단/우회 플로우 설치·삭제 자체는
 박시현 담당(ryu/app/controller.py, flapping_fsm.py)이며, 이 모듈은 "지금
 RESTORE를 요청해도 되는가"만 판단한다.
+
+SCORE_RECOVERY_THRESHOLD 보정 (13주차에 실측으로 수정, model/detection_guard.py
+참고): 원래 -0.5였으나, 실제 AnomalyModel의 decision_function() 점수는
+공격도 -0.15~-0.05 범위라 "score >= -0.5"가 항상 참이 되어 사실상 아무런
+게이트 역할을 못 했다(= PPS 조건 하나만으로 복구를 판단하던 것과 동일).
+공격/정상 점수가 0을 기준으로 깨끗이 갈리는 걸 실측으로 확인해 0.0으로
+재보정했다.
 """
 
 from __future__ import annotations
@@ -14,7 +21,7 @@ from enum import Enum
 from typing import Optional
 
 ATTACK_CEASE_PPS = 100  # docs/specs/defense_scenarios.md §6
-SCORE_RECOVERY_THRESHOLD = -0.5
+SCORE_RECOVERY_THRESHOLD = 0.0
 COOLDOWN_SEC = 10.0
 
 

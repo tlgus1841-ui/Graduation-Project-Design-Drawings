@@ -105,7 +105,7 @@
 |:---|:---|
 | 트래픽 | H_attacker(10.0.0.2) → H_server, 무작위 출발지 IP SYN Flood (`traffic_attack.py`) |
 | 공격 강도 | `ATTACK_PPS` 3,000 PPS (시험 범위 1,000~5,000) `확정`, 패킷 크기 54~74B `확정` |
-| 탐지 지표 | S1:2 BPP ≤ `BPP_ATTACK_MAX`(80B) **그리고** Isolation Forest 스코어 < `SCORE_THRESHOLD`(-0.5) `확정` |
+| 탐지 지표 | S1:2 BPP ≤ `BPP_ATTACK_MAX`(80B) **그리고** Isolation Forest 스코어 < `SCORE_THRESHOLD`(0.0, 13주차 실측 재보정 — 아래 §6 각주 참고) `확정` |
 | 전이 조건 T1 | 위 조건이 `DETECT_CONSECUTIVE`(2) 주기 연속 충족 `제안` — 단일 스파이크 오탐(Flash Crowd) 방지 |
 | 발행 메시지 | AI Worker → `sdn:anomaly:alert` (`AnomalyAlertMessage`, `threat_type=SYN_FLOOD_SPOOFING`) |
 | 관제탑 | S1 노드·S1:2 링크 적색 점멸, 경보 피드에 팝업 1건 추가, 배지 `UNDER ATTACK` |
@@ -200,7 +200,7 @@ FastAPI는 Redis 채널 메시지를 아래 봉투(envelope)로 감싸 브로드
 | `ATTACK_PPS` | 3,000 (1,000~5,000) | PPS | 확정 | 유재민 | `schedule_and_milestones.md` 5주차 |
 | `ATTACK_PKT_SIZE` | 54~74 | Byte | 확정 | 유재민 | `roadmap_v2.md` Sprint 4 |
 | `BPP_ATTACK_MAX` | 80 | Byte | 제안 | 유재민 | 공격 패킷 최대 74B + 여유 |
-| `SCORE_THRESHOLD` | -0.5 | - | 확정 | 유재민 | Phase2 가이드 |
+| `SCORE_THRESHOLD` | 0.0 (13주차 재보정, 원래 -0.5) | - | 확정 | 유재민 | 13주차 실측 — 학습된 AnomalyModel의 decision_function() 점수가 공격도 -0.15~-0.05 범위라 -0.5는 영원히 도달 못 하는 값이었음. 공격/정상 점수가 0을 기준으로 깨끗이 갈리는 걸 확인해 재보정 (`model/detection_guard.py`) |
 | `DETECT_CONSECUTIVE` | 2 | 주기 | 제안 | 유재민 | Flash Crowd 오탐 방지 |
 | `ATTACK_CEASE_PPS` | 100 | PPS | 제안 | 유재민 | 정상 PPS 상한 |
 | `COOLDOWN_SEC` | 10 | 초 | 확정 | 박시현·유재민 | `roadmap_v2.md` Sprint 4 |
