@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi==0.109.2",
+    "networkx==2.5.1",
     "pydantic==2.6.1",
     "redis==5.0.1",
     "scapy==2.5.0",

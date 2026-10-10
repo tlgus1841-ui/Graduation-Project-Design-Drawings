@@ -143,6 +143,35 @@ def test_anomaly_alert_validation():
     assert recovered.score == -0.785
     assert recovered.pps == 4820.5
     assert recovered.metadata["model"] == "IsolationForest-v1"
+    assert recovered.err_rate == 0.0
+
+
+def test_anomaly_alert_with_delta_aliases_and_err_rate():
+    """Verify feature extractor naming (delta_pps, delta_bps, err_rate) is accepted."""
+    alert = AnomalyAlertMessage(
+        dpid=1,
+        in_port=2,
+        threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
+        score=-0.82,
+        delta_pps=5000.0,
+        delta_bps=3200000.0,
+        bpp=64.0,
+        err_rate=0.015,
+    )
+    assert alert.pps == 5000.0
+    assert alert.bps == 3200000.0
+    assert alert.bpp == 64.0
+    assert alert.err_rate == 0.015
+
+    # Also verify parsing from JSON with delta naming
+    raw = (
+        '{"dpid": 1, "in_port": 2, "score": -0.8, '
+        '"delta_pps": 3500.0, "delta_bps": 224000.0, "bpp": 64.0}'
+    )
+    parsed = AnomalyAlertMessage.model_validate_json(raw)
+    assert parsed.pps == 3500.0
+    assert parsed.bps == 224000.0
+    assert parsed.err_rate == 0.0
 
 
 def test_anomaly_alert_missing_fields_rejected():

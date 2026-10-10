@@ -239,3 +239,23 @@ def test_port_stats_reply_with_empty_body():
     parsed = PortStatsMessage.model_validate_json(published_json)
     assert parsed.dpid == 3
     assert parsed.stats == []
+
+
+def test_redis_init_socket_connect_timeout(monkeypatch):
+    """Verify _init_redis configures both socket_timeout and socket_connect_timeout."""
+    import redis
+
+    mock_redis_cls = MagicMock()
+    monkeypatch.setattr(redis, "Redis", mock_redis_cls)
+
+    controller = SelfDefendingSDNController()
+    controller._init_redis()
+
+    mock_redis_cls.assert_called_with(
+        host=controller.redis_host,
+        port=controller.redis_port,
+        db=0,
+        decode_responses=True,
+        socket_timeout=0.5,
+        socket_connect_timeout=0.5,
+    )

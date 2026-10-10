@@ -13,7 +13,7 @@ Redis Pub/Sub Channels:
 import time
 from enum import Enum
 from typing import Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 # =====================================================================
@@ -72,12 +72,30 @@ class AnomalyAlertMessage(BaseModel):
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp")
     dpid: int = Field(..., description="Ingress switch DPID experiencing anomaly")
     in_port: int = Field(..., description="Attacking traffic ingress port")
-    threat_type: str = Field(ThreatType.SYN_FLOOD_SPOOFING.value, description="Detected threat type")
+    threat_type: str = Field(
+        ThreatType.SYN_FLOOD_SPOOFING.value,
+        description="Detected threat type",
+    )
     score: float = Field(..., description="Anomaly score from Isolation Forest (e.g., -1.0 to 0.0)")
-    pps: float = Field(..., description="Packet per second rate (ΔPPS)")
-    bps: float = Field(..., description="Bytes per second rate (ΔBPS)")
+    pps: float = Field(
+        ...,
+        validation_alias=AliasChoices("pps", "delta_pps"),
+        description="Packet per second rate (ΔPPS)",
+    )
+    bps: float = Field(
+        ...,
+        validation_alias=AliasChoices("bps", "delta_bps"),
+        description="Bytes per second rate (ΔBPS)",
+    )
     bpp: float = Field(..., description="Bytes per packet (BPP)")
-    metadata: Dict[str, str] = Field(default_factory=dict, description="Optional diagnostic attributes")
+    err_rate: float = Field(
+        default=0.0,
+        description="Error packet rate (Δrx_errors / Δpackets)",
+    )
+    metadata: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional diagnostic attributes",
+    )
 
 
 # =====================================================================

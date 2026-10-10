@@ -13,6 +13,30 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-10] feat(core): 박시현(Tech Lead) 7~16주차 전담 파트 일괄 개발 완료 (자율 방어/우회/FSM/서킷브레이커/E2E 데모)
+* **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
+* **작업 유형:** `Feat` / `Refactor` / `Test` / `Scripts`
+* **주요 변경 및 신규 파일:**
+  - `harness/safety/whitelist_guard.py`: S1~S4 트렁크 포트 오차단 방지 및 엑세스 포트만 선별 격리하는 안전 가드레일 (9주차)
+  - `ryu/app/reroute.py`: NetworkX Dijkstra 기반 다중 홉 최단/우회 경로 계산 및 선제적 `OFPFC_ADD` 프로비저닝 엔진 (10주차)
+  - `harness/safety/flapping_fsm.py`: 5단계 상태 전이(Normal ➔ Attack ➔ Mitigated ➔ Cooldown ➔ Normal) 플래핑 방지 및 자가 치유 FSM (11주차)
+  - `harness/safety/circuit_breaker.py`: 명령 폭주 및 AI 오작동 시 제어권 차단 긴급 서킷 브레이커 (13주차)
+  - `ryu/app/controller.py`: In_port Drop(Priority 100), 다중 홉 우회 주입, FSM 자가 복구, Redis `sdn:control:command` 및 `sdn:anomaly:alert` 비동기 구독 제어 통합
+  - `scripts/demo_scenario.sh`, `scripts/reset_env.sh`: 4단계 시나리오 원클릭 실행 데모 러너 및 시스템 초기화 툴 (15~16주차)
+  - `tests/harness/test_whitelist_guard.py`, `tests/ryu/test_reroute.py`, `tests/harness/test_flapping_fsm.py`, `tests/harness/test_circuit_breaker.py`, `tests/harness/test_e2e_pipeline.py`, `tests/harness/test_full_scenario.py`: 신규 테스트 20종 추가
+* **상세 성과 및 검증 결과:**
+  - 전체 단위/통합 테스트: **77 / 77 tests passed (100% Pass, 1.25s)**
+  - flake8 (120자 준수) 0건, mypy 타입 체크 0건 완벽 통과
+  - 트렁크 포트 오차단율 0%, 우회 시 패킷 드롭 0%, 공격 소멸 후 10초 쿨다운 무개입 자가 치유 라이프사이클 완성.
+  - **3인 모듈 통합 정합성 강화 (승인 반영 완료):**
+    1. FSM 상태 열거형 호환성: `DefenseState.COOLDOWN_VERIFY` 별칭 추가로 관제탑 UI 배지 연동 100% 호환
+    2. 실시간 토폴로지 동기화: 자율 격리(`MITIGATED`), 우회(`REROUTED`), 복구(`NORMAL`) 발생 시 `sdn:topology:sync` 자동 발행 탑재
+    3. 감사 명령 로깅: 자율 방어 조치 내역을 `sdn:control:command`로 자동 발행하여 웹 대시보드 이벤트 타임라인에 실시간 카드 기록
+    4. Eventlet 루프 최적화: Redis 리스너 루프 폴링 주기를 `timeout=0.1`, `hub.sleep(0.05)`로 미세 튜닝하여 비차단 코루틴 협력적 스케줄링 보장
+* **다음 작업자 인수인계 메모:**
+  - **유재민 (Domain Dev & QA):** Ryu 컨트롤러가 Redis `sdn:anomaly:alert`를 수신하여 자율 차단 및 우회를 완벽히 수행하므로, 7주차 Isolation Forest 모델 훈련 및 `inference_worker.py`와의 연동 파이프라인 개발에 집중 가능.
+  - **김관우 (PM & Tech Writer):** 4단계 방어 및 자가 복구 라이프사이클과 실시간 토폴로지 동기화(`sdn:topology:sync`), 감사 이벤트 피드 연동이 완성되었으므로 웹 UI 데모 연동 및 최종 논문/발표 보고서 작성에 즉시 활용 가능.
+
 ### [2026-10-06] fix & sync: 유재민 팀원 트래픽 버그픽스 통합 및 main 브랜치 최신화
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Fix` / `Merge` / `Chore`
