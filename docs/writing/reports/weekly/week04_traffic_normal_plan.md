@@ -2,7 +2,7 @@
 > **담당자:** 유재민 (22101498 / Domain Dev & QA)
 > **해당 기간:** 4주차 (2026.09.21 ~ 2026.09.27)
 > **개발 단계:** Phase 2 (코어 모듈 구현 & Mock 하네스 기반 병렬 개발) 착수 주차
-> **상위 근거 문서:** [`schedule_and_milestones.md`](../../planning/schedule_and_milestones.md), [`phase2_traffic_features_model.md`](phase2_traffic_features_model.md)
+> **상위 근거 문서:** [`schedule_and_milestones.md`](../../../planning/schedule_and_milestones.md), [`phase2_traffic_features_model.md`](../../../guides/dev_b_domain_qa/phase2_traffic_features_model.md)
 
 ---
 
