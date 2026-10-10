@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir \
     webob==1.8.7 \
     networkx==2.5.1 \
     redis==5.0.1 \
+    pydantic>=2.0.0 \
     ryu==4.34
 
 EXPOSE 6653 8080

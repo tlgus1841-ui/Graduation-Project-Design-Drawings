@@ -15,8 +15,11 @@ services:
     container_name: sdn-ryu
     restart: unless-stopped
     network_mode: host
+    environment:
+      - PYTHONPATH=/app:/workspace
     volumes:
       - ./ryu/app:/app
+      - ./harness:/workspace/harness
     command: ryu-manager --ofp-tcp-listen-port 6653 --observe-links /app/controller.py
     depends_on:
       - redis-broker
