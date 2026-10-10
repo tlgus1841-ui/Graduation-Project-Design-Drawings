@@ -37,6 +37,146 @@
   - **유재민 (Domain Dev & QA):** Ryu 컨트롤러가 Redis `sdn:anomaly:alert`를 수신하여 자율 차단 및 우회를 완벽히 수행하므로, 7주차 Isolation Forest 모델 훈련 및 `inference_worker.py`와의 연동 파이프라인 개발에 집중 가능.
   - **김관우 (PM & Tech Writer):** 4단계 방어 및 자가 복구 라이프사이클과 실시간 토폴로지 동기화(`sdn:topology:sync`), 감사 이벤트 피드 연동이 완성되었으므로 웹 UI 데모 연동 및 최종 논문/발표 보고서 작성에 즉시 활용 가능.
 
+### [2026-10-07] docs: 김관우 16주차 주간 보고서 합본, 논문 결론 장, 심사 피드백 정리서
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Docs`
+* **주요 변경 파일:**
+  - `docs/writing/reports/weekly/semester_weekly_report_compilation.md`: (신규) 1~16주차 합본 — 학기 요약, 주차별 한눈표, 주차별 팀원 보고, 산출물 목록
+  - `docs/writing/reports/final_review_feedback.md`: (신규) 심사 당일 기록 · 질의응답 · 피드백 양식, 방학 개선 과제 9건 사전 도출
+  - `docs/writing/thesis/thesis_draft.md`: 지도교수 기입, 초록 복구 방식(타임아웃 → 10초 쿨다운 검증)과 실측 수치 반영, 6장 결론 · 한계 · 향후 과제 작성
+  - `docs/writing/presentations/final_demo_runbook.md`: §8 심사 당일 진행 · 역할 분담
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - **[박시현 · 유재민]** 합본의 7~15주차 `진행중` 항목은 저장소 기준. 각자 결과가 반영되면 합본 해당 칸과 결과 수치를 갱신해 주세요.
+  - **[박시현]** 논문 초록 · 4.3절은 "Dijkstra 기반 우회"라고 쓰지만 현재 검증은 고정 우회 경로(S1→S3→S4) 기준. 경로 계산 엔진이 들어오면 그대로, 아니면 문구 조정 필요.
+  - **[유재민]** 논문 5.4 표의 F1 · 추론 지연 `[ ]` 칸.
+
+### [2026-10-07] docs: 김관우 15주차 최종 발표 10장 덱, 시연 진행표 · 리허설 기록지
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Docs`
+* **주요 변경 파일:**
+  - `docs/writing/presentations/final_demo_runbook.md`: (신규) 발표 시간 배분, 시연 전 준비 9항목, 4단계 시연 조작 · 대사, 장애 대응, 백업 영상 녹화 기준, 리허설 3회 기록표, 예상 질문 7개
+  - 최종 발표 10장 슬라이드 (팀 슬라이드 링크로 공유): 9~14주차 실측 수치(규칙 증가 0, 전환 손실 0 / 4,000, 플래핑 7 → 0, 60fps, 78.4ms, 손실 0%) 반영
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - **[유재민]** 백업 시연 영상 녹화 (진행표 §5 기준). 실제 AI 모델이 연동되면 성능 슬라이드 수치를 재측정값으로 교체.
+  - **[박시현]** 시연 실행 순서(진행표 §2)가 컨트롤러 실행 방식과 맞는지 확인. 명세 Q5 결정되면 5번 슬라이드 "검토중" 문구 갱신.
+  - 표지의 지도교수명 · 발표일은 비워 둠.
+
+### [2026-10-07] test(e2e) + docs: 김관우 14주차 E2E 통합 검증, 차단·우회 우선순위 충돌 발견
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Test` / `Docs` / `Spec`
+* **주요 변경 파일:**
+  - `harness/verification/e2e_scenario.py`: ping 출력을 파일로 기록(호스트 pty 버퍼 포화로 ping이 멈추던 문제 수정), 응답 시각 기반 구간 손실, S1 우회 규칙 카운터 추가
+  - `harness/verification/e2e_defense_standin.py`: `--drop-priority` 옵션, 비정상 카운터(ΔPPS > 1e7) 무시
+  - `docs/writing/reports/verification/week14_e2e_verification.md`: (신규) E2E 보고서 + 원본 JSON·실데이터 관제탑 화면
+  - `docs/specs/defense_scenarios.md`: v1.1, Q5 추가 (차단·우회 규칙 우선순위 충돌)
+  - `docs/writing/thesis/thesis_draft.md`: 4.2 우선순위 서술, 5.4 결과 표(반응 78.4ms, 손실 0%), 5.5 E2E 절
+* **상세 변경 내용 및 성과 (3회):**
+  - 4단계 루프 완결, 정상 ping 손실 **0 / 4,312** (공격 구간 0 / 1,123), 격리 후 서버 도달 공격 0, 플래핑 0, 공격 종료 → 복구 평균 12.73초, 탐지 확정 → 규칙 설치 평균 78.4ms
+  - 관제탑 live 모드에서 UNDER ATTACK → MITIGATED → NORMAL 전환과 S1:3 → S1:4 트래픽 이동이 실데이터로 확인됨
+* **영향 범위 및 주의사항 (Breaking Changes):** 명세 변경 제안(Q5). 코드 인터페이스 변경 없음.
+* **다음 작업자 인수인계 메모:**
+  - **[박시현] 명세 Q5:** 차단과 우회가 둘 다 Priority 100이면 차단이 무력화됨(실측: 차단 적중 0, 공격 27,607패킷이 우회로로 서버 도달). ISOLATE drop을 200으로 올리거나 REROUTE 일치 조건에 `in_port=1` 추가 필요.
+  - **[유재민]** Mininet 종료 시 포트 카운터 리셋으로 ΔPPS ≈ 9.2e18이 계산됨. `feature_extractor`에 비정상 값 무시 처리 권장.
+  - 임시 구성요소(규칙 스코어, SpecFSM, ovs-ofctl)는 실제 AI·FSM·컨트롤러가 들어오면 같은 시나리오로 교체 측정.
+
+### [2026-10-07] feat(api,ui) + docs: 김관우 13주차 비상 수동 제어, 관제 매뉴얼, 논문 구현 절
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `api/manual_control.py`: (신규) 수동 ISOLATE/RESTORE 요청 검증 → `ControlCommandMessage` 생성 (트렁크·존재하지 않는 포트 거부, 사유 필수, `[MANUAL] 운영자: 사유`)
+  - `api/main.py`: `POST /api/control/manual` (선택적 `SDN_ADMIN_TOKEN` → `X-Admin-Token`), live 모드는 Redis `sdn:control:command`로 발행(구독 에코로 UI 반영), mock 모드는 WebSocket 직접 브로드캐스트, Redis 장애 시 503
+  - `api/redis_bridge.py`: `publish()` 추가
+  - `ui/src/components/ManualControl.jsx`: (신규) 헤더 "비상 수동 제어" 버튼 + 확인 대화상자 (동작·대상 포트·사유·운영자·토큰, 확인 체크 후 실행, 정상 호스트 격리 경고, Esc 닫기, 포커스 복귀). body 포털 렌더링
+  - `ui/src/lib/api.js`: (신규) `sendManualControl`, `VITE_API_URL`
+  - `ui/src/lib/towerState.js`, `EventFeed.jsx`: `[MANUAL]` 명령을 주황 `MANUAL` 이벤트로 표시
+  - `tests/api/test_manual_control.py`: (신규) 14건
+  - `docs/writing/manual/operator_manual.md`: (신규) 관제탑 사용자 매뉴얼
+  - `docs/writing/thesis/thesis_draft.md`: 5.2 구성 요소별 구현 절 추가 (5.2→5.3, 5.3→5.4)
+  - `README.md`: 매뉴얼·검증서 링크, 관리자 토큰·성능 측정 안내
+* **상세 변경 내용 및 성과:**
+  - 브라우저 검수: 대화상자 열림·포커스, 확인 전 실행 비활성, 정상 호스트 경고, 전송 후 알림·MANUAL 이벤트, Esc 닫기, 모바일 넘침 없음, 오류 0. 트렁크 포트 API 직접 요청 409.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 새 엔드포인트 추가.
+* **다음 작업자 인수인계 메모:**
+  - Tech Lead 컨트롤러가 `sdn:control:command`를 구독해 ISOLATE(Priority 100 in_port drop)/RESTORE를 실행하면 수동 제어가 실제 스위치에 반영됨. 서킷 브레이커(`harness/safety/circuit_breaker.py`)가 수동 모드로 전환할 때도 이 API를 그대로 사용 가능.
+
+### [2026-10-07] perf(ui) + docs(thesis): 김관우 12주차 관제탑 60fps 성능 검수 및 논문 본문 집필 착수
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Perf` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/hooks/useControlTowerSocket.js`, `ui/src/lib/towerState.js`: 한 애니메이션 프레임에 들어온 WebSocket 메시지를 모아 `batch`로 한 번에 반영 (주기당 리렌더 6회 → 1회)
+  - `ui/src/components/TrafficCharts.jsx`: 차트 옵션 고정, 점별 dataLabels 제거(빈 라벨 240개 생성·측정 비용 제거) → 차트 위 최신값 행(`LatestValues`)으로 대체
+  - `ui/src/components/TopologyMap.jsx`, `EventFeed.jsx`: `memo` 적용
+  - `ui/scripts/fps-check.mjs` + `npm run perf`: (신규) 한 사이클 FPS·p95/p99·끊김 비율·Long Task 측정, CPU 1배/4배 조건. `playwright` devDependency 추가
+  - `docs/writing/reports/verification/week12_ui_performance_verification.md`: (신규) 개선 전후 검수서 + 원본 JSON
+  - `docs/writing/thesis/thesis_draft.md`: 1장(서론), 2장(2.1·2.2), 3장(아키텍처), 5장(환경·시나리오·결과 표) 초안
+* **상세 변경 내용 및 성과:**
+  - 일반 CPU: 평균 58.6 → **60.0fps**, p99 33.4 → **16.8ms**, 끊김 1.0 → **0%**
+  - CPU 4배 감속: 47.4 → **56.6fps**, p99 233 → **16.8ms**, Long Task 79 → 40회
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 차트 범례가 ApexCharts 내장 범례에서 최신값 행으로 바뀜 (같은 색·이름).
+* **다음 작업자 인수인계 메모:**
+  - 논문 5.3 표의 [ ] (F1, 추론 지연, 반응 시간, 종합 손실률)는 AI 모델·E2E 측정 후 채움. 2.3 선행 연구 비교는 문헌 조사 필요.
+
+### [2026-10-07] feat(ui,verification,docs): 김관우 11주차 자가 복구 알림 UI, 플래핑 수용 시험, 논문 4장 초안
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/IncidentStrip.jsx`: COOLDOWN_VERIFY 청록색 스트립 + 10초 카운트다운·진행 막대
+  - `ui/src/components/RecoveryNotice.jsx`: (신규) 자가 복구 완료 알림 (탐지·우회·격리·복구 확인·복구 완료 ms 타임라인, 총 소요 시간, 확인 버튼/15초 자동 닫힘)
+  - `ui/src/lib/towerState.js`: `incident.cooldownAt`(재진입 시 리셋), `recovery` 보고서, `COOLDOWN_SEC`
+  - `harness/verification/fsm_acceptance.py`: (신규) 명세 FSM 참조 구현(`SpecFSM`) + 5개 시나리오 수용 시험, 비교용 타임아웃식 FSM
+  - `tests/harness/test_fsm_acceptance.py`: (신규) 9건
+  - `docs/writing/reports/verification/week11_self_healing_verification.md`: (신규) 11주차 검증서 + 원본 JSON
+  - `docs/writing/thesis/thesis_draft.md`: 제4장(4.1~4.4) 본문 초안 v0.1
+* **상세 변경 내용 및 성과:**
+  - 명세 FSM: 5개 시나리오 모두 플래핑 0회 (V5 충족), 지속 공격 종료 후 12초 내 복구. 타임아웃식 FSM은 맥동 공격에서 플래핑 7회로 실패 → 시험 도구의 검출력 확인.
+  - 브라우저 검수: 카운트다운 9.9→6.9초 감소, 복구 확인 시작→완료 10.0초, 알림 표시·닫힘, 모바일 넘침 없음, 오류 0.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - Tech Lead `flapping_fsm.py` 구현 시 `step(sample) -> [명령]` 형태로 감싸 `fsm_acceptance.run_all()`에 넣으면 같은 기준으로 판정됨.
+  - 논문 초록의 "FSM 타임아웃을 통해 자가 복구" 표현은 명세(타임아웃 없이 쿨다운 후 명시적 RESTORE)와 다름. 초록 작성자 확인 필요.
+
+### [2026-10-07] feat(ui,verification): 김관우 10주차 청색 우회 경로 UI 및 무유실 경로 전환 실증
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/IncidentStrip.jsx`: MITIGATED 단계 청색 스트립 (격리 포트, 우회 경로, 탐지→격리·우회 ms, 격리 시각)
+  - `ui/src/lib/towerState.js`: ISOLATE·REROUTE 명령 시각을 `incident`에 기록 (첫 명령만)
+  - `ui/src/lib/format.js`: `elapsedMs` 추가
+  - `ui/src/components/TopologyMap.jsx`: REROUTED 링크 청색 발광 효과
+  - `harness/verification/reroute_loss_check.py`: (신규) ping 도중 우회 규칙을 S3→S4→S1 순서로 주입하고 손실률·우회 규칙 카운터 측정
+  - `tests/harness/test_reroute_loss_check.py`, `ui/src/lib/*.test.js`: 테스트 추가
+  - `docs/writing/reports/verification/week10_reroute_loss_verification.md`: (신규) 10주차 실증 검증서 + 원본 데이터 4회분
+* **상세 변경 내용 및 성과:**
+  - 실측: 경로 전환 중 정상 ping **4,000 / 4,000 수신 (손실 0%)**, 회당 약 800개가 우회 규칙 통과.
+  - 브라우저 검수: MITIGATED 청색 스트립, 우회 링크 발광, NORMAL 복귀 시 해제, 콘솔 오류 0.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **다음 작업자 인수인계 메모:**
+  - 컨트롤러 REROUTE 구현 시 `BYPASS_FLOWS`와 같은 규칙·순서(S1을 마지막에)로 설치하면 무유실이 유지됨. 같은 스크립트로 재검증 가능.
+
+### [2026-10-07] feat(ui,verification): 김관우 9주차 적색 경보 UI 및 플로우 테이블 폭발 방어 실증
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/IncidentStrip.jsx`: (신규) 헤더 아래 상태 스트립. `ATTACK_DETECTED` 동안 적색 경보 점멸(유입 포트, 위협 유형, score·PPS·BPP, 탐지 시각 ms), 평상시에는 단계별 안내 문구. 레이아웃 흔들림 방지를 위해 항상 같은 자리에 표시
+  - `ui/src/lib/towerState.js`: `incident` 상태 추가 (첫 알림에서 열리고 NORMAL·CALIBRATING에서 닫힘)
+  - `ui/src/lib/format.js`: (신규) `clockMs`(HH:MM:SS.mmm), `PORT_NAMES`, `fmt` 공용화
+  - `ui/src/components/EventFeed.jsx`: 보안 이벤트 시각을 밀리초 단위로 표시
+  - `ui/src/components/PortStatsPanel.jsx`: 공격 유입 포트 행 적색 점멸
+  - `ui/tailwind.config.js`: `animate-alert-blink` 키프레임 추가 (`motion-reduce` 시 정지)
+  - `harness/verification/flow_table_check.py`: (신규) Mininet에서 공격 중 스위치별 플로우 개수를 1초마다 측정하는 실증 스크립트
+  - `tests/harness/test_flow_table_check.py`, `ui/src/lib/format.test.js`, `ui/src/lib/towerState.test.js`: 테스트 추가
+  - `docs/writing/reports/verification/week09_flow_table_verification.md`: (신규) 9주차 실증 검증서 + 원본 데이터 JSON
+* **상세 변경 내용 및 성과:**
+  - 실측: IP 스푸핑 SYN Flood 18,103패킷 동안 S1~S4 플로우 증가 **0** (S1 4개 유지, 공격 패킷 전부 `nw_dst=10.0.0.4` 규칙 1개에 매칭). pingall 0%.
+  - 브라우저 검수: 공격 단계에서 적색 경보 점멸, S1:2 행 강조, 이벤트 시각 ms 표시, 격리 후 경보 해제, 모바일 가로 넘침 없음, 콘솔 오류 0.
+  - Python 69 / 웹 10 테스트 통과, flake8(120자)·mypy 통과.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 백엔드·계약 스키마 변경 없음.
+* **다음 작업자 인수인계 메모:**
+  - Tech Lead의 In_port 차단 규칙(Priority 100)이 들어오면 같은 스크립트로 "플로우 +1, 차단 규칙 n_packets 증가"를 재검증 (검증서 §5).
+  - live 모드의 적색 경보는 AI 워커가 `sdn:anomaly:alert`를 발행해야 표시됨 (7주차 이후).
+
 ### [2026-10-06] fix & sync: 유재민 팀원 트래픽 버그픽스 통합 및 main 브랜치 최신화
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Fix` / `Merge` / `Chore`

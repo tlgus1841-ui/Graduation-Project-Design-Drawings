@@ -1,0 +1,134 @@
+{
+  "SpecFSM": {
+    "steady": {
+      "isolates": 1,
+      "restores": 1,
+      "flaps": 0,
+      "recovery_sec": 12.0,
+      "pass": true,
+      "log": [
+        " 22.0s REROUTE",
+        " 22.0s ISOLATE",
+        " 50.0s RESTORE"
+      ]
+    },
+    "reattack_in_cooldown": {
+      "isolates": 1,
+      "restores": 1,
+      "flaps": 0,
+      "recovery_sec": 12.0,
+      "pass": true,
+      "log": [
+        " 22.0s REROUTE",
+        " 22.0s ISOLATE",
+        " 66.0s RESTORE"
+      ]
+    },
+    "pulsing_4s": {
+      "isolates": 1,
+      "restores": 1,
+      "flaps": 0,
+      "recovery_sec": 12.0,
+      "pass": true,
+      "log": [
+        " 22.0s REROUTE",
+        " 22.0s ISOLATE",
+        " 90.0s RESTORE"
+      ]
+    },
+    "single_spike": {
+      "isolates": 0,
+      "restores": 0,
+      "flaps": 0,
+      "recovery_sec": null,
+      "pass": true,
+      "log": []
+    },
+    "flash_crowd": {
+      "isolates": 0,
+      "restores": 0,
+      "flaps": 0,
+      "recovery_sec": null,
+      "pass": true,
+      "log": []
+    }
+  },
+  "NaiveFSM": {
+    "steady": {
+      "isolates": 1,
+      "restores": 1,
+      "flaps": 0,
+      "recovery_sec": 2.0,
+      "pass": true,
+      "log": [
+        " 22.0s REROUTE",
+        " 22.0s ISOLATE",
+        " 40.0s RESTORE"
+      ]
+    },
+    "reattack_in_cooldown": {
+      "isolates": 2,
+      "restores": 2,
+      "flaps": 1,
+      "recovery_sec": 2.0,
+      "pass": false,
+      "log": [
+        " 22.0s REROUTE",
+        " 22.0s ISOLATE",
+        " 40.0s RESTORE",
+        " 48.0s REROUTE",
+        " 48.0s ISOLATE",
+        " 56.0s RESTORE"
+      ]
+    },
+    "pulsing_4s": {
+      "isolates": 8,
+      "restores": 8,
+      "flaps": 7,
+      "recovery_sec": 2.0,
+      "pass": false,
+      "log": [
+        " 22.0s REROUTE",
+        " 22.0s ISOLATE",
+        " 24.0s RESTORE",
+        " 30.0s REROUTE",
+        " 30.0s ISOLATE",
+        " 32.0s RESTORE",
+        " 38.0s REROUTE",
+        " 38.0s ISOLATE",
+        " 40.0s RESTORE",
+        " 46.0s REROUTE",
+        " 46.0s ISOLATE",
+        " 48.0s RESTORE",
+        " 54.0s REROUTE",
+        " 54.0s ISOLATE",
+        " 56.0s RESTORE",
+        " 62.0s REROUTE",
+        " 62.0s ISOLATE",
+        " 64.0s RESTORE",
+        " 70.0s REROUTE",
+        " 70.0s ISOLATE",
+        " 72.0s RESTORE",
+        " 78.0s REROUTE",
+        " 78.0s ISOLATE",
+        " 80.0s RESTORE"
+      ]
+    },
+    "single_spike": {
+      "isolates": 0,
+      "restores": 0,
+      "flaps": 0,
+      "recovery_sec": null,
+      "pass": true,
+      "log": []
+    },
+    "flash_crowd": {
+      "isolates": 0,
+      "restores": 0,
+      "flaps": 0,
+      "recovery_sec": null,
+      "pass": true,
+      "log": []
+    }
+  }
+}

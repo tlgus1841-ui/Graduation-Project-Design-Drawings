@@ -1,0 +1,61 @@
+{
+  "before_optimization": {
+    "cpu_x1": {
+      "avgFps": 58.6,
+      "p95FrameMs": 16.8,
+      "p99FrameMs": 33.4,
+      "maxFrameMs": 83.3,
+      "jankPercent": 1.0,
+      "longTasks": 25,
+      "longestTaskMs": 99
+    },
+    "cpu_x4": {
+      "avgFps": 47.4,
+      "p95FrameMs": 16.8,
+      "p99FrameMs": 233.3,
+      "maxFrameMs": 416.7,
+      "jankPercent": 2.2,
+      "longTasks": 79,
+      "longestTaskMs": 413
+    }
+  },
+  "after_optimization": {
+    "seconds": 80,
+    "measuredAt": "2026-10-07T06:39:41.569Z",
+    "results": {
+      "cpu_x1": {
+        "frames": 4796,
+        "avgFps": 60,
+        "p95FrameMs": 16.7,
+        "p99FrameMs": 16.8,
+        "maxFrameMs": 50,
+        "jankPercent": 0,
+        "longTasks": 1,
+        "longestTaskMs": 55,
+        "phasesSeen": [
+          "SYSTEM CALIBRATING",
+          "NORMAL",
+          "UNDER ATTACK",
+          "MITIGATED",
+          "RESTORING"
+        ]
+      },
+      "cpu_x4": {
+        "frames": 4528,
+        "avgFps": 56.6,
+        "p95FrameMs": 16.8,
+        "p99FrameMs": 16.8,
+        "maxFrameMs": 266.7,
+        "jankPercent": 0.9,
+        "longTasks": 40,
+        "longestTaskMs": 278,
+        "phasesSeen": [
+          "NORMAL",
+          "UNDER ATTACK",
+          "MITIGATED",
+          "RESTORING"
+        ]
+      }
+    }
+  }
+}

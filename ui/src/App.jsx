@@ -1,7 +1,10 @@
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
 import EventFeed from "./components/EventFeed.jsx";
+import IncidentStrip from "./components/IncidentStrip.jsx";
+import ManualControl from "./components/ManualControl.jsx";
 import PhaseBadge from "./components/PhaseBadge.jsx";
 import PortStatsPanel from "./components/PortStatsPanel.jsx";
+import RecoveryNotice from "./components/RecoveryNotice.jsx";
 import TopologyMap from "./components/TopologyMap.jsx";
 import TrafficCharts from "./components/TrafficCharts.jsx";
 import { useControlTowerSocket } from "./hooks/useControlTowerSocket.js";
@@ -28,13 +31,16 @@ export default function App() {
           )}
           <PhaseBadge phase={state.phase} />
           <ConnectionBadge status={status} retries={retries} />
+          <ManualControl />
         </>
       }
     >
+      <div className="lg:col-span-12"><IncidentStrip phase={state.phase} incident={state.incident} /></div>
       <div className="lg:col-span-8"><TopologyMap topology={state.topology} ports={state.ports} /></div>
       <div className="lg:col-span-4"><EventFeed events={state.events} /></div>
       <TrafficCharts history={state.history} />
-      <div className="lg:col-span-12"><PortStatsPanel ports={state.ports} /></div>
+      <div className="lg:col-span-12"><PortStatsPanel ports={state.ports} phase={state.phase} incident={state.incident} /></div>
+      <RecoveryNotice recovery={state.recovery} />
     </DashboardLayout>
   );
 }

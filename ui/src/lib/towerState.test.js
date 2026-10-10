@@ -69,6 +69,54 @@ describe("applyEnvelope", () => {
     expect(s.events[0].title).toContain("S1:2");
   });
 
+  it("opens an incident on the first alert and closes it back in NORMAL", () => {
+    const status = (phase, timestamp) => ({ type: "system:status", data: { phase, mode: "mock", timestamp } });
+    const alert = (timestamp, score) => ({
+      type: "sdn:anomaly:alert",
+      data: { timestamp, dpid: 1, in_port: 2, threat_type: "SYN_FLOOD_SPOOFING", score, pps: 3000, bps: 192000, bpp: 64, metadata: {} },
+    });
+    let s = applyEnvelope(initialState, status("NORMAL", 1));
+    s = applyEnvelope(s, status("ATTACK_DETECTED", 10.123));
+    s = applyEnvelope(s, alert(10.123, -0.8));
+    s = applyEnvelope(s, alert(12.5, -0.9));
+    expect(s.incident).toMatchObject({ dpid: 1, inPort: 2, detectedAt: 10.123, score: -0.9 });
+    s = applyEnvelope(s, status("MITIGATED", 13));
+    expect(s.incident.inPort).toBe(2);
+    const command = (action, timestamp) => ({
+      type: "sdn:control:command",
+      data: { timestamp, command_id: `${action}-${timestamp}`, action, target_dpid: 1, target_port: 2, reason: "t", priority: 100 },
+    });
+    s = applyEnvelope(s, command("REROUTE", 13.004));
+    s = applyEnvelope(s, command("ISOLATE", 13.006));
+    s = applyEnvelope(s, command("ISOLATE", 20)); // a repeat must not move the first stamp
+    expect(s.incident).toMatchObject({ reroutedAt: 13.004, isolatedAt: 13.006 });
+    s = applyEnvelope(s, status("COOLDOWN_VERIFY", 30));
+    expect(s.incident.cooldownAt).toBe(30);
+    s = applyEnvelope(s, status("MITIGATED", 34)); // re-attack during cooldown (T4)
+    s = applyEnvelope(s, status("COOLDOWN_VERIFY", 38));
+    expect(s.incident.cooldownAt).toBe(38); // countdown restarts
+    expect(s.recovery).toBeNull();
+    s = applyEnvelope(s, status("NORMAL", 48.25));
+    expect(s.incident).toBeNull();
+    expect(s.recovery).toMatchObject({ inPort: 2, detectedAt: 10.123, cooldownAt: 38, restoredAt: 48.25 });
+  });
+
+  it("labels operator commands as manual in the feed", () => {
+    const s = applyEnvelope(initialState, {
+      type: "sdn:control:command",
+      data: { timestamp: 5, command_id: "manual-isolate-1", action: "ISOLATE", target_dpid: 1, target_port: 2,
+        reason: "[MANUAL] admin: test", priority: 100 },
+    });
+    expect(s.events[0].kind).toBe("manual");
+  });
+
+  it("applies a batch of envelopes in order as one update", () => {
+    const one = applyEnvelope(applyEnvelope(initialState, stats(100, 1000, 800000)), stats(102, 7000, 1184000));
+    const batched = applyEnvelope(initialState, { type: "batch", data: [stats(100, 1000, 800000), stats(102, 7000, 1184000)] });
+    expect(batched.ports).toEqual(one.ports);
+    expect(batched.history).toEqual(one.history);
+  });
+
   it("replaces topology on sync and ignores unknown types", () => {
     const topo = { nodes: [{ id: "s1", status: "ATTACKED" }], links: [] };
     let s = applyEnvelope(initialState, { type: "sdn:topology:sync", data: { timestamp: 1, ...topo } });

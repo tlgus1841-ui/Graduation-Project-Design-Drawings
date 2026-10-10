@@ -114,7 +114,7 @@
 | 항목 | 내용 |
 |:---|:---|
 | 선행 검증 | **화이트리스트 가드:** `target_port`가 §1의 Trunk 포트이면 명령 폐기 + 경고 로그 |
-| 차단 동작 | `ISOLATE`: S1에 `match(in_port=2) → drop`, `Priority 100` `확정` |
+| 차단 동작 | `ISOLATE`: S1에 `match(in_port=2) → drop`, `Priority 100` `확정` ⚠ 14주차 E2E에서 우회 규칙과 우선순위가 같아 차단이 무력화됨 → Q5 |
 | 우회 동작 | `REROUTE`: H_legit ↔ H_server 플로우를 S1 → S3 → S4로 선제 `OFPFC_ADD`, `Priority 100` `확정` |
 | 설치 순서 | ① 우회 경로 하류부터 설치(S4 → S3 → S1) ② 차단 룰 설치 — 정상 트래픽 무유실 보장 |
 | 발행 메시지 | `sdn:control:command` (`ControlCommandMessage`) 2건: `ISOLATE`, `REROUTE` / `sdn:topology:sync` 1건 |
@@ -233,6 +233,7 @@ FastAPI는 Redis 채널 메시지를 아래 봉투(envelope)로 감싸 브로드
 | Q2 | 쿨다운 중 공격 소멸 판정을 AI Worker가 할지, Ryu FSM이 할지 주체 확정 (`flapping_fsm.py` 위치) | 박시현 |
 | Q3 | `system:status`(FSM 상태)를 Redis 채널로 계약에 추가할지, FastAPI가 경보/명령으로 추론할지 결정 | 박시현 |
 | Q4 | H_server 포트(S4:1) 공격 시(서버 역방향 공격) 시나리오 범위 포함 여부 | 전원 |
+| Q5 | 차단(`in_port=2 → drop`)과 우회(`nw_dst=10.0.0.4 → S3`)가 모두 Priority 100이면 공격 패킷이 두 규칙에 동시에 해당해 어느 쪽이 적용될지 정해지지 않는다. 14주차 E2E 실측에서 차단 규칙 적중 0, 공격 27,607패킷이 우회로로 서버 도달. **제안:** 차단 Priority를 200으로 올리거나, 우회 규칙에 `in_port=1` 조건 추가 (`docs/writing/reports/verification/week14_e2e_verification.md` §4.2) | 박시현 |
 
 ---
 
@@ -240,3 +241,4 @@ FastAPI는 Redis 채널 메시지를 아래 봉투(envelope)로 감싸 브로드
 | 버전 | 일자 | 작성자 | 내용 |
 |:---:|:---:|:---:|:---|
 | v1.0 | 2026.09.29 | 김관우 | 최초 작성 (4주차 산출물) |
+| v1.1 | 2026.10.07 | 김관우 | Q5 추가: 차단·우회 규칙 우선순위 충돌 (14주차 E2E 실측) |

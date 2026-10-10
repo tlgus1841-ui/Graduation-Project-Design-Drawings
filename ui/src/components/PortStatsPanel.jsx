@@ -1,15 +1,10 @@
+import { PORT_NAMES, fmt } from "../lib/format.js";
 import Panel from "./Panel.jsx";
 
-const PORT_NAMES = {
-  "1:1": "H_legit", "1:2": "H_attacker", "1:3": "→ S2", "1:4": "→ S3",
-  "2:1": "→ S1", "2:2": "→ S4", "3:1": "→ S1", "3:2": "→ S4",
-  "4:1": "H_server", "4:2": "→ S2", "4:3": "→ S3",
-};
-
-const fmt = (n) => Math.round(n).toLocaleString("ko-KR");
-
-export default function PortStatsPanel({ ports }) {
+export default function PortStatsPanel({ ports, phase, incident }) {
   const rows = Object.entries(ports).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+  // The port named in the open incident flashes red while the attack is live.
+  const alertKey = phase === "ATTACK_DETECTED" && incident ? `${incident.dpid}:${incident.inPort}` : null;
   return (
     <Panel title="Port Telemetry" subtitle="수신 기준 · 2초 주기" className="h-[300px]">
       {rows.length === 0 ? (
@@ -26,13 +21,20 @@ export default function PortStatsPanel({ ports }) {
           <tbody className="font-mono text-slate-200">
             {rows.map(([key, p]) => {
               const hot = p.pps > 1000 && p.bpp > 0 && p.bpp < 80;
+              const alerting = key === alertKey;
               return (
-                <tr key={key} className={`border-t border-slate-700/50 ${hot ? "text-red-300" : ""}`}>
+                <tr
+                  key={key}
+                  data-alert={alerting || undefined}
+                  className={`border-t border-slate-700/50 ${hot || alerting ? "text-red-300" : ""} ${
+                    alerting ? "bg-red-950/60 font-bold animate-pulse motion-reduce:animate-none" : ""
+                  }`}
+                >
                   <td className="py-1.5">S{p.dpid}:{p.portNo}</td>
                   <td className="py-1.5 font-sans text-slate-400">{PORT_NAMES[key] ?? "-"}</td>
                   <td className="py-1.5 text-right">{fmt(p.pps)}</td>
                   <td className="py-1.5 text-right">{fmt(p.bps)}</td>
-                  <td className="py-1.5 text-right">{p.bpp ? `${fmt(p.bpp)}B` : "-"}{hot && " ⚠"}</td>
+                  <td className="py-1.5 text-right">{p.bpp ? `${fmt(p.bpp)}B` : "-"}{(hot || alerting) && " ⚠"}</td>
                 </tr>
               );
             })}

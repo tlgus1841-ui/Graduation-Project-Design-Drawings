@@ -1,0 +1,117 @@
+{
+  "pingall_loss_percent": 0.0,
+  "attack_packets_at_s1_port2": 18103,
+  "attack_seconds": 11.5,
+  "attack_pps": 1571,
+  "flow_samples": [
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    },
+    {
+      "s1": 4,
+      "s2": 4,
+      "s3": 1,
+      "s4": 4
+    }
+  ],
+  "flow_summary": {
+    "s1": {
+      "before": 4,
+      "max": 4,
+      "growth": 0
+    },
+    "s2": {
+      "before": 4,
+      "max": 4,
+      "growth": 0
+    },
+    "s3": {
+      "before": 1,
+      "max": 1,
+      "growth": 0
+    },
+    "s4": {
+      "before": 4,
+      "max": 4,
+      "growth": 0
+    }
+  },
+  "s1_flows_after_attack": [
+    "cookie=0x0, duration=11.729s, table=0, n_packets=3, n_bytes=294, idle_timeout=60, priority=10,ip,nw_dst=10.0.0.1 actions=output:\"s1-eth1\"",
+    " cookie=0x0, duration=11.727s, table=0, n_packets=3, n_bytes=294, idle_timeout=60, priority=10,ip,nw_dst=10.0.0.2 actions=output:\"s1-eth2\"",
+    " cookie=0x0, duration=11.720s, table=0, n_packets=18105, n_bytes=977802, idle_timeout=60, priority=10,ip,nw_dst=10.0.0.4 actions=output:\"s1-eth3\"",
+    " cookie=0x0, duration=13.754s, table=0, n_packets=8, n_bytes=504, priority=0 actions=CONTROLLER:65535"
+  ],
+  "attacker_stdout": [
+    "[traffic_attack] 전송 완료: 총 18102건, 7초간 평균 2586 PPS"
+  ]
+}
