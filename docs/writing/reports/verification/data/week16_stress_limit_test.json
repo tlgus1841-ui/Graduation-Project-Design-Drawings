@@ -1,0 +1,140 @@
+{
+  "Tier1_15k_PPS": {
+    "attack_seconds": 12.4,
+    "attack_packets": 177751,
+    "detect_after_attack_s": 3.23,
+    "first_alert_to_isolate_ms": 0.4,
+    "decision_to_isolated_ms": null,
+    "flow_install_ms": {
+      "REROUTE": null,
+      "ISOLATE": null
+    },
+    "isolate_count": 1,
+    "restore_count": 1,
+    "recovery_after_attack_s": 11.01,
+    "dropped_at_s1_while_isolated": 126151,
+    "leaked_to_server_while_isolated": 0,
+    "s1_bypass_hits_while_isolated": 166,
+    "normal_loss": {
+      "whole_run": {
+        "sent": 588,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "before_attack": {
+        "sent": 79,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "attack_until_isolated": {
+        "sent": 63,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "attack_while_isolated": {
+        "sent": 179,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "after_attack": {
+        "sent": 267,
+        "lost": 0,
+        "loss_percent": 0.0
+      }
+    },
+    "actual_pps": 14376.7,
+    "ryu_errors": []
+  },
+  "Tier2_60k_PPS": {
+    "attack_seconds": 12.4,
+    "attack_packets": 712201,
+    "detect_after_attack_s": 3.22,
+    "first_alert_to_isolate_ms": 2.2,
+    "decision_to_isolated_ms": null,
+    "flow_install_ms": {
+      "REROUTE": null,
+      "ISOLATE": null
+    },
+    "isolate_count": 1,
+    "restore_count": 1,
+    "recovery_after_attack_s": 10.99,
+    "dropped_at_s1_while_isolated": 505201,
+    "leaked_to_server_while_isolated": 0,
+    "s1_bypass_hits_while_isolated": 166,
+    "normal_loss": {
+      "whole_run": {
+        "sent": 588,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "before_attack": {
+        "sent": 79,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "attack_until_isolated": {
+        "sent": 63,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "attack_while_isolated": {
+        "sent": 180,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "after_attack": {
+        "sent": 266,
+        "lost": 0,
+        "loss_percent": 0.0
+      }
+    },
+    "actual_pps": 57552.1,
+    "ryu_errors": []
+  },
+  "Tier3_Max_Unthrottled": {
+    "attack_seconds": 12.4,
+    "attack_packets": 9448501,
+    "detect_after_attack_s": 3.22,
+    "first_alert_to_isolate_ms": 0.3,
+    "decision_to_isolated_ms": null,
+    "flow_install_ms": {
+      "REROUTE": null,
+      "ISOLATE": null
+    },
+    "isolate_count": 1,
+    "restore_count": 1,
+    "recovery_after_attack_s": 6.88,
+    "dropped_at_s1_while_isolated": 8582483,
+    "leaked_to_server_while_isolated": 0,
+    "s1_bypass_hits_while_isolated": 176,
+    "normal_loss": {
+      "whole_run": {
+        "sent": 587,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "before_attack": {
+        "sent": 79,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "attack_until_isolated": {
+        "sent": 63,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "attack_while_isolated": {
+        "sent": 178,
+        "lost": 0,
+        "loss_percent": 0.0
+      },
+      "after_attack": {
+        "sent": 267,
+        "lost": 0,
+        "loss_percent": 0.0
+      }
+    },
+    "actual_pps": 763749.3,
+    "ryu_errors": []
+  }
+}
