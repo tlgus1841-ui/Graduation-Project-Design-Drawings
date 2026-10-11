@@ -6,8 +6,8 @@ Phase 6 Milestone
 Simulates the full 4-stage lifecycle:
 Stage 1: Normal Traffic Baseline (S1 -> S2 -> S4)
 Stage 2: Attack Injection & Detection (Scapy SYN Flood on S1:P2, Score < -0.8)
-Stage 3: Autonomous Defense & Bypass Rerouting (In_port 2 Drop, S1 -> S3 -> S4 Bypass)
-Stage 4: Autonomous Self-Healing (Traffic ceases, FSM Cooldown, Safe Rollback to Baseline)
+Stage 3: Autonomous Defense & Bypass Rerouting (In_port 2 Drop, S1-S3-S4)
+Stage 4: Autonomous Self-Healing (Traffic ceases, Cooldown, Safe Rollback)
 """
 
 from unittest.mock import MagicMock
@@ -24,10 +24,12 @@ from tests.ryu.test_telemetry import _setup_and_load_controller_for_telemetry
 def test_full_4_stage_autonomous_defense_scenario():
     """
     4단계 전체 라이프사이클 시뮬레이션 및 검증:
-    1단계 (Normal) -> 2단계 (Attack) -> 3단계 (Mitigate & Reroute) -> 4단계 (Self-Healing)
+    1단계(Normal) -> 2단계(Attack) -> 3단계(Mitigate & Reroute) -> 4단계(Recovery)
     """
     fake_server = fakeredis.FakeServer()
-    redis_client = fakeredis.FakeRedis(server=fake_server, decode_responses=True)
+    redis_client = fakeredis.FakeRedis(
+        server=fake_server, decode_responses=True
+    )
 
     ControllerCls = _setup_and_load_controller_for_telemetry()
     controller = ControllerCls()
@@ -73,7 +75,15 @@ def test_full_4_stage_autonomous_defense_scenario():
 
     # 3.3 Bypass routing installed on intermediate switch S3 (Port 2 -> S4)
     s3_msgs = [call.args[0] for call in mock_dps[3].send_msg.call_args_list]
-    assert len(s3_msgs) > 0
+    assert len(s3_msgs) == 1
+    s1_initial_count = mock_dps[1].send_msg.call_count
+
+    # 3.4 Repeated alert while MITIGATED extends heartbeat without duplicates
+    controller._handle_redis_message(
+        REDIS_CHANNEL_ANOMALY_ALERT, alert.model_dump_json()
+    )
+    assert mock_dps[1].send_msg.call_count == s1_initial_count
+    assert mock_dps[3].send_msg.call_count == 1
 
     # [Stage 4: Autonomous Self-Healing & Cooldown Rollback]
     t_threat = controller.fsm.last_threat_time
@@ -86,5 +96,6 @@ def test_full_4_stage_autonomous_defense_scenario():
     controller.fsm.evaluate_heartbeat(current_time=t_threat + 10.5)
     assert controller.fsm.get_state() == DefenseState.NORMAL
 
-    # 4.3 Verify S1 received flow deletion command to restore In_port 2
-    assert mock_dps[1].send_msg.call_count >= 2
+    # 4.3 Verify S1 & S3 received flow deletions (Drop + Priority 20 Bypass)
+    assert mock_dps[1].send_msg.call_count >= s1_initial_count + 2
+    assert mock_dps[3].send_msg.call_count == 2

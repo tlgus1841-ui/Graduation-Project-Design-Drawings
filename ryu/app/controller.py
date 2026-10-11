@@ -318,14 +318,46 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 continue
             parser = dp.ofproto_parser
             actions = [parser.OFPActionOutput(spec["out_port"])]
-            # 우회 경로는 기본 경로(priority 10)보다 높은 priority 20으로 주입
+            # 우회 경로는 기본 경로(priority 10)보다 높은 priority 20으로 주입 (복구 시 명시적 삭제)
             match = parser.OFPMatch(eth_type=0x0800, ipv4_dst=dst_ip)
-            self.add_flow(dp, priority=20, match=match, actions=actions, idle_timeout=30)
+            self.add_flow(dp, priority=20, match=match, actions=actions, idle_timeout=0)
             self.logger.info(
                 f"[Reroute] S{spec['dpid']}: Injected priority 20 flow -> Port {spec['out_port']} for {dst_ip}"
             )
 
         self.logger.info(f"[Reroute] Successfully activated bypass route: {path} for {dst_ip}")
+        return True
+
+    def restore_reroute_traffic(
+        self,
+        source_dpid: int = 1,
+        target_dpid: int = 4,
+        dst_ip: str = "10.0.0.4",
+        priority: int = 20,
+    ):
+        """
+        11주차: 복구 시 우회 경로(Priority 20) 플로우 규칙 명시적 삭제.
+        Ingress 스위치(S1)부터 역순으로 우회 규칙을 제거하여 즉시 주 경로(S1-S2-S4)로 복귀.
+        """
+        path = self.reroute_engine.compute_reroute_path(
+            source_dpid, target_dpid, congested_intermediate_dpid=2
+        )
+        if not path:
+            return False
+
+        specs = self.reroute_engine.get_path_flow_specs(path, dst_ip)
+        for spec in reversed(specs):
+            dp = self.datapaths.get(spec["dpid"])
+            if not dp:
+                continue
+            parser = dp.ofproto_parser
+            match = parser.OFPMatch(eth_type=0x0800, ipv4_dst=dst_ip)
+            self.delete_flow(dp, priority=priority, match=match)
+            self.logger.info(
+                f"[Reroute] S{spec['dpid']}: Deleted priority {priority} bypass flow for {dst_ip}"
+            )
+
+        self.logger.info(f"[Reroute] Restored primary route from bypass: {path} for {dst_ip}")
         return True
 
     def _publish_topology_sync(self, phase_name: str = "NORMAL"):
@@ -396,10 +428,16 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             f"[FSM] Transition: {prev_state.value} -> {next_state.value} (meta: {meta})"
         )
         if next_state == DefenseState.NORMAL:
-            # 정상 상태 롤백: 등록된 격리 타깃들 복원
+            # 정상 상태 롤백: 등록된 격리 타깃들 복원 및 우회 경로(Priority 20) 삭제
             cleared = meta.get("cleared_targets", {})
+            restored_sources = set()
             for key, info in cleared.items():
                 self.restore_port(info["dpid"], info["in_port"])
+                if info["dpid"] not in restored_sources:
+                    self.restore_reroute_traffic(
+                        source_dpid=info["dpid"], target_dpid=4, dst_ip="10.0.0.4"
+                    )
+                    restored_sources.add(info["dpid"])
                 self._publish_control_command(
                     action=DefenseAction.RESTORE.value,
                     dpid=info["dpid"],
@@ -472,25 +510,37 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 )
                 # 1. In_port 차단 (트렁크는 화이트리스트가 방어)
                 if self.whitelist_guard.can_isolate(alert.dpid, alert.in_port):
-                    self.isolate_port(alert.dpid, alert.in_port, priority=100)
-                    self._publish_control_command(
-                        action=DefenseAction.ISOLATE.value,
-                        dpid=alert.dpid,
-                        port=alert.in_port,
-                        reason=f"Autonomous In_port Drop: {alert.threat_type} (score {alert.score:.2f})",
+                    target_key = f"{alert.dpid}:{alert.in_port}"
+                    already_mitigated = (
+                        self.fsm.get_state() != DefenseState.NORMAL
+                        and target_key in self.fsm.mitigated_targets
                     )
-                    # 2. 다중 홉 우회 라우팅 선제 설치
-                    self.reroute_traffic(source_dpid=alert.dpid, target_dpid=4, dst_ip="10.0.0.4")
-                    self._publish_control_command(
-                        action=DefenseAction.REROUTE.value,
-                        dpid=alert.dpid,
-                        port=4,
-                        reason="Autonomous Bypass: Proactive S1-S3-S4 Rerouting",
-                    )
-                    # 3. FSM 상태 전이
-                    self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
-                    # 4. 실시간 토폴로지 동기화 발행
-                    self._publish_topology_sync("MITIGATED")
+                    if not already_mitigated:
+                        self.isolate_port(alert.dpid, alert.in_port, priority=100)
+                        self._publish_control_command(
+                            action=DefenseAction.ISOLATE.value,
+                            dpid=alert.dpid,
+                            port=alert.in_port,
+                            reason=f"Autonomous In_port Drop: {alert.threat_type} (score {alert.score:.2f})",
+                        )
+                        # 2. 다중 홉 우회 라우팅 선제 설치
+                        self.reroute_traffic(source_dpid=alert.dpid, target_dpid=4, dst_ip="10.0.0.4")
+                        self._publish_control_command(
+                            action=DefenseAction.REROUTE.value,
+                            dpid=alert.dpid,
+                            port=4,
+                            reason="Autonomous Bypass: Proactive S1-S3-S4 Rerouting",
+                        )
+                        # 3. FSM 상태 전이
+                        self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
+                        # 4. 실시간 토폴로지 동기화 발행
+                        self._publish_topology_sync("MITIGATED")
+                    else:
+                        # 이미 격리된 타깃: FSM 하트비트(쿨다운 타이머)만 연장하고 중복 명령 기록 발행 생략
+                        prev_state = self.fsm.get_state()
+                        self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
+                        if prev_state != DefenseState.MITIGATED:
+                            self._publish_topology_sync("MITIGATED")
 
             elif channel == REDIS_CHANNEL_CONTROL_COMMAND:
                 cmd = ControlCommandMessage.model_validate_json(data_str)
@@ -506,6 +556,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     self._publish_topology_sync("MITIGATED")
                 elif cmd.action == "RESTORE":
                     self.restore_port(cmd.target_dpid, cmd.target_port, priority=cmd.priority)
+                    self.restore_reroute_traffic(
+                        source_dpid=cmd.target_dpid, target_dpid=4, dst_ip="10.0.0.4"
+                    )
                     self.fsm.force_restore()
                     self._publish_topology_sync("NORMAL")
                 elif cmd.action == "REROUTE":
