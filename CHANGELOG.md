@@ -13,6 +13,20 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-11] feat(model): 김관우 AI 추론 워커 추가 및 실제 구성 E2E 검증
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feat` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `model/inference_worker.py`: (신규) `sdn:stats:port` → FeatureExtractor → AnomalyModel → DetectionGuard → `sdn:anomaly:alert`. 감시 대상은 보호 호스트가 없는 접속 포트(S1:2), 초당 100패킷 미만은 연속 기록을 끊음, 확정 중 매 주기 경보(컨트롤러 FSM 하트비트). 모델 파일이 없으면 `--train-csv` 또는 합성 데이터로 학습 후 저장
+  - `tests/model/test_inference_worker.py`: (신규) 2주기 확정, 트렁크 포트 무경보, 단발 스파이크·저속 소형 패킷 무경보
+  - `harness/verification/e2e_scenario.py`: 컨트롤러 우회 규칙(Priority 20) 카운터 포함, 실행 시간 필드가 없는 이벤트 로그도 분석
+  - `docs/writing/reports/verification/week16_real_components_e2e.md`: (신규) 실제 구성 E2E 3회 보고서 + `data/week16_real_e2e.json`
+* **상세 성과 (3회, 임시 구성 없음):** 공격 시작 → 차단 평균 3.35초, 경보 → 컨트롤러 차단·우회 명령 1.4ms, 정상 ping 손실 0 / 4,337, 서버 도달 공격 0, 플래핑 0, 오탐 0, 공격 종료 → 자동 복구 10.87초
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 기존 인터페이스 그대로 사용.
+* **다음 작업자 인수인계 메모:**
+  - **[박시현]** MITIGATED 중 반복 경보마다 ISOLATE·REROUTE 기록이 다시 발행됨(공격 20초에 10쌍). 상태 유지 시 기록 생략 검토. 복구 때 우회 규칙(Priority 20)도 같이 지우는 것 검토.
+  - **[유재민]** 모델이 합성 데이터로 학습됨. Mininet 정상 트래픽 CSV로 `--train-csv` 학습 후 실데이터 F1 측정 필요.
+
 ### [2026-10-10] feat(core): 박시현(Tech Lead) 7~16주차 전담 파트 일괄 개발 완료 (자율 방어/우회/FSM/서킷브레이커/E2E 데모)
 * **작업자:** 박시현 (Tech Lead) with Antigravity AI Agent
 * **작업 유형:** `Feat` / `Refactor` / `Test` / `Scripts`

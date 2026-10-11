@@ -96,7 +96,7 @@ def analyze(run: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, Any]
     def loss(t_from: float, t_to: float) -> Dict[str, float]:
         return window_loss(times, p["received_seqs"], t_from, t_to)
 
-    def sample_t(stats_ts: float) -> Optional[float]:
+    def sample_t(stats_ts: Optional[float]) -> Optional[float]:
         e = next((e for e in events if e["kind"] == "sample" and e.get("stats_ts") == stats_ts), None)
         return e["t"] if e else None
 
@@ -110,8 +110,10 @@ def analyze(run: Dict[str, Any], events: List[Dict[str, Any]]) -> Dict[str, Any]
         "detect_after_attack_s": round(alert["t"] - a0, 2) if alert else None,
         "first_alert_to_isolate_ms": round((iso["t"] - alert["t"]) * 1000, 1) if alert and iso else None,
         "decision_to_isolated_ms": (round((iso["t"] - st) * 1000, 1)
-                                    if iso and (st := sample_t(iso["stats_ts"])) is not None else None),
-        "flow_install_ms": {"REROUTE": rer["apply_ms"] if rer else None, "ISOLATE": iso["apply_ms"] if iso else None},
+                                    if iso and (st := sample_t(iso.get("stats_ts"))) is not None else None),
+        # stand-in: time spent in ovs-ofctl; controller run: not measured here (None)
+        "flow_install_ms": {"REROUTE": rer.get("apply_ms") if rer else None,
+                            "ISOLATE": iso.get("apply_ms") if iso else None},
         "isolate_count": sum(1 for e in events if e["kind"] == "command" and e.get("action") == "ISOLATE"),
         "restore_count": sum(1 for e in events if e["kind"] == "command" and e.get("action") == "RESTORE"),
         "recovery_after_attack_s": round(res["t"] - a1, 2) if res else None,
@@ -161,7 +163,9 @@ def run(before: int, attack: int, after: int, userspace: bool) -> Dict[str, Any]
             samples.append({"t": time.time(),
                             "s1_drop_in2": rule_packets(d, "actions=drop"),
                             "s1_dst_server_p10": rule_packets(d, "priority=10,ip,nw_dst=10.0.0.4"),
-                            "s1_bypass_p100": rule_packets(d, "priority=100,ip,nw_dst=10.0.0.4")})
+                            # bypass rule: priority 100 in the week-14 stand-in, 20 in the Ryu controller
+                            "s1_bypass_p100": rule_packets(d, "priority=100,ip,nw_dst=10.0.0.4")
+                            + rule_packets(d, "priority=20,ip,nw_dst=10.0.0.4")})
             stop.wait(1.0)
 
     try:

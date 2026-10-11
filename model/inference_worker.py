@@ -1,0 +1,167 @@
+"""Self-Defending SDN Tower - AI 추론 워커 (통계 → 피처 → 모델 → 경보).
+
+Ryu가 2초마다 발행하는 `sdn:stats:port`를 받아 유재민의 FeatureExtractor로 5대 피처를 만들고,
+AnomalyModel(Isolation Forest) 점수와 DetectionGuard(BPP ≤ 80 그리고 점수 < 0, 2주기 연속)를
+통과한 포트에 대해 `sdn:anomaly:alert`를 발행한다. 경보를 받은 Ryu 컨트롤러가 차단·우회를 실행한다.
+
+경보는 공격이 확정된 동안 매 주기 발행한다. 컨트롤러 FSM은 마지막 경보 시각부터 쿨다운을 재므로,
+경보가 끊긴 뒤 10초가 지나야 자동 복구된다 (harness/safety/flapping_fsm.py).
+
+감시 대상은 호스트가 붙은 접속(access) 포트뿐이다. 트렁크 포트는 컨트롤러가 어차피 막지 않고,
+보호 호스트(정상 사용자·서버)가 붙은 포트도 경보 대상에서 뺀다 (화이트리스트).
+
+실행 (Ryu·Redis 실행 중):
+    uv run python -m model.inference_worker --model model/isolation_forest.joblib --log events.jsonl
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import signal
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from harness.contracts import (  # noqa: E402
+    REDIS_CHANNEL_ANOMALY_ALERT,
+    REDIS_CHANNEL_CONTROL_COMMAND,
+    REDIS_CHANNEL_PORT_STATS,
+    AnomalyAlertMessage,
+    ControlCommandMessage,
+    PortStatsMessage,
+    ThreatType,
+)
+from harness.safety.whitelist_guard import DEFAULT_ACCESS_PORTS  # noqa: E402
+from model.detection_guard import DetectionGuard  # noqa: E402
+from model.model import DEFAULT_MODEL_PATH, AnomalyModel  # noqa: E402
+from pipeline.feature_extractor import FeatureExtractor  # noqa: E402
+
+PortKey = Tuple[int, int]
+
+# 보호 호스트가 붙은 접속 포트: S1:1 = H_legit(10.0.0.1), S4:1 = H_server(10.0.0.4)
+PROTECTED_HOST_PORTS = {(1, 1), (4, 1)}
+# 초당 100패킷 미만은 공격 규모가 아니다 (명세 §6 ATTACK_CEASE_PPS = 정상 PPS 상한).
+MIN_ATTACK_PPS = 100.0
+# 테스트베드 어느 링크보다도 큰 값. 이보다 크면 카운터 리셋으로 생긴 가짜 델타다.
+MAX_PLAUSIBLE_PPS = 1e7
+
+
+def watched_ports() -> List[PortKey]:
+    """경보 대상 포트 = 접속 포트 - 보호 호스트 포트."""
+    return sorted((dpid, port) for dpid, ports in DEFAULT_ACCESS_PORTS.items() for port in ports
+                  if (dpid, port) not in PROTECTED_HOST_PORTS)
+
+
+class InferenceWorker:
+    """PortStatsMessage 한 건을 받아, 공격이 확정된 포트의 경보 목록을 돌려준다 (Redis와 분리, 테스트 가능)."""
+
+    def __init__(self, model: AnomalyModel, ports: Optional[List[PortKey]] = None,
+                 min_pps: float = MIN_ATTACK_PPS) -> None:
+        self.model = model
+        self.ports = set(ports if ports is not None else watched_ports())
+        self.min_pps = min_pps
+        self.extractor = FeatureExtractor()
+        self.guards: Dict[PortKey, DetectionGuard] = {}
+        self.last_samples: List[dict] = []
+
+    def process(self, message: PortStatsMessage) -> List[AnomalyAlertMessage]:
+        alerts: List[AnomalyAlertMessage] = []
+        self.last_samples = []
+        for f in self.extractor.update(message):
+            key = (f["dpid"], f["port_no"])
+            if key not in self.ports or f["delta_pps"] > MAX_PLAUSIBLE_PPS:
+                continue
+            _, score = self.model.predict_single(f)
+            # Too little traffic to be a flood: feed an impossible BPP so the guard's streak resets.
+            gate_bpp = f["bpp"] if f["delta_pps"] >= self.min_pps else math.inf
+            confirmed = self.guards.setdefault(key, DetectionGuard()).observe(gate_bpp, score)
+            self.last_samples.append({**f, "score": round(score, 4), "confirmed": confirmed})
+            if confirmed:
+                alerts.append(AnomalyAlertMessage(
+                    dpid=f["dpid"], in_port=f["port_no"], threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
+                    score=score, pps=f["delta_pps"], bps=f["delta_bps"], bpp=f["bpp"], err_rate=f["err_rate"],
+                    metadata={"model": "isolation_forest", "stats_ts": str(f["timestamp"])}))
+        return alerts
+
+
+def load_model(model_path: Path, train_csv: Optional[Path]) -> Tuple[AnomalyModel, str]:
+    """저장된 모델 → 학습 CSV → 합성 데이터 순서로 모델을 준비한다."""
+    if model_path.exists():
+        return AnomalyModel.load(str(model_path)), f"loaded {model_path}"
+    if train_csv is not None:
+        model, source = AnomalyModel().fit(str(train_csv)), f"trained on {train_csv}"
+    else:
+        from model.synthetic_samples import build_labeled_dataset_csv
+        csv_path = Path(tempfile.mkdtemp()) / "synthetic.csv"
+        build_labeled_dataset_csv(str(csv_path))
+        model, source = AnomalyModel().fit(str(csv_path)), "trained on synthetic samples (no real-traffic CSV given)"
+    model.save(str(model_path))
+    return model, source
+
+
+def run(worker: InferenceWorker, redis_url: str, log_path: Optional[Path]) -> None:
+    import redis
+
+    r = redis.Redis(connection_pool=redis.ConnectionPool.from_url(redis_url))
+    pubsub = r.pubsub()
+    pubsub.subscribe(REDIS_CHANNEL_PORT_STATS, REDIS_CHANNEL_CONTROL_COMMAND)
+    log = log_path.open("w", encoding="utf-8") if log_path else None
+
+    def record(kind: str, **fields: object) -> None:
+        if log:
+            log.write(json.dumps({"t": time.time(), "kind": kind, **fields}, ensure_ascii=False) + "\n")
+            log.flush()
+
+    stop = {"flag": False}
+    signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__("flag", True))
+    signal.signal(signal.SIGINT, lambda *_: stop.__setitem__("flag", True))
+    record("start", watch=[f"S{d}:{p}" for d, p in sorted(worker.ports)])
+    print(f"[inference_worker] watching {sorted(worker.ports)}", flush=True)
+
+    while not stop["flag"]:
+        item = pubsub.get_message(timeout=0.5)
+        if not item or item.get("type") != "message":
+            continue
+        channel = item["channel"].decode() if isinstance(item["channel"], bytes) else item["channel"]
+        if channel == REDIS_CHANNEL_CONTROL_COMMAND:
+            # Logged so one file holds the alert → command timeline for the E2E analysis.
+            cmd = ControlCommandMessage.model_validate_json(item["data"])
+            record("command", action=cmd.action, target=f"S{cmd.target_dpid}:{cmd.target_port}",
+                   command_id=cmd.command_id)
+            continue
+        message = PortStatsMessage.model_validate_json(item["data"])
+        alerts = worker.process(message)
+        for s in worker.last_samples:
+            record("sample", stats_ts=s["timestamp"], port=f"S{s['dpid']}:{s['port_no']}",
+                   pps=round(s["delta_pps"], 1), bpp=round(s["bpp"], 1), score=s["score"], confirmed=s["confirmed"])
+        for alert in alerts:
+            r.publish(REDIS_CHANNEL_ANOMALY_ALERT, alert.model_dump_json())
+            record("alert", stats_ts=float(alert.metadata["stats_ts"]), port=f"S{alert.dpid}:{alert.in_port}",
+                   score=round(alert.score, 4))
+    record("stop")
+    if log:
+        log.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="AI 추론 워커: 포트 통계 → Isolation Forest → 경보 발행")
+    parser.add_argument("--model", type=Path, default=Path(DEFAULT_MODEL_PATH))
+    parser.add_argument("--train-csv", type=Path, help="모델 파일이 없을 때 학습할 CSV (csv_logger 형식)")
+    parser.add_argument("--redis-url", default="redis://localhost:6379/0")
+    parser.add_argument("--log", type=Path, help="경보·명령 이벤트 기록 (jsonl)")
+    args = parser.parse_args()
+    model, source = load_model(args.model, args.train_csv)
+    print(f"[inference_worker] model: {source}", flush=True)
+    run(InferenceWorker(model), args.redis_url, args.log)
+
+
+if __name__ == "__main__":
+    main()
