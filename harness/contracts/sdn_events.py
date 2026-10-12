@@ -85,7 +85,7 @@ class AnomalyAlertMessage(BaseModel):
     bps: float = Field(
         ...,
         validation_alias=AliasChoices("bps", "delta_bps"),
-        description="Bytes per second rate (ΔBPS)",
+        description="Bits per second rate (ΔBPS)",
     )
     bpp: float = Field(..., description="Bytes per packet (BPP)")
     err_rate: float = Field(
@@ -137,5 +137,9 @@ class TopologyLink(BaseModel):
 class TopologySyncMessage(BaseModel):
     """Topology state sync broadcast to frontend vis-network dashboard."""
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp")
+    phase: Optional[str] = Field(
+        default=None,
+        description="Optional FSM phase name (CALIBRATING | NORMAL | ATTACK_DETECTED | MITIGATED | COOLDOWN_VERIFY)",
+    )
     nodes: List[TopologyNode] = Field(default_factory=list)
     links: List[TopologyLink] = Field(default_factory=list)

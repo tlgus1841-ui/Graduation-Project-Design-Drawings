@@ -46,23 +46,32 @@ class PortStatsMessage(BaseModel):
     stats: List[PortStatItem]
 
 class AnomalyAlertMessage(BaseModel):
-    timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
-    dpid: int
-    in_port: int
-    threat_type: str = Field("SYN_FLOOD_SPOOFING", description="위협 유형")
-    score: float = Field(..., description="이상치 스코어 (-1.0 ~ 0.0)")
-    pps: float = Field(..., description="초당 패킷 수 (ΔPPS)")
-    bps: float = Field(..., description="초당 바이트 수 (ΔBPS)")
-    bpp: float = Field(..., description="패킷당 바이트 수 (BPP)")
+    timestamp: float = Field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    dpid: int = Field(..., ge=1)
+    in_port: int = Field(..., ge=1)
+    threat_type: str = Field(default="SYN_FLOOD_SPOOFING", description="위협 유형")
+    score: float = Field(..., description="이상치 스코어 (< 0.0 이상 징후)")
+    pps: float = Field(..., ge=0, validation_alias=AliasChoices("pps", "delta_pps"), description="초당 패킷 수 (ΔPPS)")
+    bps: float = Field(..., ge=0, validation_alias=AliasChoices("bps", "delta_bps"), description="초당 비트 수 (ΔBPS)")
+    bpp: float = Field(..., ge=0, description="패킷당 바이트 수 (BPP)")
+    err_rate: float = Field(default=0.0, ge=0.0, description="에러 패킷 비율 (Δrx_errors / Δrx_packets)")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="선택적 진단 메타데이터")
 
 class ControlCommandMessage(BaseModel):
-    timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+    timestamp: float = Field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
     command_id: str
-    action: str = Field(..., description="ISOLATE | RESTORE | REROUTE")
-    target_dpid: int
-    target_port: int
+    action: Literal["ISOLATE", "RESTORE", "REROUTE"]
+    target_dpid: int = Field(..., ge=1)
+    target_port: int = Field(..., ge=1)
     reason: str
-    priority: int = 100
+    priority: int = Field(default=100, description="OpenFlow 우선순위 (ISOLATE=100, REROUTE=20)")
+
+class TopologySyncMessage(BaseModel):
+    timestamp: float = Field(default_factory=lambda: datetime.now(timezone.utc).timestamp())
+    active_links: List[str] = Field(default_factory=list, description="정상 활성 링크 목록 (예: ['S1-S2', 'S2-S4'])")
+    isolated_ports: List[str] = Field(default_factory=list, description="차단된 포트 목록 (예: ['S1:2'])")
+    active_path: List[int] = Field(default_factory=lambda: [1, 2, 4], description="현재 활성 라우팅 경로 DPID 시퀀스")
+    phase: Optional[str] = Field(default=None, description="컨트롤러 방어 단계 (NORMAL | MITIGATED | COOLDOWN_VERIFY)")
 ```
 
 ---

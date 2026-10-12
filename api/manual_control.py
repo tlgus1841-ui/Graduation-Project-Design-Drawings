@@ -17,9 +17,11 @@ from pydantic import BaseModel, Field
 
 from api.mock_generator import SWITCH_PORTS, is_trunk_port
 from harness.contracts import ControlCommandMessage, DefenseAction
+from harness.safety.whitelist_guard import DEFAULT_PROTECTED_ACCESS_PORTS
 
 MANUAL_PRIORITY = 100
 MANUAL_PREFIX = "[MANUAL]"
+PROTECTED_ACCESS_PORTS = DEFAULT_PROTECTED_ACCESS_PORTS
 
 
 class ManualControlRequest(BaseModel):
@@ -31,7 +33,7 @@ class ManualControlRequest(BaseModel):
 
 
 class ManualControlRejected(ValueError):
-    """Request is well-formed but not allowed (unknown or trunk port)."""
+    """Request is well-formed but not allowed (unknown, trunk, or protected host port)."""
 
 
 def build_manual_command(req: ManualControlRequest) -> ControlCommandMessage:
@@ -39,6 +41,8 @@ def build_manual_command(req: ManualControlRequest) -> ControlCommandMessage:
         raise ManualControlRejected(f"S{req.dpid}:{req.port} 는 존재하지 않는 포트입니다.")
     if is_trunk_port(req.dpid, req.port):
         raise ManualControlRejected(f"S{req.dpid}:{req.port} 는 스위치 간 트렁크 포트라 수동 제어할 수 없습니다.")
+    if req.action == "ISOLATE" and req.port in PROTECTED_ACCESS_PORTS.get(req.dpid, []):
+        raise ManualControlRejected(f"S{req.dpid}:{req.port} 는 보호 호스트 포트라 격리할 수 없습니다.")
     return ControlCommandMessage(
         command_id=f"manual-{req.action.lower()}-{uuid.uuid4().hex[:8]}",
         action=DefenseAction(req.action).value,

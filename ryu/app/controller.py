@@ -393,7 +393,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             TopologyLink(source="s4", target="h_server", src_port=1, dst_port=1),
         ]
 
-        sync_msg = TopologySyncMessage(timestamp=time.time(), nodes=nodes, links=links)
+        sync_msg = TopologySyncMessage(
+            timestamp=time.time(), phase=phase_name, nodes=nodes, links=links
+        )
         try:
             if not self.redis_client:
                 self._init_redis()
@@ -522,6 +524,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                             dpid=alert.dpid,
                             port=alert.in_port,
                             reason=f"Autonomous In_port Drop: {alert.threat_type} (score {alert.score:.2f})",
+                            priority=100,
                         )
                         # 2. 다중 홉 우회 라우팅 선제 설치
                         self.reroute_traffic(source_dpid=alert.dpid, target_dpid=4, dst_ip="10.0.0.4")
@@ -530,6 +533,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                             dpid=alert.dpid,
                             port=4,
                             reason="Autonomous Bypass: Proactive S1-S3-S4 Rerouting",
+                            priority=20,
                         )
                         # 3. FSM 상태 전이
                         self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())

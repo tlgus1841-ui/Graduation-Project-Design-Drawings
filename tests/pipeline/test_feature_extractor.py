@@ -81,6 +81,31 @@ def test_counter_reset_is_skipped_and_rebaselined():
     assert next_features[0]["delta_pps"] == (210 - 10) / 2.0
 
 
+def test_counter_overflow_wraparound_is_skipped_and_rebaselined():
+    """14주차 실측 재현: Mininet 종료 시 rx_packets가 0으로 리셋되는 과정에서
+    델타가 ~9.2e18(언사인드 64비트 래핑)로 튄 사례(week14_e2e_verification.md §6).
+    음수 델타 가드만으로는 못 잡는, 비현실적으로 거대한 양수 델타 케이스다.
+    """
+    extractor = FeatureExtractor()
+    extractor.update(_message(ts=0.0, rx_packets=5000, rx_bytes=400000))
+
+    # 래핑으로 생긴 비현실적인 거대 양수 델타는 버려야 한다 (상한 가드).
+    overflowed_features = extractor.update(
+        _message(ts=2.0, rx_packets=9_223_372_036_854_775_807, rx_bytes=9_223_372_036_854_775_807)
+    )
+    assert overflowed_features == []
+
+    # 그 다음 실제 리셋된(작은) 값은 직전 기준점(거대 값)보다 작아 음수 델타로
+    # 걸러지고, 그 작은 값이 새 기준점이 된다 (기존 음수 델타 가드가 처리).
+    post_reset_features = extractor.update(_message(ts=4.0, rx_packets=10, rx_bytes=800))
+    assert post_reset_features == []
+
+    # 그 이후부터는 정상적으로 델타가 계산되어야 한다.
+    next_features = extractor.update(_message(ts=6.0, rx_packets=210, rx_bytes=16800))
+    assert len(next_features) == 1
+    assert next_features[0]["delta_pps"] == (210 - 10) / 2.0
+
+
 def test_duplicate_timestamp_is_skipped():
     extractor = FeatureExtractor()
     extractor.update(_message(ts=5.0, rx_packets=100, rx_bytes=8000))

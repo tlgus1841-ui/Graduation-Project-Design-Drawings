@@ -12,9 +12,12 @@ echo "🧹 Resetting Self-Defending SDN Tower Environment..."
 echo "=============================================================================="
 
 # 1. Kill stale traffic generators / python scripts
-echo "[1/4] Stopping background traffic generators..."
-pkill -f "python traffic/traffic_attack.py" 2>/dev/null || true
-pkill -f "python traffic/traffic_normal.py" 2>/dev/null || true
+echo "[1/4] Stopping background traffic generators and AI workers..."
+pkill -f "traffic/traffic_attack.py" 2>/dev/null || true
+pkill -f "traffic/traffic_normal.py" 2>/dev/null || true
+pkill -f "traffic.traffic_attack" 2>/dev/null || true
+pkill -f "traffic.traffic_normal" 2>/dev/null || true
+pkill -f "model.inference_worker" 2>/dev/null || true
 
 # 2. Clean Mininet if installed
 if command -v mn &> /dev/null; then

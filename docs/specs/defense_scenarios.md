@@ -114,23 +114,23 @@
 | 항목 | 내용 |
 |:---|:---|
 | 선행 검증 | **화이트리스트 가드:** `target_port`가 §1의 Trunk 포트이면 명령 폐기 + 경고 로그 |
-| 차단 동작 | `ISOLATE`: S1에 `match(in_port=2) → drop`, `Priority 100` `확정` ⚠ 14주차 E2E에서 우회 규칙과 우선순위가 같아 차단이 무력화됨 → Q5 |
-| 우회 동작 | `REROUTE`: H_legit ↔ H_server 플로우를 S1 → S3 → S4로 선제 `OFPFC_ADD`, `Priority 100` `확정` |
-| 설치 순서 | ① 우회 경로 하류부터 설치(S4 → S3 → S1) ② 차단 룰 설치 — 정상 트래픽 무유실 보장 |
-| 발행 메시지 | `sdn:control:command` (`ControlCommandMessage`) 2건: `ISOLATE`, `REROUTE` / `sdn:topology:sync` 1건 |
+| 차단 동작 | `ISOLATE`: S1에 `match(in_port=2) → drop`, `Priority 100` `확정` |
+| 우회 동작 | `REROUTE`: H_legit → H_server 플로우를 S1 → S3 → S4로 선제 `OFPFC_ADD`, `Priority 20` `확정` (기본 경로 `Priority 10`보다 높고 차단 `Priority 100`보다 낮게 설정해 우선순위 충돌 원천 해소 — `ryu/app/controller.py`) |
+| 설치 순서 | ① 중간 경유 스위치(S3) 먼저 설치 ② 입구 스위치(S1) 전환 (`ryu/app/reroute.py`) — 정상 트래픽 무유실 보장 |
+| 발행 메시지 | `sdn:control:command` (`ControlCommandMessage`) 2건: `ISOLATE`(Priority 100), `REROUTE`(Priority 20) / `sdn:topology:sync` 1건 |
 | 전이 조건 T2 | 두 명령의 FlowMod 설치 완료 → `MITIGATED` |
 | 관제탑 | S1:2 링크 회색(`BLOCKED`), S1-S3-S4 링크 청색 강조(`REROUTED`), S1-S2-S4는 대기, H_legit 통신 그래프 유지 |
 
 ### 3.4 4단계: 자가 복구 — `COOLDOWN_VERIFY` → `NORMAL`
 | 항목 | 내용 |
 |:---|:---|
-| 전이 조건 T3 | S1:2 PPS < `ATTACK_CEASE_PPS`(100) 및 스코어 ≥ -0.5 → `COOLDOWN_VERIFY` 진입 `제안` |
+| 전이 조건 T3 | 공격 경보(`sdn:anomaly:alert`) 중단 (S1:2 PPS < `ATTACK_CEASE_PPS`(100) 또는 스코어 ≥ `SCORE_THRESHOLD`(0.0)) → 쿨다운 검증 진입 `확정` |
 | 쿨다운 | `COOLDOWN_SEC` = 10초 `확정`, 이 기간 동안 차단·우회 **유지** |
-| 재공격 T4 | 쿨다운 중 T1 조건 재충족 → 즉시 `MITIGATED` 복귀, 타이머 리셋 (플래핑 방지) |
-| 복구 T5 | 10초 동안 정상 판정 유지 → `RESTORE` 명령 발행 |
-| 복구 동작 | ① S1:2 Drop 룰 `OFPFC_DELETE_STRICT` ② 우회 플로우(S1, S3, S4) `OFPFC_DELETE_STRICT` → 기본 경로(`Priority 10`)로 자동 복귀 |
-| 주의 | 우회 플로우를 삭제하지 않으면 `Priority 100`이 남아 기본 경로로 돌아가지 않음 (`roadmap_v2.md` §15) |
-| 관제탑 | 배지 `RESTORING` 후 `NORMAL`, 모든 링크 녹색 복귀, 이벤트 타임라인에 복구 시각 기록 |
+| 재공격 T4 | 쿨다운 중 경보 재수신(T1 조건 재충족) → 즉시 `MITIGATED` 복귀, 타이머 리셋 (플래핑 방지) |
+| 복구 T5 | 10초 동안 추가 경보 없음 → `RESTORE` 명령 발행 및 롤백 수행 |
+| 복구 동작 | ① S1:2 Drop 룰(`Priority 100`) `OFPFC_DELETE` ② 우회 플로우(S1, S3 `Priority 20`) `OFPFC_DELETE` → 기본 경로(`Priority 10`)로 자동 복귀 |
+| 주의 | 우회 플로우를 삭제하지 않으면 `Priority 20`이 남아 기본 경로(`Priority 10`)로 돌아가지 않음 (`roadmap_v2.md` §15, `ryu/app/controller.py` `restore_reroute_traffic`) |
+| 관제탑 | 배지 `RESTORING` 후 `NORMAL`, 모든 링크 녹색 복귀, 이벤트 타임라인에 복구 시각 기록 및 복구 완료 알림 표시 |
 
 ---
 
@@ -138,19 +138,19 @@
 
 | 단계 | `sdn:stats:port` | `sdn:anomaly:alert` | `sdn:control:command` | `sdn:topology:sync` |
 |:---|:---:|:---:|:---:|:---:|
-| CALIBRATING | 2초 주기 | - | - (발행 금지) | 기동 시 1회 |
+| CALIBRATING | 2초 주기 | - | - (발행 금지) | 기동 시 1회 (Mock/초기 스냅샷) |
 | NORMAL | 2초 주기 | - | - | - |
 | ATTACK_DETECTED | 2초 주기 | 매 주기 | - | S1 `ATTACKED` |
-| MITIGATED | 2초 주기 | 선택(공격 지속 시) | `ISOLATE`, `REROUTE` | S1 `MITIGATED`, 링크 `BLOCKED`/`REROUTED` |
-| COOLDOWN_VERIFY | 2초 주기 | - | - | - |
-| → NORMAL | 2초 주기 | - | `RESTORE` | 전체 `NORMAL`/`ACTIVE` |
+| MITIGATED | 2초 주기 | 공격 지속 시 매 주기 (하트비트) | `ISOLATE`, `REROUTE` (최초 1회) | S1 `MITIGATED`, 링크 `BLOCKED`/`REROUTED` (`phase="MITIGATED"`) |
+| COOLDOWN_VERIFY | 2초 주기 | - | - | S1 `MITIGATED` 유지 (`phase="COOLDOWN_VERIFY"`) |
+| → NORMAL | 2초 주기 | - | `RESTORE` | 전체 `NORMAL`/`ACTIVE` (`phase="NORMAL"`) |
 
 ### 4.1 예시 페이로드 (계약 스키마 준수)
 ```json
 // sdn:anomaly:alert
 {"timestamp": 1790000000.0, "dpid": 1, "in_port": 2, "threat_type": "SYN_FLOOD_SPOOFING",
- "score": -0.78, "pps": 3000.0, "bps": 192000.0, "bpp": 64.0,
- "metadata": {"model": "IsolationForest-v1", "threshold": "-0.50"}}
+ "score": -0.1035, "pps": 3000.0, "bps": 1536000.0, "bpp": 64.0, "err_rate": 0.0,
+ "metadata": {"model": "isolation_forest", "threshold": "0.00"}}
 
 // sdn:control:command (ISOLATE)
 {"timestamp": 1790000002.0, "command_id": "cmd-isolate-0001", "action": "ISOLATE",
@@ -164,12 +164,12 @@
 | 계약 필드 값 | 색상 (Tailwind) | 표현 |
 |:---|:---|:---|
 | `TopologyNode.status = NORMAL` | `emerald-500` | 실선 테두리 |
-| `TopologyNode.status = ATTACKED` | `red-500` | 1초 주기 점멸 |
-| `TopologyNode.status = MITIGATED` | `sky-500` | 방패 아이콘 |
+| `TopologyNode.status = ATTACKED` | `red-500` | 굵은 적색 테두리 (`borderWidth: 5`) + 상단 경보 스트립/포트 행 점멸 |
+| `TopologyNode.status = MITIGATED` | `sky-500` | 청색 테두리 + 상단 격리 스트립 |
 | `TopologyNode.status = OFFLINE` | `slate-500` | 반투명 |
 | `TopologyLink.status = ACTIVE` | `emerald-500` | 실선 |
-| `TopologyLink.status = BLOCKED` | `slate-500` | 점선 + X 표시 |
-| `TopologyLink.status = REROUTED` | `blue-500` | 굵은 실선 + 흐름 애니메이션 |
+| `TopologyLink.status = BLOCKED` | `slate-500` | 회색 점선 (`dashes: [8, 8]`) |
+| `TopologyLink.status = REROUTED` | `blue-500` | 굵은 실선 + 청색 발광 효과 (`shadow`) |
 
 - 배경 `bg-slate-900`, 카드 `bg-slate-800` (다크 SOC 테마)
 - WebSocket 연결 상태 배지: `CONNECTED`(녹색) / `RECONNECTING`(황색) / `DISCONNECTED`(적색)
@@ -195,18 +195,18 @@ FastAPI는 Redis 채널 메시지를 아래 봉투(envelope)로 감싸 브로드
 | 상수명 | 값 | 단위 | 상태 | 담당 | 근거 |
 |:---|:---:|:---:|:---:|:---:|:---|
 | `STATS_POLL_INTERVAL_SEC` | 2 | 초 | 확정 | 박시현 | `sdn_events.py` |
-| `CALIBRATION_SEC` | 15 | 초 | 확정 | 유재민 | `roadmap_v2.md` §17 |
+| `CALIBRATION_SEC` | 15 | 초 | 확정 | 유재민 | `roadmap_v2.md` §17 (`mock_generator.py`, `fsm_acceptance.py`) |
 | `NORMAL_PPS_RANGE` | 10~100 | PPS | 확정 | 유재민 | Phase2 가이드 |
 | `ATTACK_PPS` | 3,000 (1,000~5,000) | PPS | 확정 | 유재민 | `schedule_and_milestones.md` 5주차 |
 | `ATTACK_PKT_SIZE` | 54~74 | Byte | 확정 | 유재민 | `roadmap_v2.md` Sprint 4 |
-| `BPP_ATTACK_MAX` | 80 | Byte | 제안 | 유재민 | 공격 패킷 최대 74B + 여유 |
-| `SCORE_THRESHOLD` | 0.0 (13주차 재보정, 원래 -0.5) | - | 확정 | 유재민 | 13주차 실측 — 학습된 AnomalyModel의 decision_function() 점수가 공격도 -0.15~-0.05 범위라 -0.5는 영원히 도달 못 하는 값이었음. 공격/정상 점수가 0을 기준으로 깨끗이 갈리는 걸 확인해 재보정 (`model/detection_guard.py`) |
-| `DETECT_CONSECUTIVE` | 2 | 주기 | 제안 | 유재민 | Flash Crowd 오탐 방지 |
-| `ATTACK_CEASE_PPS` | 100 | PPS | 제안 | 유재민 | 정상 PPS 상한 |
-| `COOLDOWN_SEC` | 10 | 초 | 확정 | 박시현·유재민 | `roadmap_v2.md` Sprint 4 |
-| `PRIORITY_DROP` | 100 | - | 확정 | 박시현 | `project_proposal.md` |
-| `PRIORITY_REROUTE` | 100 | - | 확정 | 박시현 | `roadmap_v2.md` |
-| `PRIORITY_DEFAULT` | 10 | - | 확정 | 박시현 | `roadmap_v2.md` |
+| `BPP_ATTACK_MAX` | 80 | Byte | 확정 | 유재민 | 공격 패킷 최대 74B + 여유 (`model/detection_guard.py`) |
+| `SCORE_THRESHOLD` | 0.0 (13주차 재보정, 원래 -0.5) | - | 확정 | 유재민 | 13주차 실측 — 학습된 AnomalyModel의 decision_function() 점수가 공격도 -0.15~-0.05 범위라 -0.5는 영원히 도달 못 하는 값이었음. 공격/정상 점수가 0을 기준으로 깨끗이 갈리는 걸 확인해 재보정 (`model/detection_guard.py`, `model/recovery_monitor.py`) |
+| `DETECT_CONSECUTIVE` | 2 | 주기 | 확정 | 유재민 | Flash Crowd 오탐 방지 (`model/detection_guard.py`) |
+| `ATTACK_CEASE_PPS` | 100 | PPS | 확정 | 유재민 | 정상 PPS 상한 (`model/inference_worker.py` `MIN_ATTACK_PPS`) |
+| `COOLDOWN_SEC` | 10 | 초 | 확정 | 박시현·유재민 | `roadmap_v2.md` Sprint 4 (`harness/safety/flapping_fsm.py`) |
+| `PRIORITY_DROP` | 100 | - | 확정 | 박시현 | `project_proposal.md` (`ryu/app/controller.py`) |
+| `PRIORITY_REROUTE` | 20 (16주차 확정, 원래 100) | - | 확정 | 박시현 | 기본 경로(10) < 우회 경로(20) < 포트 차단(100) 계층화로 Q5 우선순위 충돌 해소 (`ryu/app/controller.py`) |
+| `PRIORITY_DEFAULT` | 10 | - | 확정 | 박시현 | `roadmap_v2.md` (`ryu/app/controller.py`) |
 
 ---
 
@@ -225,15 +225,15 @@ FastAPI는 Redis 채널 메시지를 아래 봉투(envelope)로 감싸 브로드
 
 ---
 
-## 8. 미결 사항 (검토 요청)
+## 8. 미결 사항 및 확정 이력
 
-| # | 내용 | 검토자 |
-|:---:|:---|:---:|
-| Q1 | `DETECT_CONSECUTIVE`=2 적용 시 탐지 지연이 최대 4초 증가 — V1 측정 구간 정의 확인 필요 | 유재민 |
-| Q2 | 쿨다운 중 공격 소멸 판정을 AI Worker가 할지, Ryu FSM이 할지 주체 확정 (`flapping_fsm.py` 위치) | 박시현 |
-| Q3 | `system:status`(FSM 상태)를 Redis 채널로 계약에 추가할지, FastAPI가 경보/명령으로 추론할지 결정 | 박시현 |
-| Q4 | H_server 포트(S4:1) 공격 시(서버 역방향 공격) 시나리오 범위 포함 여부 | 전원 |
-| Q5 | 차단(`in_port=2 → drop`)과 우회(`nw_dst=10.0.0.4 → S3`)가 모두 Priority 100이면 공격 패킷이 두 규칙에 동시에 해당해 어느 쪽이 적용될지 정해지지 않는다. 14주차 E2E 실측에서 차단 규칙 적중 0, 공격 27,607패킷이 우회로로 서버 도달. **제안:** 차단 Priority를 200으로 올리거나, 우회 규칙에 `in_port=1` 조건 추가 (`docs/writing/reports/verification/week14_e2e_verification.md` §4.2) | 박시현 |
+| # | 내용 | 상태 | 결정 사항 |
+|:---:|:---|:---:|:---|
+| Q1 | `DETECT_CONSECUTIVE`=2 적용 시 탐지 지연이 최대 4초 증가 — V1 측정 구간 정의 확인 | **확정** | 탐지 확정(경보 발행) 시점부터 컨트롤러 FlowMod 주입까지를 V1으로 측정 (16주차 실측 1.4~2.5ms) |
+| Q2 | 쿨다운 중 공격 소멸 판정을 AI Worker가 할지, Ryu FSM이 할지 주체 확정 (`flapping_fsm.py` 위치) | **확정** | AI Worker(`model/inference_worker.py`)는 공격 중 매 주기 경보(하트비트)를 발행하고, 컨트롤러 내장 `FlappingFSM`(`harness/safety/flapping_fsm.py`)이 마지막 경보로부터 10초 쿨다운 만료 시 자율 복구 수행 (보조 모듈로 `model/recovery_monitor.py`도 제공) |
+| Q3 | `system:status`(FSM 상태)를 Redis 채널로 계약에 추가할지, FastAPI가 경보/명령으로 추론할지 결정 | **확정** | `TopologySyncMessage.phase` 선택 필드를 추가하고 `api/redis_bridge.py`의 `LivePhaseTracker`가 경보·명령·토폴로지 동기화로부터 `system:status`를 생성해 브로드캐스트 |
+| Q4 | H_server 포트(S4:1) 공격 시(서버 역방향 공격) 시나리오 범위 포함 여부 | **확정** | 보호 호스트 포트(S1:1, S4:1)는 화이트리스트(`PROTECTED_HOST_PORTS`)로 자동 격리 대상에서 제외 |
+| Q5 | 차단(`in_port=2 → drop`)과 우회(`nw_dst=10.0.0.4 → S3`)가 모두 Priority 100이면 우선순위 충돌 발생 | **해결 완료** | `ryu/app/controller.py`에서 차단 규칙은 `Priority 100` 유지, 우회 규칙은 `Priority 20`으로 낮추고(`10 < 20 < 100`), 임시 검증 스크립트(`e2e_defense_standin.py`)에서는 `--drop-priority 200`도 지원하도록 반영 완료 |
 
 ---
 
@@ -242,3 +242,4 @@ FastAPI는 Redis 채널 메시지를 아래 봉투(envelope)로 감싸 브로드
 |:---:|:---:|:---:|:---|
 | v1.0 | 2026.09.29 | 김관우 | 최초 작성 (4주차 산출물) |
 | v1.1 | 2026.10.07 | 김관우 | Q5 추가: 차단·우회 규칙 우선순위 충돌 (14주차 E2E 실측) |
+| v1.2 | 2026.10.12 | 전원 | 16주차 실제 통합 코드 기준 정합성 확정 (`PRIORITY_REROUTE=20`, `SCORE_THRESHOLD=0.0`, `bps` 비트 단위, Q1~Q5 확정) |

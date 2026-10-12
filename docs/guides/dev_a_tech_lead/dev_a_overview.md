@@ -15,7 +15,7 @@ Tech Lead는 전체 시스템의 안정성, 프로토콜 정합성, 그리고 AI
 - `topo/`: Mininet 다중 경로 토폴로지 에뮬레이션 스크립트 (`diamond_topo.py`)
 - `ryu/`: OpenFlow 1.3 제어 평면 컨트롤러 (`ryu/app/controller.py`), Dockerfile
 - `tests/harness/`: Mock IPC 버스, Headless 토폴로지 시뮬레이터, 회귀 테스트 러너
-- `scripts/`: 원클릭 실행(`run_system.sh`), 초기화 스크립트(`reset_env.sh`)
+- `scripts/`: 원클릭 시연 실행(`demo_scenario.sh`), 초기화 스크립트(`reset_env.sh`)
 
 ### 1.2 핵심 개발 책임
 1. **아키텍처 격리 수호:** Ryu 컨트롤러가 Docker Python 3.8 환경에서 격리 실행되도록 통제하고, 컨트롤러 내부에서 블로킹 연산이 일어나지 않도록 보호.

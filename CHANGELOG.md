@@ -13,6 +13,23 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-12] fix(all): 코드·계약·관제탑·안전가드레일 및 전체 산출물 문서 정합성 일괄 정렬
+* **작업자:** 박시현 · 유재민 · 김관우 with Antigravity AI Agent
+* **작업 유형:** `Fix` / `Refactor` / `Docs` / `Test`
+* **주요 변경 파일:**
+  - `pipeline/feature_extractor.py`, `tests/pipeline/test_feature_extractor.py`: 유재민 `origin/fix/yoo-jaemin-counter-overflow-guard` 반영 — Mininet 종료 시 언사인드 64비트 래핑(`~9.22e18`) 거대 양수 델타를 원천 차단하는 `MAX_PLAUSIBLE_PACKET_DELTA = 10_000_000`, `MAX_PLAUSIBLE_BYTE_DELTA` 상한 가드 및 회귀 테스트 추가
+  - `harness/safety/whitelist_guard.py`, `api/manual_control.py`, `ui/src/components/ManualControl.jsx`, `docs/writing/manual/operator_manual.md`, `tests/harness/test_whitelist_guard.py`, `tests/api/test_manual_control.py`: 유재민 `origin/fix/protected-host-isolation-guard` 반영 및 SSOT·UI·매뉴얼 정합성 통합 — `DEFAULT_PROTECTED_ACCESS_PORTS`(`S1:1` `H_legit`, `S4:1` `H_server`) 격리 차단 가드를 자율·수동 제어 경로와 UI 모달, 운영자 매뉴얼에 일관되게 적용
+  - `harness/contracts/sdn_events.py`: `AnomalyAlertMessage.bps` 설명 단위를 `Bits per second rate (ΔBPS)`로 교정, `TopologySyncMessage`에 컨트롤러 방어 단계 전달용 선택적 필드 `phase: Optional[str]` 추가
+  - `ryu/app/controller.py`: `_publish_topology_sync` 발행 시 현재 FSM 단계(`phase`) 포함, 자율 방어 감사 이벤트 발행 시 `REROUTE` 우선순위를 실제 OpenFlow 규칙과 동일한 `priority=20`으로 통일
+  - `api/redis_bridge.py`, `tests/api/test_redis_bridge.py`: `LivePhaseTracker`가 `TopologySyncMessage.phase`(`COOLDOWN_VERIFY` 등)를 반영하도록 개선하여 실데이터 모드(`SDN_MOCK=0`)에서도 관제 UI 복구 검증 배지·카운트다운·복구 모달이 동작하도록 수정 및 단위 테스트 보강
+  - `api/mock_generator.py`: `SCORE_THRESHOLD = 0.0`, `PRIORITY_REROUTE = 20`으로 실제 파이프라인 상수와 일치시키고, 모의 경보 `bps` 계산식에 `× 8`(bits/sec) 적용
+  - `scripts/demo_scenario.sh`, `scripts/reset_env.sh`: 시연 안내 문구(`Score < 0.0`, `Priority 100 / Priority 20`), `model.inference_worker` 기동 안내 추가 및 모듈(`-m`) 실행 프로세스 종료 패턴 보완
+  - `README.md`, `docs/specs/defense_scenarios.md`, `docs/writing/thesis/thesis_draft.md`, `docs/writing/presentations/final_demo_runbook.md`, `docs/writing/reports/verification/week16_real_components_e2e.md`, `docs/writing/reports/weekly/semester_weekly_report_compilation.md`, `docs/writing/reports/final_review_feedback.md`: 16주차 실제 구성(`IsolationForest` + 컨트롤러 내장 FSM/Reroute + `Priority 100 / 20` + 반응시간 `1.4~2.5ms`) 기준으로 수치·상태·오픈 이슈 전면 갱신
+  - `docs/guides/**`, `docs/writing/reports/weekly/week05_*.md`, `week06_*.md`: 디렉토리 구조(`pipeline/`, `tests/model/`, `docs/writing/`), CLI 인자(`--label 0`), 깨진 상대 경로 링크(`../archive/v1_guides/`, `phase2_core_mock_harness.md`) 일괄 수정
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음 (`TopologySyncMessage.phase`는 `Optional[str] = None` 기본값을 사용하여 기존 메시지 하위 호환성 100% 유지. 보호 호스트 `S1:1`, `S4:1`은 격리 `ISOLATE`만 차단되며 복원 `RESTORE`는 기존대로 허용).
+* **다음 작업자 인수인계 메모:**
+  - **[공통]** 유재민 님의 원격 브랜치 2건(`fix/yoo-jaemin-counter-overflow-guard`, `fix/protected-host-isolation-guard`)을 포함한 전 모듈 코드와 공식 문서 간 상수·우선순위·단위·경로 불일치가 모두 해소되었습니다.
+
 ### [2026-10-11] feat(model): 김관우 AI 추론 워커 추가 및 실제 구성 E2E 검증
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Feat` / `Test` / `Docs`

@@ -36,7 +36,7 @@
 ### 3.1 신규 패키지 추가
 ```bash
 # 기본 라이브러리 추가
-uv add scikit-learn==1.3.2 scapy==2.5.0 pandas==2.1.4 numpy==1.24.3
+uv add scikit-learn==1.3.2 scapy==2.5.0 numpy==1.24.3 networkx>=3.1
 uv add fastapi==0.109.2 uvicorn==0.27.1 pydantic==2.6.1 redis==5.0.1
 
 # 개발 및 테스트 전용 패키지 추가
@@ -53,8 +53,11 @@ uv run pytest tests/harness/test_mock_ipc.py -v
 # Scapy 정상 트래픽 생성기 실행 (루트 권한 필요 시)
 sudo uv run python traffic/traffic_normal.py
 
-# AI 파이프라인 피처 추출기 실행
-uv run python pipeline/feature_extractor.py
+# AI 파이프라인 피처 추출기 실행 (0=정상, 1=공격 레이블 지정)
+uv run python pipeline/feature_extractor.py --label 0
+
+# AI 실시간 추론 워커 실행
+uv run python -m model.inference_worker --model model/isolation_forest.joblib
 
 # FastAPI 웹소켓 서버 구동
 uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload

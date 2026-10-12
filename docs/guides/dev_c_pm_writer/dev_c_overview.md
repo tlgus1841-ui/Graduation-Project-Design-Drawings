@@ -12,11 +12,11 @@ PM & Tech Writer는 프로젝트의 전체 개발 진도를 조율하고, 기술
 
 ### 1.1 담당 문서 및 기획/산출물 영역
 - `docs/planning/`: 주차별 마일스톤 추적, 리스크 관리, 정기 계획 수정
-- `docs/reports/`: 매주 학과에 제출하는 A4 주간 진행 보고서 작성 및 취합
+- `docs/writing/reports/`: 매주 학과에 제출하는 A4 주간 진행 보고서(`weekly/`), 중간보고서, 실증 검증서(`verification/`)
 - `docs/specs/`: 4단계 방어 시나리오(Normal ➔ Attack ➔ Mitigated ➔ Restored) 명세서
-- `ui/`: 웹 관제탑 대시보드(React 18 + Tailwind) 사용자 인터페이스 레이아웃 기획 및 렌더링 검수
-- `docs/thesis/`: 최종 졸업작품 논문(보고서) 본문 집필 및 초안 감수
-- `docs/proposal/`: 최종 심사용 10장 PPT 슬라이드 대본 및 라이브 시연 대본(Script) 총괄
+- `api/` & `ui/`: 웹 관제탑 백엔드(FastAPI + Redis 브릿지) 및 대시보드(React 18 + Tailwind) 레이아웃 기획·검수
+- `docs/writing/thesis/`: 최종 졸업작품 논문(보고서) 본문 집필 및 초안 감수
+- `docs/writing/presentations/` & `docs/writing/manual/`: 최종 심사용 10장 PPT 슬라이드, 라이브 시연 런북 및 운영 매뉴얼 총괄
 
 ### 1.2 핵심 프로젝트 관리 책임
 1. **주간 마일스톤 추적 및 A4 보고서 제출:** 매주 금요일 팀원들(박시현, 유재민)의 정량 검증 데이터를 취합하여 A4 규격 주간 보고서 작성 및 지도교수님 대면 보고 주관.

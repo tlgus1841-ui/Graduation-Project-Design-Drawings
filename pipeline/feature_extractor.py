@@ -28,6 +28,14 @@ from pipeline.csv_logger import log_features  # noqa: E402
 EPSILON = 1e-6
 PortKey = Tuple[int, int]
 
+# 카운터 리셋/오버플로우로 생기는 비현실적인 델타 방지. 14주차 실측에서 Mininet
+# 종료 시 rx_packets가 0으로 리셋되며 델타가 ~9.2e18(언사인드 64비트 래핑)로
+# 튄 사례가 확인됐다 (docs/writing/reports/verification/week14_e2e_verification.md
+# §6). 음수 델타(d_packets < 0)만 걸러내던 기존 가드는 이 "거대한 양수" 케이스를
+# 못 잡는다. 16주차 실측 최대 공격 강도(952,828 PPS)에 여유를 둔 상한을 둔다.
+MAX_PLAUSIBLE_PACKET_DELTA = 10_000_000
+MAX_PLAUSIBLE_BYTE_DELTA = MAX_PLAUSIBLE_PACKET_DELTA * 1500  # 점보 프레임 포함 여유
+
 
 @dataclass
 class _PortSnapshot:
@@ -68,8 +76,15 @@ class FeatureExtractor:
 
             self._prev[key] = current
 
-            if dt <= 0 or d_packets < 0 or d_bytes < 0:
-                # 중복/역전 타임스탬프이거나 스위치 재시작으로 카운터가 리셋된 구간은 버린다.
+            if (
+                dt <= 0
+                or d_packets < 0
+                or d_bytes < 0
+                or d_packets > MAX_PLAUSIBLE_PACKET_DELTA
+                or d_bytes > MAX_PLAUSIBLE_BYTE_DELTA
+            ):
+                # 중복/역전 타임스탬프, 카운터 리셋(음수 델타), 또는 카운터
+                # 오버플로우로 생긴 비현실적인 거대 양수 델타는 전부 버린다.
                 continue
 
             features.append(

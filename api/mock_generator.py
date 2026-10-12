@@ -48,9 +48,9 @@ ATTACK_BPP = 64.0
 LEGIT_PPS = 50.0
 LEGIT_BPP = 800.0
 REPLY_BPP = 200.0
-SCORE_THRESHOLD = -0.5
+SCORE_THRESHOLD = 0.0
 PRIORITY_DROP = 100
-PRIORITY_REROUTE = 100
+PRIORITY_REROUTE = 20
 
 ATTACKER_DPID = 1
 ATTACKER_PORT = 2
@@ -193,7 +193,7 @@ class MockTelemetryGenerator:
             threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
             score=round(self._rng.uniform(-0.9, -0.65), 3),
             pps=round(pps, 1),
-            bps=round(pps * ATTACK_BPP, 1),
+            bps=round(pps * ATTACK_BPP * 8, 1),
             bpp=ATTACK_BPP,
             metadata={"model": "mock", "threshold": f"{SCORE_THRESHOLD:.2f}"},
         )

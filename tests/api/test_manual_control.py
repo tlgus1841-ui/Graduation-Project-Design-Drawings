@@ -42,6 +42,20 @@ def test_trunk_ports_are_never_manually_controllable(dpid, port):
         build_manual_command(ManualControlRequest(action="ISOLATE", dpid=dpid, port=port, reason="test"))
 
 
+@pytest.mark.parametrize("dpid,port", [(1, 1), (4, 1)])  # H_legit, H_server
+def test_protected_host_ports_cannot_be_manually_isolated(dpid, port):
+    """관리자가 포트 번호를 잘못 입력해도 H_legit/H_server는 수동으로 격리할 수 없다."""
+    with pytest.raises(ManualControlRejected):
+        build_manual_command(ManualControlRequest(action="ISOLATE", dpid=dpid, port=port, reason="test"))
+
+
+@pytest.mark.parametrize("dpid,port", [(1, 1), (4, 1)])
+def test_protected_host_ports_can_still_be_manually_restored(dpid, port):
+    """RESTORE는 격리가 아니므로 보호 포트 체크 대상이 아니다."""
+    cmd = build_manual_command(ManualControlRequest(action="RESTORE", dpid=dpid, port=port, reason="test"))
+    assert cmd.action == "RESTORE"
+
+
 def test_manual_isolate_is_broadcast_to_dashboards(mock_client):
     with mock_client.websocket_connect("/ws") as ws:
         ws.receive_json()  # initial topology

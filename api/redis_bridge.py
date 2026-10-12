@@ -51,7 +51,7 @@ RedisFactory = Callable[[], "aioredis.Redis"]
 
 
 class LivePhaseTracker:
-    """Provisional FSM phase inferred from the contract messages (spec §8 Q3)."""
+    """FSM phase tracker from contract messages (alerts, commands, and topology sync)."""
 
     def __init__(self) -> None:
         self.phase: Optional[Phase] = None
@@ -59,12 +59,20 @@ class LivePhaseTracker:
     def observe(self, channel: str, message: BaseModel) -> bool:
         """Update the phase from one validated message. Returns True when it changed."""
         previous = self.phase
-        if channel == REDIS_CHANNEL_ANOMALY_ALERT and self.phase != Phase.MITIGATED:
+        if channel == REDIS_CHANNEL_ANOMALY_ALERT and self.phase not in (
+            Phase.MITIGATED,
+            Phase.COOLDOWN_VERIFY,
+        ):
             self.phase = Phase.ATTACK_DETECTED
         elif channel == REDIS_CHANNEL_CONTROL_COMMAND and isinstance(message, ControlCommandMessage):
             if message.action in (DefenseAction.ISOLATE.value, DefenseAction.REROUTE.value):
                 self.phase = Phase.MITIGATED
             elif message.action == DefenseAction.RESTORE.value:
+                self.phase = Phase.NORMAL
+        elif channel == REDIS_CHANNEL_TOPOLOGY_SYNC and isinstance(message, TopologySyncMessage):
+            if message.phase in {p.value for p in Phase}:
+                self.phase = Phase(message.phase)
+            elif self.phase is None:
                 self.phase = Phase.NORMAL
         elif self.phase is None:
             self.phase = Phase.NORMAL

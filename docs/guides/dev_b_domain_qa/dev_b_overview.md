@@ -12,9 +12,9 @@ Domain Dev & QA는 현실적인 네트워크 공격을 모의하고, SDN 제어 
 
 ### 1.1 담당 소스코드 및 산출물 영역
 - `traffic/`: Scapy 가변 정상 트래픽(`traffic_normal.py`), 무작위 IP 변조 SYN Flooding 공격기(`traffic_attack.py`)
-- `pipeline/`: 실시간 5대 파생 피처 계산 모듈(`feature_extractor.py`), CSV 데이터셋 로거
-- `model/`: Scikit-learn 경량 비지도 이상 탐지 엔진(`model.py`, `inference_worker.py`)
-- `tests/harness/`: 모델 벤치마크 평가 하네스(`model_evaluator.py`), 지연시간 프로파일러(`latency_profiler.py`)
+- `pipeline/`: 실시간 5대 파생 피처 계산 모듈(`feature_extractor.py`), CSV 데이터셋 로거(`csv_logger.py`)
+- `model/`: Scikit-learn 경량 비지도 이상 탐지 엔진(`model.py`, `inference_worker.py`, `latency_profiler.py`)
+- `tests/model/`: 모델 벤치마크 평가 하네스(`test_model_evaluator.py`, `test_inference_worker.py`, `test_latency_profiler.py`)
 - `dataset/`: 훈련 및 평가용 정규화 CSV 데이터셋 및 혼동행렬/ROC 평가 리포트
 
 ### 1.2 핵심 개발 및 검증 책임

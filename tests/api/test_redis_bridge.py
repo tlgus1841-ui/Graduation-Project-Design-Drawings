@@ -93,17 +93,20 @@ def test_topology_sync_updates_snapshot():
 def test_phase_follows_alert_isolate_restore():
     bridge = RedisBridge()
     phases = []
+    cooldown_topo = MockTelemetryGenerator().topology_snapshot(Phase.COOLDOWN_VERIFY)
+    cooldown_topo.phase = Phase.COOLDOWN_VERIFY.value
     for channel, raw in [
         (REDIS_CHANNEL_PORT_STATS, port_stats_json()),
         (REDIS_CHANNEL_ANOMALY_ALERT, alert_json()),
         (REDIS_CHANNEL_CONTROL_COMMAND, command_json("ISOLATE")),
         (REDIS_CHANNEL_ANOMALY_ALERT, alert_json()),  # attack continues while mitigated
+        (REDIS_CHANNEL_TOPOLOGY_SYNC, cooldown_topo.model_dump_json()),
         (REDIS_CHANNEL_CONTROL_COMMAND, command_json("RESTORE")),
     ]:
         for env in bridge.handle_message(channel, raw):
             if env["type"] == SYSTEM_STATUS_TYPE:
                 phases.append(env["data"]["phase"])
-    assert phases == ["NORMAL", "ATTACK_DETECTED", "MITIGATED", "NORMAL"]
+    assert phases == ["NORMAL", "ATTACK_DETECTED", "MITIGATED", "COOLDOWN_VERIFY", "NORMAL"]
 
 
 # =====================================================================

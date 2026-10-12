@@ -13,7 +13,7 @@
 |:---:|:---|:---|:---|
 | **역할 정의** | **시스템 아키텍트 & 코어 엔지니어** | **AI/보안 엔지니어 & 품질 보증 (QA)** | **프로젝트 매니저 & 테크니컬 라이터** |
 | **핵심 책임** | • 가상 인프라(Mininet) 및 듀얼 하네스 아키텍처 설계<br>• Ryu OpenFlow 1.3 코어 스위칭 & 텔레메트리<br>• In_port 격리, Dijkstra 다중 홉 우회, FSM 플래핑 방지 | • Scapy 가변 정상/랜덤 IP 변조 공격 패킷 생성기<br>• 실시간 5대 SDN 파생 피처 엔지니어링<br>• Isolation Forest 모델 훈련 및 정량 벤치마크 | • 프로젝트 마일스톤 및 A4 주간 진도 보고서 관리<br>• 4단계 방어 시나리오 명세 및 관제 UI/UX 기획/검수<br>• 최종 논문 집필, 10장 PPT 슬라이드 및 시연 총괄 |
-| **작업 디렉토리** | `harness/`, `topo/`, `ryu/`, `tests/harness/` | `traffic/`, `pipeline/`, `model/`, `tests/` | `docs/`, `ui/`, `reports/`, 시연 스크립트 |
+| **작업 디렉토리** | `harness/`, `topo/`, `ryu/`, `scripts/`, `tests/harness/` | `traffic/`, `pipeline/`, `model/`, `tests/` | `docs/`, `api/`, `ui/`, `docs/writing/reports/` |
 | **개발 환경** | Ubuntu 22.04 LTS, Docker(`python:3.8-slim`), `uv` | Python 3.10.12 (`.venv`), Scapy, Scikit-learn, `uv` | 문서화 도구, Node 20, React 18, Vite, Tailwind CSS |
 | **가이드 대문** | [📘 Tech Lead 가이드](dev_a_tech_lead/dev_a_overview.md) | [📗 Domain QA 가이드](dev_b_domain_qa/dev_b_overview.md) | [📙 PM & Writer 가이드](dev_c_pm_writer/dev_c_overview.md) |
 
@@ -94,5 +94,5 @@
 
 ## 🗄️ 4. 이전 버전 가이드 아카이브
 
-프로젝트 v1.0 기획 단계에서 작성되었던 초기 가이드 문서는 참고 목적으로 [`archive_v1/`](archive_v1/) 폴더에 보관되어 있습니다.  
+프로젝트 v1.0 기획 단계에서 작성되었던 초기 가이드 문서는 참고 목적으로 [`../archive/v1_guides/`](../archive/v1_guides/) 폴더에 보관되어 있습니다.  
 구버전 문서에 포함된 `pip install`, 단일 스위치 수정(`OFPFC_MODIFY`) 등은 현재 아키텍처와 충돌하므로 참고용으로만 열람하십시오.

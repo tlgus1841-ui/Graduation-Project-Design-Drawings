@@ -2,7 +2,7 @@
 
 > **담당자:** 박시현 (22101489 / Tech Lead & 시스템 아키텍트)  
 > **해당 기간:** 6주차 (2026.10.05 ~ 2026.10.11)  
-> **상위 근거 문서:** [`schedule_and_milestones.md`](../../../planning/schedule_and_milestones.md), [`roadmap_v2.md`](../../../planning/roadmap_v2.md), [`sdn_events.py`](../../../../harness/contracts/sdn_events.py), [`phase2_core_sdn_infra.md`](../../../guides/dev_a_tech_lead/phase2_core_sdn_infra.md)
+> **상위 근거 문서:** [`schedule_and_milestones.md`](../../../planning/schedule_and_milestones.md), [`roadmap_v2.md`](../../../planning/roadmap_v2.md), [`sdn_events.py`](../../../../harness/contracts/sdn_events.py), [`phase2_core_mock_harness.md`](../../../guides/dev_a_tech_lead/phase2_core_mock_harness.md)
 
 ---
 

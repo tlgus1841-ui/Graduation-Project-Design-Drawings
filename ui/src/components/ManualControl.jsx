@@ -77,7 +77,8 @@ function ManualControlDialog({ onClose }) {
 
   const t = TARGETS.find((x) => x.value === target);
   const [dpid, port] = target.split(":").map(Number);
-  const valid = reason.trim().length >= 3 && operator.trim().length > 0 && confirmed;
+  const isProtectedIsolate = action === "ISOLATE" && Boolean(t?.normal);
+  const valid = !isProtectedIsolate && reason.trim().length >= 3 && operator.trim().length > 0 && confirmed;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -131,9 +132,9 @@ function ManualControlDialog({ onClose }) {
           <span className="block text-xs text-slate-400">스위치끼리 연결된 포트는 망 전체가 끊길 수 있어 선택할 수 없습니다.</span>
         </label>
 
-        {action === "ISOLATE" && t.normal && (
+        {isProtectedIsolate && (
           <p role="alert" className="rounded-md border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-            정상 호스트 포트입니다. 격리하면 해당 사용자의 통신이 끊깁니다.
+            보호 호스트 포트(H_legit, H_server)는 안전 가드레일에 의해 격리할 수 없습니다. (복원 동작만 가능)
           </p>
         )}
 

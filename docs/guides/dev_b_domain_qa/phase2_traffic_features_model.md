@@ -1,7 +1,7 @@
 # 📗 [Domain Dev & QA] Phase 2: 트래픽 생성기 & 피처 파이프라인 & AI 모델 가이드
 > **담당자:** 유재민 (22101498 / Domain Dev & QA)  
 > **해당 기간:** 4주차 ~ 7주차 (2026.09.21 ~ 2026.10.18)  
-> **핵심 산출물:** `traffic/traffic_normal.py`, `traffic/traffic_attack.py`, `pipeline/feature_extractor.py`, `model/model.py`, `tests/harness/model_evaluator.py`  
+> **핵심 산출물:** `traffic/traffic_normal.py`, `traffic/traffic_attack.py`, `pipeline/feature_extractor.py`, `pipeline/csv_logger.py`, `model/model.py`, `tests/model/test_model_evaluator.py`  
 > **선행 조건:** Phase 1 마일스톤(Python 3.10 `uv` 셋업, 계약 스키마 확정) 완료
 
 ---
@@ -14,8 +14,8 @@
 |:---:|:---|:---|:---|:---|
 | **4주차** | **Scapy 정상 트래픽 생성기 & 체크섬 검증** | `traffic/traffic_normal.py` | • Poisson 분포 기반 현실적 웹/다운로드/Ping 모사<br>• Wireshark 기준 TCP Checksum 무결성 100% 검증 | 박시현(다이아몬드 토폴로지 H_legit)에서 구동 검증 |
 | **5주차** | **무작위 IP 스푸핑 SYN Flood 고속 공격기** | `traffic/traffic_attack.py`<br>`traffic/checksum_utils.py` | • 사설 대역 제외 무작위 공인 IP 스푸핑<br>• 1,000~5,000 PPS 가변 주입 및 54~74B 초소형 패킷<br>• 체크섬 공용 유틸(`finalize_checksum`) 추출 | 박시현(5주차 컨트롤러) 제어 평면 안정성 및 유입 검증 |
-| **6주차** | **Redis 통계 구독 & 5대 실시간 피처 계산기** | `traffic/feature_extractor.py`<br>`traffic/logger.py` | • Redis `sdn:stats:port` 비동기 구독<br>• 5대 파생 피처($\Delta \text{PPS}$, $\Delta \text{BPS}$, $\text{BPP}$ 등) 계산 지연 <5ms<br>• 정상/공격 레이블링 CSV 로거 파이프라인 구축 | 박시현(Ryu 2초 통계 발행) 수신 ➔ 김관우(웹 차트 연동) |
-| **7주차** | **Isolation Forest 모델 훈련 & 평가 하네스** | `model/model.py`<br>`tests/harness/model_evaluator.py` | • Scikit-learn Isolation Forest 단일 샘플 이상치 스코어링<br>• 단일 추론 지연 <10ms 달성<br>• F1-Score 90% 이상 1차 기준선 검증 | 박시현(AI 이상치 스코어 기반 9주차 차단 트리거 기초) |
+| **6주차** | **Redis 통계 구독 & 5대 실시간 피처 계산기** | `pipeline/feature_extractor.py`<br>`pipeline/csv_logger.py` | • Redis `sdn:stats:port` 비동기 구독<br>• 5대 파생 피처($\Delta \text{PPS}$, $\Delta \text{BPS}$, $\text{BPP}$ 등) 계산 지연 <5ms<br>• 정상/공격 레이블링 CSV 로거 파이프라인 구축 | 박시현(Ryu 2초 통계 발행) 수신 ➔ 김관우(웹 차트 연동) |
+| **7주차** | **Isolation Forest 모델 훈련 & 평가 하네스** | `model/model.py`<br>`tests/model/test_model_evaluator.py` | • Scikit-learn Isolation Forest 단일 샘플 이상치 스코어링<br>• 단일 추론 지연 <10ms 달성<br>• F1-Score 90% 이상 1차 기준선 검증 | 박시현(AI 이상치 스코어 기반 9주차 차단 트리거 기초) |
 
 ---
 
@@ -25,8 +25,8 @@
 |:---:|:---|:---|:---|
 | **4주차** | `traffic/traffic_normal.py` | 정상 트래픽 생성기 | `docs/writing/reports/weekly/week04_traffic_normal_plan.md` |
 | **5주차** | `traffic/traffic_attack.py`<br>`traffic/checksum_utils.py` | SYN Flood 공격기 / 유틸 | `docs/writing/reports/weekly/week05_traffic_attack_implementation_plan.md` |
-| **6주차** | `traffic/feature_extractor.py`<br>`traffic/logger.py` | 실시간 피처 파이프라인 | 6주차 피처 추출 구현 계획서 및 진도 보고서 #3 |
-| **7주차** | `model/model.py`<br>`tests/harness/model_evaluator.py` | 머신러닝 모델 / 평가 하네스 | 7주차 AI 모델 구현 계획서 및 진도 보고서 #4 |
+| **6주차** | `pipeline/feature_extractor.py`<br>`pipeline/csv_logger.py` | 실시간 피처 파이프라인 | 6주차 피처 추출 구현 계획서 및 진도 보고서 #3 |
+| **7주차** | `model/model.py`<br>`tests/model/test_model_evaluator.py` | 머신러닝 모델 / 평가 하네스 | 7주차 AI 모델 구현 계획서 및 진도 보고서 #4 |
 
 ---
 
@@ -81,14 +81,14 @@ H_attacker(10.0.0.2)에서 출발지 IP를 무작위 변조하여 H_server(10.0.
 
 #### 5대 표준 피처 산출 공식
 1. **$\Delta \text{PPS}$ (초당 패킷 수):** $\frac{\text{rx\_packets}_t - \text{rx\_packets}_{t-1}}{\Delta t}$
-2. **$\Delta \text{BPS}$ (초당 바이트 수):** $\frac{\text{rx\_bytes}_t - \text{rx\_bytes}_{t-1}}{\Delta t} \times 8$
+2. **$\Delta \text{BPS}$ (초당 비트 수):** $\frac{\text{rx\_bytes}_t - \text{rx\_bytes}_{t-1}}{\Delta t} \times 8$
 3. **$\text{BPP}$ (패킷당 바이트 수 - 핵심 탐지 지표):** $\frac{\text{rx\_bytes}_t - \text{rx\_bytes}_{t-1}}{\text{rx\_packets}_t - \text{rx\_packets}_{t-1} + \epsilon}$
 4. **$\text{ERR\_Rate}$ (에러 패킷 비율):** $\frac{\text{rx\_errors}_t - \text{rx\_errors}_{t-1}}{\text{rx\_packets}_t - \text{rx\_packets}_{t-1} + \epsilon}$
 5. **$\text{Duration}$ (포트 활성 지속 시간):** $\text{duration\_sec}$
 
 ```bash
-# 피처 추출 파이프라인 구동
-uv run python pipeline/feature_extractor.py
+# 피처 추출 파이프라인 구동 (0=정상, 1=공격 레이블 지정)
+uv run python pipeline/feature_extractor.py --label 0
 ```
 
 ---
@@ -111,7 +111,7 @@ Scikit-learn 1.3.2 기반으로 실시간 SDN 피처를 입력받아 이상 유�
 
 ```bash
 # 모델 벤치마크 및 추론 지연시간 검증 하네스 실행
-uv run pytest tests/harness/test_model_evaluator.py -v
+uv run pytest tests/model/test_model_evaluator.py -v
 ```
 
 ---
