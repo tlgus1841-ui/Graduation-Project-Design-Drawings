@@ -5,13 +5,15 @@ Guardrails:
 - only ISOLATE and RESTORE (REROUTE stays automatic);
 - only known access ports — trunk ports (switch-to-switch) are never isolatable, the same rule
   as the mock generator and the spec's whitelist guard;
+- protected host ports (H_legit, H_server) can never be ISOLATEd either, even manually —
+  same list as harness/safety/whitelist_guard.py's DEFAULT_PROTECTED_ACCESS_PORTS;
 - a reason is mandatory so every manual action is traceable in the event feed.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +22,9 @@ from harness.contracts import ControlCommandMessage, DefenseAction
 
 MANUAL_PRIORITY = 100
 MANUAL_PREFIX = "[MANUAL]"
+# S1:1 (H_legit), S4:1 (H_server) — must match
+# harness/safety/whitelist_guard.py's DEFAULT_PROTECTED_ACCESS_PORTS.
+PROTECTED_ACCESS_PORTS: Dict[int, List[int]] = {1: [1], 4: [1]}
 
 
 class ManualControlRequest(BaseModel):
@@ -39,6 +44,8 @@ def build_manual_command(req: ManualControlRequest) -> ControlCommandMessage:
         raise ManualControlRejected(f"S{req.dpid}:{req.port} 는 존재하지 않는 포트입니다.")
     if is_trunk_port(req.dpid, req.port):
         raise ManualControlRejected(f"S{req.dpid}:{req.port} 는 스위치 간 트렁크 포트라 수동 제어할 수 없습니다.")
+    if req.action == "ISOLATE" and req.port in PROTECTED_ACCESS_PORTS.get(req.dpid, []):
+        raise ManualControlRejected(f"S{req.dpid}:{req.port} 는 보호 호스트 포트라 격리할 수 없습니다.")
     return ControlCommandMessage(
         command_id=f"manual-{req.action.lower()}-{uuid.uuid4().hex[:8]}",
         action=DefenseAction(req.action).value,

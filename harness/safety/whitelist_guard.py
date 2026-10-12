@@ -32,6 +32,17 @@ DEFAULT_ACCESS_PORTS: Dict[int, List[int]] = {
     4: [1],
 }
 
+# Protected end-host ports that must never be isolated, regardless of trunk
+# status: S1:1 (H_legit), S4:1 (H_server). Previously only `is_ip_protected()`
+# existed for this and it was never called anywhere, so nothing actually
+# stopped an ISOLATE on these ports except the AI worker's own port filter
+# (model/inference_worker.py) upstream. This makes the guarantee authoritative
+# at the safety-gate layer itself.
+DEFAULT_PROTECTED_ACCESS_PORTS: Dict[int, List[int]] = {
+    1: [1],
+    4: [1],
+}
+
 
 class WhitelistGuard:
     """Trunk 포트 오차단을 원천 차단하고 인프라 가용성을 보장하는 안전 가드레일"""
@@ -41,11 +52,16 @@ class WhitelistGuard:
         trunk_ports: Optional[Dict[int, List[int]]] = None,
         access_ports: Optional[Dict[int, List[int]]] = None,
         protected_ips: Optional[Set[str]] = None,
+        protected_access_ports: Optional[Dict[int, List[int]]] = None,
     ):
         self.trunk_ports = trunk_ports if trunk_ports is not None else DEFAULT_TRUNK_PORTS
         self.access_ports = access_ports if access_ports is not None else DEFAULT_ACCESS_PORTS
         # H_legit (10.0.0.1), H_server (10.0.0.4) 등 주요 호스트 보호 IP 목록
         self.protected_ips = protected_ips if protected_ips is not None else {"10.0.0.1", "10.0.0.4"}
+        # 포트 기준 보호 목록 (can_isolate()가 실제로 참조하는 값)
+        self.protected_access_ports = (
+            protected_access_ports if protected_access_ports is not None else DEFAULT_PROTECTED_ACCESS_PORTS
+        )
 
     def is_trunk_port(self, dpid: int, port_no: int) -> bool:
         """포트가 스위치 간 트렁크 포트인지 확인"""
@@ -54,6 +70,10 @@ class WhitelistGuard:
     def is_access_port(self, dpid: int, port_no: int) -> bool:
         """포트가 엔드 호스트가 연결된 엑세스 포트인지 확인"""
         return port_no in self.access_ports.get(dpid, [])
+
+    def is_protected_access_port(self, dpid: int, port_no: int) -> bool:
+        """H_legit/H_server 등 보호 대상 호스트가 연결된 포트인지 확인"""
+        return port_no in self.protected_access_ports.get(dpid, [])
 
     def validate_isolation_target(self, dpid: int, port_no: int) -> bool:
         """
@@ -64,10 +84,19 @@ class WhitelistGuard:
             raise ValueError(
                 f"치명적 오류: DPID {dpid}의 Port {port_no}는 Trunk 포트이므로 차단할 수 없습니다."
             )
+        if self.is_protected_access_port(dpid, port_no):
+            raise ValueError(
+                f"치명적 오류: DPID {dpid}의 Port {port_no}는 보호 호스트 포트이므로 차단할 수 없습니다."
+            )
         return True
 
     def can_isolate(self, dpid: int, port_no: int) -> bool:
-        """차단 가능 여부를 boolean으로 반환 (예외 대신 가드 체크용)"""
+        """차단 가능 여부를 boolean으로 반환 (예외 대신 가드 체크용).
+
+        트렁크 포트뿐 아니라 보호 호스트(H_legit, H_server) 포트도 격리 불가.
+        """
+        if self.is_protected_access_port(dpid, port_no):
+            return False
         return not self.is_trunk_port(dpid, port_no)
 
     def is_ip_protected(self, ip_addr: str) -> bool:
