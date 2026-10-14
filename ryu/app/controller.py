@@ -28,6 +28,7 @@ from ryu.ofproto import ofproto_v1_3
 
 
 from harness.contracts.sdn_events import (
+    MANUAL_RESTORE_HOLD_SEC,
     REDIS_CHANNEL_ANOMALY_ALERT,
     REDIS_CHANNEL_CONTROL_COMMAND,
     REDIS_CHANNEL_TOPOLOGY_SYNC,
@@ -92,6 +93,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             cooldown_sec=10.0,
             on_state_change=self._on_fsm_state_change,
         )
+        # 수동 RESTORE 보류: {"dpid:port": 보류 만료 시각}. 이 시각 전까지는 AI 경보로 다시 격리하지 않음
+        self.manual_holds = {}
 
         # 2초 주기 비차단 포트 통계 폴링 그린스레드 가동
         self.monitor_thread = hub.spawn(self._monitor_loop)
@@ -494,11 +497,27 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 self.logger.warning(f"[Redis Sub] Listener exception: {e}. Reconnecting in 2s...")
                 hub.sleep(2.0)
 
+    def _manual_hold_active(self, dpid: int, port: int) -> bool:
+        """수동 RESTORE 보류 시간 안이면 True. 만료된 보류는 지운다."""
+        key = f"{dpid}:{port}"
+        until = self.manual_holds.get(key)
+        if until is None:
+            return False
+        remaining = until - time.time()
+        if remaining > 0:
+            self.logger.info(f"[Manual Hold] S{dpid}:P{port} 수동 복원 보류 중 → 자동 격리 생략 (남은 {remaining:.0f}s)")
+            return True
+        del self.manual_holds[key]
+        return False
+
     def _handle_redis_message(self, channel: str, data_str: str):
         """수신된 Redis 채널 메시지 파싱 및 제어 디스패치"""
         try:
             if channel == REDIS_CHANNEL_ANOMALY_ALERT:
                 alert = AnomalyAlertMessage.model_validate_json(data_str)
+                # 운영자가 수동 복원한 포트는 보류 시간 동안 자동 재격리 생략 (명령이 아니므로 서킷 브레이커 집계 전)
+                if self._manual_hold_active(alert.dpid, alert.in_port):
+                    return
                 # 서킷 브레이커 가드 검사
                 if not self.circuit_breaker.record_command():
                     self.logger.error(
@@ -555,7 +574,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 self.logger.info(
                     f"[Control Cmd] Action: {cmd.action} on S{cmd.target_dpid}:P{cmd.target_port} (reason: {cmd.reason})"
                 )
+                is_manual = cmd.command_id.startswith("manual-")
+                target_key = f"{cmd.target_dpid}:{cmd.target_port}"
                 if cmd.action == "ISOLATE":
+                    if is_manual:
+                        # 운영자가 다시 격리하면 보류도 끝
+                        self.manual_holds.pop(target_key, None)
                     self.isolate_port(cmd.target_dpid, cmd.target_port, priority=cmd.priority)
                     self._publish_topology_sync("MITIGATED")
                 elif cmd.action == "RESTORE":
@@ -564,6 +588,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                         source_dpid=cmd.target_dpid, target_dpid=4, dst_ip="10.0.0.4"
                     )
                     self.fsm.force_restore()
+                    if is_manual:
+                        # 공격이 이어져도 다음 경보(2초 이내)가 바로 다시 막지 않도록 자동 재격리 보류
+                        self.manual_holds[target_key] = time.time() + MANUAL_RESTORE_HOLD_SEC
                     self._publish_topology_sync("NORMAL")
                 elif cmd.action == "REROUTE":
                     self.reroute_traffic(source_dpid=cmd.target_dpid, target_dpid=4)

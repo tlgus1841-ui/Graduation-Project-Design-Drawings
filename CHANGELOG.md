@@ -13,6 +13,19 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-14] fix(ui,control): 비상 수동 제어 입력 튐 · 공격 중 복원 무효 수정, BPP 그래프 가시성 개선
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Fix` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ui/src/components/ManualControl.jsx`: 모달의 초기 포커스 effect가 매 렌더마다 새로 만들어지는 `onClose`에 의존해, 2초 통계가 올 때마다 포커스를 '격리' 라디오로 되돌리던 버그 수정 (사유 입력이 끊기고, 띄어쓰기 한 번에 '격리'가 선택되고, 포트 목록이 닫히던 현상). effect는 열릴 때 한 번만 실행하고 컴포넌트를 `memo`로 감쌈. 복원 선택 시 보류 안내, 전송 알림에 보류 시간 표시
+  - `ryu/app/controller.py`, `harness/contracts/sdn_events.py`: 수동 RESTORE 후 `MANUAL_RESTORE_HOLD_SEC`(60초) 동안 같은 포트의 AI 경보로 자동 재격리하지 않음 (기존에는 공격 중 복원해도 2초 안에 다음 경보가 다시 격리). 수동 ISOLATE 시 보류 해제, 보류 중 경보는 서킷 브레이커 집계 전에 거름
+  - `api/main.py`: 수동 제어 응답에 `auto_isolation_hold_sec` (LIVE 모드 RESTORE = 60, 그 외 0)
+  - `ui/src/components/TrafficCharts.jsx`: BPP 축을 0~1500B 고정에서 데이터 기준(최소 160B)으로 변경, 판정선 80B(점선)·판정 구간(음영)·'판정선 이하' 표시 추가. 실측 값(정상 ping 98B, SYN Flood 54B)이 바닥에 붙어 구분되지 않던 문제 해결
+  - `tests/ryu/test_controller_logic.py`, `tests/api/test_manual_control.py`, `docs/writing/manual/operator_manual.md`: 보류 동작 회귀 테스트 3건, 응답 필드 검증, 매뉴얼 안내 추가
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 수동 복원 직후 60초 동안은 공격이 계속돼도 해당 포트가 자동으로 막히지 않음 (운영자가 의도한 동작). 다시 막으려면 수동 격리
+* **다음 작업자 인수인계 메모:**
+  - **[박시현]** 컨트롤러에 `manual_holds`와 `_manual_hold_active()`가 추가됐습니다. 보류 시간은 `harness/contracts/sdn_events.py`의 `MANUAL_RESTORE_HOLD_SEC` 하나로 관리합니다.
+
 ### [2026-10-12] fix(all): 코드·계약·관제탑·안전가드레일 및 전체 산출물 문서 정합성 일괄 정렬
 * **작업자:** 박시현 · 유재민 · 김관우 with Antigravity AI Agent
 * **작업 유형:** `Fix` / `Refactor` / `Docs` / `Test`
