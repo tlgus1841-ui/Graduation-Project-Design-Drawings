@@ -275,3 +275,67 @@ def test_ipv4_unknown_destination_dropped():
 
     controller.add_flow.assert_not_called()
     datapath.send_msg.assert_not_called()
+
+
+# ---------------------------------------------------------------------
+# Manual RESTORE hold: an operator's restore is not undone by the next alert
+# ---------------------------------------------------------------------
+from harness.contracts.sdn_events import (  # noqa: E402
+    MANUAL_RESTORE_HOLD_SEC,
+    REDIS_CHANNEL_ANOMALY_ALERT,
+    REDIS_CHANNEL_CONTROL_COMMAND,
+    AnomalyAlertMessage,
+    ControlCommandMessage,
+)
+
+
+def _defense_controller():
+    controller = SelfDefendingSDNController()
+    for name in ("isolate_port", "restore_port", "reroute_traffic", "restore_reroute_traffic",
+                 "_publish_control_command", "_publish_topology_sync"):
+        setattr(controller, name, MagicMock())
+    return controller
+
+
+def _attack_alert():
+    return AnomalyAlertMessage(dpid=1, in_port=2, score=-0.3, pps=1500.0, bps=650000.0, bpp=54.0).model_dump_json()
+
+
+def _command(command_id, action):
+    return ControlCommandMessage(command_id=command_id, action=action, target_dpid=1, target_port=2,
+                                 reason="[MANUAL] admin: AI 오탐 의심").model_dump_json()
+
+
+def test_manual_restore_holds_auto_isolation_while_attack_continues():
+    """공격 중 수동 복원 → 다음 경보가 와도 보류 시간 동안은 다시 격리하지 않는다."""
+    controller = _defense_controller()
+    controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _attack_alert())
+    assert controller.isolate_port.call_count == 1
+
+    controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-restore-1", "RESTORE"))
+    controller.restore_port.assert_called_once()
+    assert "1:2" in controller.manual_holds
+
+    controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _attack_alert())
+    assert controller.isolate_port.call_count == 1  # not re-isolated during the hold
+
+
+def test_auto_isolation_resumes_after_manual_hold_expires():
+    controller = _defense_controller()
+    controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-restore-1", "RESTORE"))
+    controller.manual_holds["1:2"] -= MANUAL_RESTORE_HOLD_SEC + 1  # hold already over
+
+    controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _attack_alert())
+    controller.isolate_port.assert_called_once()
+    assert "1:2" not in controller.manual_holds
+
+
+def test_manual_isolate_ends_the_hold_and_auto_restore_sets_none():
+    controller = _defense_controller()
+    controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-restore-1", "RESTORE"))
+    controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-isolate-2", "ISOLATE"))
+    assert "1:2" not in controller.manual_holds
+
+    # Only operator commands create a hold.
+    controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("standin-restore-3", "RESTORE"))
+    assert controller.manual_holds == {}

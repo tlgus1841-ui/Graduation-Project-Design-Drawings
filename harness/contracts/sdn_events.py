@@ -24,6 +24,10 @@ REDIS_CHANNEL_ANOMALY_ALERT = "sdn:anomaly:alert"
 REDIS_CHANNEL_CONTROL_COMMAND = "sdn:control:command"
 REDIS_CHANNEL_TOPOLOGY_SYNC = "sdn:topology:sync"
 
+# 수동 RESTORE(command_id "manual-…") 직후 같은 포트의 자동 재격리를 보류하는 시간(초).
+# 운영자가 AI 오탐을 의심해 풀어 준 포트를, 2초 뒤 다음 경보가 곧바로 다시 막지 않게 한다.
+MANUAL_RESTORE_HOLD_SEC = 60.0
+
 
 # =====================================================================
 # Action and Threat Enumerations

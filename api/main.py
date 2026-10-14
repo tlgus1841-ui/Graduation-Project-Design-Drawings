@@ -33,7 +33,7 @@ from api.manual_control import ManualControlRejected, ManualControlRequest, buil
 from api.mock_generator import SYSTEM_STATUS_TYPE, MockTelemetryGenerator
 from api.redis_bridge import RedisBridge, RedisFactory
 from api.websocket_hub import ConnectionManager, make_envelope
-from harness.contracts import REDIS_CHANNEL_CONTROL_COMMAND, REDIS_CHANNEL_TOPOLOGY_SYNC
+from harness.contracts import MANUAL_RESTORE_HOLD_SEC, REDIS_CHANNEL_CONTROL_COMMAND, REDIS_CHANNEL_TOPOLOGY_SYNC
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +114,13 @@ def create_app(enable_mock: Optional[bool] = None, *, start_source: bool = True,
                 logger.warning("Manual command publish failed: %s", exc)
                 raise HTTPException(status_code=503, detail="Redis에 연결할 수 없어 명령을 보내지 못했습니다.") from exc
             # The bridge's subscription echoes it to the UI; no direct broadcast (avoids duplicates).
-            return {"accepted": True, "delivered_to": "redis", "receivers": receivers, "command": payload}
+            # The controller holds auto re-isolation of a manually restored port (mock has no controller).
+            hold = MANUAL_RESTORE_HOLD_SEC if command.action == "RESTORE" else 0
+            return {"accepted": True, "delivered_to": "redis", "receivers": receivers, "command": payload,
+                    "auto_isolation_hold_sec": hold}
         await hub.broadcast(make_envelope(REDIS_CHANNEL_CONTROL_COMMAND, payload))
-        return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload}
+        return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload,
+                "auto_isolation_hold_sec": 0}
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

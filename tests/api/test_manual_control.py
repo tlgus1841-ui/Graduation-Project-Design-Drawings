@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from api.main import create_app
 from api.manual_control import ManualControlRejected, ManualControlRequest, build_manual_command
-from harness.contracts import REDIS_CHANNEL_CONTROL_COMMAND
+from harness.contracts import MANUAL_RESTORE_HOLD_SEC, REDIS_CHANNEL_CONTROL_COMMAND
 
 ISOLATE_ATTACKER = {"action": "ISOLATE", "dpid": 1, "port": 2, "reason": "AI 오탐 의심, 수동 격리"}
 
@@ -64,6 +64,7 @@ def test_manual_isolate_is_broadcast_to_dashboards(mock_client):
         assert res.status_code == 200
         body = res.json()
         assert body["accepted"] is True and body["delivered_to"] == "mock"
+        assert body["auto_isolation_hold_sec"] == 0  # no controller in mock mode, so no hold
         envelope = ws.receive_json()
     assert envelope["type"] == REDIS_CHANNEL_CONTROL_COMMAND
     assert envelope["data"]["command_id"] == body["command"]["command_id"]
@@ -103,8 +104,12 @@ def test_live_mode_publishes_to_redis_control_channel():
                      redis_factory=lambda: fakeredis.aioredis.FakeRedis(server=server))
     with TestClient(app) as client:
         res = client.post("/api/control/manual", json={**ISOLATE_ATTACKER, "action": "RESTORE"})
+        isolate = client.post("/api/control/manual", json=ISOLATE_ATTACKER)
     assert res.status_code == 200
     assert res.json()["delivered_to"] == "redis"
+    # The controller holds auto re-isolation after a manual restore; the UI shows how long.
+    assert res.json()["auto_isolation_hold_sec"] == MANUAL_RESTORE_HOLD_SEC
+    assert isolate.json()["auto_isolation_hold_sec"] == 0
     msg = pubsub.get_message(timeout=1)
     assert msg is not None and msg["type"] == "message"
     data = json.loads(msg["data"])
