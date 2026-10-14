@@ -66,3 +66,46 @@ def test_single_spike_and_low_rate_small_packets_do_not_alert(model):
     trickle = {1: (20, 98), 2: (5, 60), 3: (25, 90)}  # small packets but far below flood rate
     for _ in range(3):
         assert worker.process(c.tick(trickle)) == []
+
+
+class ErrorCounters(Counters):
+    """Counters that can also advance a per-port rx_errors counter (for port-scan tests)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.errors = {1: 0, 2: 0, 3: 0}
+
+    def tick(self, rates, error_rates=None):  # noqa: D401 - small test helper
+        self.t += 2.0
+        for port, (pps, size) in rates.items():
+            self.pkts[port] += int(pps * 2)
+            self.bytes[port] += int(pps * 2 * size)
+        for port, err_pps in (error_rates or {}).items():
+            self.errors[port] += int(err_pps * 2)
+        stats = [
+            PortStatItem(dpid=1, port_no=p, rx_packets=self.pkts[p], tx_packets=0, rx_bytes=self.bytes[p],
+                         tx_bytes=0, rx_errors=self.errors[p], duration_sec=60)
+            for p in self.pkts
+        ]
+        return PortStatsMessage(timestamp=self.t, dpid=1, stats=stats)
+
+
+def test_port_scan_on_watched_port_is_confirmed_as_port_scan(model):
+    """DDoS 외 공격 유형: 패킷량은 평범한데 에러율만 뚜렷하게 높은 포트 스캔류 트래픽."""
+    worker, c = InferenceWorker(model), ErrorCounters()
+    scan = {1: (20, 98), 2: (30, 90), 3: (20, 98)}  # H_attacker 포트: PPS는 평범
+    scan_errors = {2: 20}  # 그런데 30개 중 20개가 에러(닫힌 포트 등) -> err_rate 매우 높음
+
+    worker.process(c.tick(scan, scan_errors))  # baseline
+    worker.process(c.tick(scan, scan_errors))  # 1st suspicious sample
+    alerts = worker.process(c.tick(scan, scan_errors))  # 2nd -> confirmed
+
+    assert len(alerts) == 1
+    assert alerts[0].in_port == 2
+    assert alerts[0].threat_type == "PORT_SCAN"
+
+
+def test_normal_error_free_traffic_never_triggers_port_scan(model):
+    worker, c = InferenceWorker(model), ErrorCounters()
+    for _ in range(5):
+        assert worker.process(c.tick(NORMAL)) == []

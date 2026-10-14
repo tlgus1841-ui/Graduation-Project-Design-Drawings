@@ -37,9 +37,13 @@ from harness.contracts import (  # noqa: E402
     AnomalyAlertMessage,
     ControlCommandMessage,
     PortStatsMessage,
-    ThreatType,
 )
 from harness.safety.whitelist_guard import DEFAULT_ACCESS_PORTS  # noqa: E402
+from model.attack_classifier import (  # noqa: E402
+    CATEGORY_TO_THREAT_TYPE,
+    AttackCategory,
+    SecondaryAttackClassifier,
+)
 from model.detection_guard import DetectionGuard  # noqa: E402
 from model.model import DEFAULT_MODEL_PATH, AnomalyModel  # noqa: E402
 from pipeline.feature_extractor import FeatureExtractor  # noqa: E402
@@ -70,6 +74,10 @@ class InferenceWorker:
         self.min_pps = min_pps
         self.extractor = FeatureExtractor()
         self.guards: Dict[PortKey, DetectionGuard] = {}
+        # DDoS(volumetric flood)는 위 DetectionGuard가 전담한다 (실측 검증된 경로, 그대로 둔다).
+        # 그 외 공격 유형(포트 스캔, Slow 공격)은 이 분류기가 독립적으로 병행 탐지한다 —
+        # 한 포트가 동시에 플러드와 포트 스캔을 당할 수도 있으므로 서로 배타적이지 않다.
+        self.secondary = SecondaryAttackClassifier()
         self.last_samples: List[dict] = []
 
     def process(self, message: PortStatsMessage) -> List[AnomalyAlertMessage]:
@@ -82,11 +90,23 @@ class InferenceWorker:
             _, score = self.model.predict_single(f)
             # Too little traffic to be a flood: feed an impossible BPP so the guard's streak resets.
             gate_bpp = f["bpp"] if f["delta_pps"] >= self.min_pps else math.inf
-            confirmed = self.guards.setdefault(key, DetectionGuard()).observe(gate_bpp, score)
-            self.last_samples.append({**f, "score": round(score, 4), "confirmed": confirmed})
-            if confirmed:
+            flood_confirmed = self.guards.setdefault(key, DetectionGuard()).observe(gate_bpp, score)
+            secondary_category, secondary_confirmed = self.secondary.observe(f)
+
+            confirmed_category = (
+                AttackCategory.VOLUMETRIC_FLOOD if flood_confirmed
+                else secondary_category if secondary_confirmed
+                else None
+            )
+            self.last_samples.append({
+                **f, "score": round(score, 4),
+                "confirmed": confirmed_category is not None,
+                "category": (confirmed_category or secondary_category).value,
+            })
+            if confirmed_category is not None:
                 alerts.append(AnomalyAlertMessage(
-                    dpid=f["dpid"], in_port=f["port_no"], threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
+                    dpid=f["dpid"], in_port=f["port_no"],
+                    threat_type=CATEGORY_TO_THREAT_TYPE[confirmed_category],
                     score=score, pps=f["delta_pps"], bps=f["delta_bps"], bpp=f["bpp"], err_rate=f["err_rate"],
                     metadata={"model": "isolation_forest", "stats_ts": str(f["timestamp"])}))
         return alerts
