@@ -5,22 +5,30 @@ import "vis-network/styles/vis-network.css";
 import Panel from "./Panel.jsx";
 
 // Spec §5 colour mapping. Status is also written in the label/tooltip, never colour alone.
-const NODE_COLOR = { NORMAL: "#10b981", ATTACKED: "#ef4444", MITIGATED: "#0ea5e9", OFFLINE: "#64748b" };
-const EDGE_STYLE = {
+// Exported (alongside toVisNode/toVisEdge/isBypassEdge/SEED below) so the layout and styling
+// rules can be unit-tested without mounting vis-network — see TopologyMap.test.js.
+export const NODE_COLOR = { NORMAL: "#10b981", ATTACKED: "#ef4444", MITIGATED: "#0ea5e9", OFFLINE: "#64748b" };
+export const EDGE_STYLE = {
   ACTIVE: { color: "#10b981", width: 3, dashes: false },
-  REROUTED: { color: "#3b82f6", width: 6, dashes: false },
+  REROUTED: { color: "#3b82f6", width: 8, dashes: false },
   BLOCKED: { color: "#64748b", width: 3, dashes: [8, 8] },
 };
 // Fixed diamond layout (topo/diamond_topo.py). Physics is off, so nodes never drift or jitter;
 // they can still be dragged and stay where they are dropped.
-const SEED = {
+// Feedback (demo rehearsal): S2/S3 used to be a plain vertical mirror, so the "bypass" path
+// rendered exactly as long as the primary one — nothing read as a detour. S3 is pushed further
+// out and down (plus the curved edges below) so the bypass route is visibly longer and bows
+// around, the way a real reroute would.
+export const SEED = {
   h_legit: [-330, -110], h_attacker: [-330, 110], s1: [-160, 0],
-  s2: [0, -140], s3: [0, 140], s4: [160, 0], h_server: [330, 0],
+  s2: [0, -140], s3: [60, 280], s4: [160, 0], h_server: [330, 0],
 };
+const BYPASS_NODES = new Set(["s3"]);
+export const isBypassEdge = (l) => BYPASS_NODES.has(l.source) || BYPASS_NODES.has(l.target);
 
 const PORT_NAMES = { "1:1": "H_legit", "1:2": "H_attacker", "1:3": "→ S2", "1:4": "→ S3", "4:1": "H_server" };
 
-function toVisNode(n) {
+export function toVisNode(n) {
   const color = NODE_COLOR[n.status] ?? NODE_COLOR.NORMAL;
   const isSwitch = n.node_type === "switch";
   const [x, y] = SEED[n.id] ?? [0, 0];
@@ -38,8 +46,10 @@ function toVisNode(n) {
   };
 }
 
-function toVisEdge(l) {
+export function toVisEdge(l) {
   const s = EDGE_STYLE[l.status] ?? EDGE_STYLE.ACTIVE;
+  const rerouted = l.status === "REROUTED";
+  const bypass = isBypassEdge(l);
   return {
     id: `${l.source}-${l.target}`,
     from: l.source,
@@ -47,9 +57,15 @@ function toVisEdge(l) {
     color: { color: s.color, highlight: s.color },
     width: s.width,
     dashes: s.dashes,
+    // The bypass links (S1-S3, S3-S4) bow outward instead of drawing straight, so the detour
+    // reads as a longer, winding path rather than a mirror image of the primary S1-S2-S4 line.
+    smooth: bypass ? { enabled: true, type: "curvedCW", roundness: 0.35 } : { enabled: false },
     // Week 10 review item: the live bypass path glows so it reads at a glance from across the room.
-    shadow: l.status === "REROUTED"
-      ? { enabled: true, color: "rgba(59,130,246,0.85)", size: 14, x: 0, y: 0 }
+    // Follow-up feedback: add a directional arrow + stronger glow so "rerouted" is unmistakable,
+    // not just a thicker line in the same colour family.
+    arrows: rerouted ? { to: { enabled: true, scaleFactor: 1.1, type: "arrow" } } : undefined,
+    shadow: rerouted
+      ? { enabled: true, color: "rgba(59,130,246,0.95)", size: 20, x: 0, y: 0 }
       : { enabled: false },
     title: `${l.source.toUpperCase()}:${l.src_port} ↔ ${l.target.toUpperCase()}:${l.dst_port} · ${l.status}`,
   };
