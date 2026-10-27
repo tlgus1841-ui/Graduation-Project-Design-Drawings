@@ -39,6 +39,7 @@ class ThreatType(str, Enum):
     UDP_FLOOD = "UDP_FLOOD"
     ICMP_FLOOD = "ICMP_FLOOD"
     SLOW_DDOS = "SLOW_DDOS"
+    PORT_SCAN = "PORT_SCAN"
     UNKNOWN = "UNKNOWN"
 
 
