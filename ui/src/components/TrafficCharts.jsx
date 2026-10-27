@@ -8,8 +8,36 @@ const SERIES = [
   { key: "1:2", name: "H_attacker (S1:2)", color: "#d95926" },
 ];
 const INK = { primary: "#e2e8f0", secondary: "#94a3b8", grid: "#334155" };
+// Same value as model/detection_guard.py BPP_ATTACK_MAX: at or below it a port counts as attack-like.
+const BPP_ATTACK_MAX = 80;
 
-function buildOptions(unit, max) {
+// A fixed 0-1500B axis squeezed live traffic (ping ≈98B vs SYN Flood ≈54B) into the bottom few percent,
+// so the drop never showed. Fit the axis to the data, but keep the 80B line in view.
+function bppAxisMax(dataMax) {
+  return Number.isFinite(dataMax) ? Math.max(BPP_ATTACK_MAX * 2, dataMax * 1.15) : BPP_ATTACK_MAX * 2;
+}
+
+const BPP_ANNOTATIONS = {
+  yaxis: [
+    // Neutral band: the label, not a status color, says what the zone means.
+    { y: 0, y2: BPP_ATTACK_MAX, fillColor: "#64748b", opacity: 0.18, borderColor: "transparent" },
+    {
+      y: BPP_ATTACK_MAX,
+      borderColor: INK.secondary,
+      strokeDashArray: 4,
+      label: {
+        text: `판정선 ${BPP_ATTACK_MAX}B · 이하면 공격 의심`,
+        position: "left",
+        textAnchor: "start",
+        offsetX: 8,
+        borderColor: "transparent",
+        style: { color: INK.primary, background: "#1e293b", fontSize: "11px" },
+      },
+    },
+  ],
+};
+
+function buildOptions(unit, max, annotations) {
   return {
     chart: {
       type: "line",
@@ -29,6 +57,7 @@ function buildOptions(unit, max) {
     // Per-point data labels made ApexCharts create and measure ~240 hidden <text> nodes per update
     // (the week-12 frame-drop cause), so they stay off.
     dataLabels: { enabled: false },
+    ...(annotations ? { annotations } : {}),
     xaxis: {
       type: "datetime",
       labels: { datetimeUTC: false, format: "HH:mm:ss", style: { colors: INK.secondary } },
@@ -61,9 +90,9 @@ function seriesFor(history, field) {
 
 // Static options are built once; only series change per tick (keeps ApexCharts on its cheap update path).
 const PPS_OPTIONS = buildOptions(" PPS");
-const BPP_OPTIONS = buildOptions("B", 1500);
+const BPP_OPTIONS = buildOptions("B", bppAxisMax, BPP_ANNOTATIONS);
 
-function LatestValues({ history, field, unit }) {
+function LatestValues({ history, field, unit, attackMax }) {
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs" data-testid={`latest-${field}`}>
       {SERIES.map((s) => {
@@ -75,6 +104,9 @@ function LatestValues({ history, field, unit }) {
             <span className="font-mono font-semibold text-slate-100">
               {last ? `${Math.round(last).toLocaleString("ko-KR")}${unit}` : "-"}
             </span>
+            {attackMax != null && last > 0 && last <= attackMax && (
+              <span className="rounded border border-amber-400/70 px-1 font-semibold text-amber-200">판정선 이하</span>
+            )}
           </span>
         );
       })}
@@ -82,10 +114,10 @@ function LatestValues({ history, field, unit }) {
   );
 }
 
-function ChartBody({ history, field, unit, options, series }) {
+function ChartBody({ history, field, unit, options, series, attackMax }) {
   return (
     <div className="flex h-full flex-col gap-1">
-      <LatestValues history={history} field={field} unit={unit} />
+      <LatestValues history={history} field={field} unit={unit} attackMax={attackMax} />
       <div className="min-h-0 flex-1">
         <Chart type="line" height="100%" options={options} series={series} />
       </div>
@@ -107,9 +139,10 @@ function TrafficCharts({ history }) {
         </Panel>
       </div>
       <div className="lg:col-span-6">
-        <Panel title="패킷당 평균 크기 (BPP)" subtitle="공격 판별 핵심 지표 · 정상 500B↑ / SYN Flood ≈64B" className="h-[300px]">
+        <Panel title="패킷당 평균 크기 (BPP)" subtitle={`공격 판별 핵심 지표 · ${BPP_ATTACK_MAX}B 이하면 공격 의심 (SYN Flood ≈54~74B)`} className="h-[300px]">
           {empty ? <Waiting /> : (
-            <ChartBody history={history} field="bpp" unit="B" options={BPP_OPTIONS} series={bppSeries} />
+            <ChartBody history={history} field="bpp" unit="B" options={BPP_OPTIONS} series={bppSeries}
+              attackMax={BPP_ATTACK_MAX} />
           )}
         </Panel>
       </div>

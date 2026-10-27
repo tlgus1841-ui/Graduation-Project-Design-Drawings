@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { sendManualControl } from "../lib/api.js";
 
@@ -13,7 +13,8 @@ const TARGETS = [
 ];
 const ACTIONS = { ISOLATE: "격리 (차단)", RESTORE: "복원 (차단 해제)" };
 
-export default function ManualControl() {
+// memo: no props, so the dashboard's ~2 s live updates never re-render the button or an open dialog.
+function ManualControl() {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const triggerRef = useRef(null);
@@ -46,6 +47,7 @@ export default function ManualControl() {
         <div role="status" data-testid="manual-control-notice"
           className="fixed bottom-4 left-4 z-30 rounded-lg border border-amber-500 bg-slate-900 px-4 py-3 text-sm text-amber-100 shadow-xl">
           수동 {ACTIONS[notice.command.action]} 명령 전송 · S{notice.command.target_dpid}:{notice.command.target_port}
+          {notice.auto_isolation_hold_sec > 0 && ` · ${notice.auto_isolation_hold_sec}초간 자동 재격리 보류`}
           <span className="ml-2 font-mono text-xs text-amber-300">{notice.command.command_id}</span>
         </div>,
         document.body,
@@ -53,6 +55,8 @@ export default function ManualControl() {
     </>
   );
 }
+
+export default memo(ManualControl);
 
 function ManualControlDialog({ onClose }) {
   const [action, setAction] = useState("ISOLATE");
@@ -64,13 +68,18 @@ function ManualControlDialog({ onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const firstRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
+  // Runs once, on open. It used to depend on onClose, a new function on every parent render, so each
+  // live update re-ran it and pulled focus back to the 격리 radio mid-typing: the rest of the reason
+  // went nowhere, a typed space checked 격리, and an open port dropdown closed.
   useEffect(() => {
     firstRef.current?.focus();
-    const onKey = (e) => e.key === "Escape" && onClose(null);
+    const onKey = (e) => e.key === "Escape" && onCloseRef.current(null);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   // Any change to what will be sent requires re-confirming.
   useEffect(() => setConfirmed(false), [action, target]);
@@ -135,6 +144,12 @@ function ManualControlDialog({ onClose }) {
         {isProtectedIsolate && (
           <p role="alert" className="rounded-md border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
             보호 호스트 포트(H_legit, H_server)는 안전 가드레일에 의해 격리할 수 없습니다. (복원 동작만 가능)
+          </p>
+        )}
+
+        {action === "RESTORE" && (
+          <p className="rounded-md border border-slate-600 bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
+            공격 중에도 복원할 수 있습니다. 복원한 포트는 잠시 동안 AI 경보가 와도 자동으로 다시 격리되지 않습니다.
           </p>
         )}
 
