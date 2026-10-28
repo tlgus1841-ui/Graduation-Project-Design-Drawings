@@ -22,7 +22,8 @@
   - `harness/verification/criteria_measure.py`: 공격 시작을 0~2초 무작위로 늦춰 보고 주기와 엇갈리게 함 (전에는 매번 보고 직후에 시작해 가장 늦은 경우만 쟀다)
   - `tests/`: 1초 보고에서도 같은 창 · 2초 만에 확정, 컨트롤러가 개수는 1초 · 포트 통계는 2초마다 요청하는지
 * **영향 범위 및 주의사항 (Breaking Changes):** `sdn:stats:flowcount`가 1초마다 온다 (구독자는 추론 워커뿐). `CriteriaConfig`의 `scan_window` · `scan_long_window` · `watch_clear_intervals` · `learn_resume_intervals` · `ewma_alpha` · `relearn_alpha`가 초 단위 이름으로 바뀜
-* **다음 작업자 인수인계 메모:** 평소값 파일(`model/criteria_baseline.json`)은 2초 주기로 학습한 값이다. 1초 주기 정상 측정으로 다시 학습하고 방어를 켠 검증 결과를 명세 §2.7에 채운다 (진행중)
+* **결과:** 1초 단위 정상 10분으로 숫자를 다시 확인(SYN 차이 최소값 20, 서비스 지연 12ms, SYN 누적 H 50, 평소값 다시 학습). 방어를 켠 공격 14종: 강한 Flood 1.8~2.5초, 약한 Flood 2.4~2.6초, 스캔 1.7~2.4초 (전에는 3.5~4.4초), 정상 5분 경보 0회. 명세 §2.7
+* **다음 작업자 인수인계 메모:** 발표 자료의 "2초마다" · 탐지 지연 "약 4초"는 1초 · 약 2초로 바뀌었습니다
 
 
 ### [2026-10-28] feat(ryu,model,api,ui): 서비스 악화 조건 · Slow HTTP · 내부 확산 · 특수 상황 재학습 승인
