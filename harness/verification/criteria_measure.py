@@ -42,9 +42,10 @@ ATTACKS: List[Tuple[str, str, int]] = [
     ("syn_weak", "traffic.traffic_attack --dst 10.0.0.4 --min-pps 100 --max-pps 100 --duration 20", 20),
     ("udp_weak", "traffic.traffic_flood --kind udp --pps 100 --duration 20", 20),
     ("icmp_weak", "traffic.traffic_flood --kind icmp --pps 100 --duration 20", 20),
-    ("tcp_scan", "traffic.traffic_scan --kind tcp --ports 1-1000 --rate 500", 2),
-    ("tcp_scan_slow", "traffic.traffic_scan --kind tcp --ports 1-40 --rate 2", 20),
+    # 스캔은 받은 실패 응답을 5분 동안 세므로, 실패가 적은 스캔부터 해서 앞 스캔의 실패가 섞이지 않게 한다
     ("udp_scan", "traffic.traffic_scan --kind udp --ports 1-300 --rate 300", 1),
+    ("tcp_scan_slow", "traffic.traffic_scan --kind tcp --ports 1-40 --rate 2", 20),
+    ("tcp_scan", "traffic.traffic_scan --kind tcp --ports 1-1000 --rate 500", 2),
 ]
 
 
@@ -105,11 +106,16 @@ def summarize(values: List[float]) -> Dict[str, float]:
 
 
 def phase_of(t: float, phases: List[dict], lag: float = 4.5) -> Optional[str]:
-    """보고 시각 t가 속한 구간 이름. 보고가 최대 한 주기 늦으므로 끝을 lag만큼 늘린다."""
+    """보고 시각 t가 속한 구간 이름. 보고가 최대 한 주기 늦으므로 끝을 lag만큼 늘린다.
+
+    구간 안에 든 보고가 먼저다. 늘린 끝은 어느 구간에도 들지 않은 보고에만 쓰고, 가장 최근에 끝난
+    구간으로 보낸다 (앞 구간의 늘린 끝이 짧은 공격의 첫 보고를 가져가지 않게).
+    """
     for ph in phases:
-        if ph["start"] + ph.get("skip", 0.0) < t <= ph["end"] + lag:
+        if ph["start"] + ph.get("skip", 0.0) < t <= ph["end"]:
             return ph["name"]
-    return None
+    ended = [ph for ph in phases if ph["end"] < t <= ph["end"] + lag]
+    return max(ended, key=lambda ph: ph["end"])["name"] if ended else None
 
 
 def analyze(out_dir: Path) -> dict:

@@ -41,6 +41,15 @@ def test_summarize_and_phase_of():
     assert phase_of(120, phases) is None
 
 
+def test_phase_of_gives_a_short_attack_its_own_first_reports():
+    phases = [{"name": "quiet", "start": 0, "end": 30, "skip": 6}, {"name": "scan", "start": 30, "end": 32},
+              {"name": "quiet", "start": 32, "end": 62, "skip": 6}]
+    assert phase_of(30.6, phases) == "scan"  # inside the scan, though within the earlier quiet's lag
+    assert phase_of(34.0, phases) == "scan"  # late report: the most recently ended phase
+    assert phase_of(37.0, phases) is None  # past the scan's lag, before the quiet's skip ends
+    assert phase_of(40.0, phases) == "quiet"
+
+
 @pytest.mark.parametrize("value", [0.0])
 def test_summarize_zero(value):
     assert summarize([value])["std"] == 0.0

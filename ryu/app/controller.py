@@ -90,15 +90,15 @@ def decode_count_cookie(cookie: int):
     return (cookie >> 24) & 0xFFFFFF, (cookie >> 8) & 0xFFFF, COUNT_KINDS[index]
 
 
-def police_match(threat_type: str) -> dict:
-    """경고 단계에서 속도를 제한할 패킷 종류 (in_port 외의 매칭 조건)."""
-    if threat_type == ThreatType.UDP_FLOOD.value:
-        return {"eth_type": 0x0800, "ip_proto": 17}
-    if threat_type == ThreatType.ICMP_FLOOD.value:
-        return {"eth_type": 0x0800, "ip_proto": 1}
-    if threat_type in (ThreatType.SYN_FLOOD_SPOOFING.value, ThreatType.PORT_SCAN.value):
-        return {"eth_type": 0x0800, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}
-    return {}
+def police_matches(threat_type: str) -> list:
+    """경고 단계에서 속도를 제한할 패킷 종류 (in_port 외의 매칭 조건). 모르는 종류면 포트 전체."""
+    udp = {"eth_type": 0x0800, "ip_proto": 17}
+    icmp = {"eth_type": 0x0800, "ip_proto": 1}
+    syn = {"eth_type": 0x0800, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}
+    return {ThreatType.UDP_FLOOD.value: [udp], ThreatType.ICMP_FLOOD.value: [icmp],
+            ThreatType.SYN_FLOOD_SPOOFING.value: [syn],
+            # 포트 스캔은 TCP(SYN)와 UDP 둘 다 쓰므로 둘 다 제한
+            ThreatType.PORT_SCAN.value: [syn, udp]}.get(threat_type, [{}])
 
 
 def count_rule_specs(arp_table):
@@ -393,8 +393,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
     def rate_limit_port(self, dpid: int, in_port: int, threat_type: str = "", pps: int = WARNING_RATE_LIMIT_PPS):
         """경고 단계: 해당 포트에서 그 공격 종류의 패킷만 초당 pps개로 제한 (미터 + 1번 테이블 규칙).
 
-        UDP Flood면 UDP만, SYN Flood·포트 스캔이면 SYN만 제한해서 같은 포트의 다른 정상 트래픽
-        (웹 응답 ACK, 다운로드 등)은 그대로 지나가게 한다. 모르는 종류면 포트 전체를 제한한다.
+        UDP Flood면 UDP만, SYN Flood면 SYN만, 포트 스캔이면 SYN과 UDP만 제한해서 같은 포트의 다른 정상
+        트래픽(웹 응답 ACK, 다운로드 등)은 그대로 지나가게 한다. 모르는 종류면 포트 전체를 제한한다.
+        규칙이 여러 개여도 미터 하나를 같이 쓴다.
         """
         self.whitelist_guard.validate_isolation_target(dpid, in_port)
         datapath = self.datapaths.get(dpid)
@@ -408,9 +409,11 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 datapath, command=command, flags=ofproto.OFPMF_PKTPS | ofproto.OFPMF_BURST, meter_id=in_port,
                 bands=[parser.OFPMeterBandDrop(rate=pps, burst_size=pps)] if command == ofproto.OFPMC_ADD else []))
         self.delete_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port), table_id=TABLE_POLICE)
-        self.add_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port, **police_match(threat_type)),
-                      actions=[], table_id=TABLE_POLICE,
-                      instructions=[parser.OFPInstructionMeter(in_port), parser.OFPInstructionGotoTable(TABLE_FORWARD)])
+        for extra in police_matches(threat_type):
+            self.add_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port, **extra),
+                          actions=[], table_id=TABLE_POLICE,
+                          instructions=[parser.OFPInstructionMeter(in_port),
+                                        parser.OFPInstructionGotoTable(TABLE_FORWARD)])
         self.logger.info(f"[Defense] S{dpid}: In_port {in_port} {threat_type or 'all'} RATE LIMITED to {pps} pps")
         return True
 

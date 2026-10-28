@@ -15,15 +15,17 @@ count_cookie = _module["count_cookie"]
 decode_count_cookie = _module["decode_count_cookie"]
 count_rule_specs = _module["count_rule_specs"]
 TABLE_COUNT, TABLE_POLICE, TABLE_FORWARD = _module["TABLE_COUNT"], _module["TABLE_POLICE"], _module["TABLE_FORWARD"]
-police_match = _module["police_match"]
+police_matches = _module["police_matches"]
 
 
-def test_police_match_limits_only_the_attack_kind():
-    assert police_match("UDP_FLOOD") == {"eth_type": 0x0800, "ip_proto": 17}
-    assert police_match("ICMP_FLOOD") == {"eth_type": 0x0800, "ip_proto": 1}
-    assert police_match("SYN_FLOOD_SPOOFING")["tcp_flags"] == (0x002, 0x012)
-    assert police_match("PORT_SCAN") == police_match("SYN_FLOOD_SPOOFING")
-    assert police_match("UNKNOWN") == {}
+def test_police_matches_limit_only_the_attack_kind():
+    udp, icmp = {"eth_type": 0x0800, "ip_proto": 17}, {"eth_type": 0x0800, "ip_proto": 1}
+    assert police_matches("UDP_FLOOD") == [udp]
+    assert police_matches("ICMP_FLOOD") == [icmp]
+    [syn] = police_matches("SYN_FLOOD_SPOOFING")
+    assert syn["tcp_flags"] == (0x002, 0x012)  # SYN without ACK: the host's own web traffic keeps flowing
+    assert police_matches("PORT_SCAN") == [syn, udp]  # TCP and UDP scans
+    assert police_matches("UNKNOWN") == [{}]  # whole port
 
 
 def test_count_cookie_round_trip_and_foreign_cookie():

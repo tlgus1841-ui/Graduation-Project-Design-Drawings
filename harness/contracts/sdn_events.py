@@ -30,9 +30,10 @@ REDIS_CHANNEL_FLOW_COUNTS = "sdn:stats:flowcount"
 # 운영자가 AI 오탐을 의심해 풀어 준 포트를, 2초 뒤 다음 경보가 곧바로 다시 막지 않게 한다.
 MANUAL_RESTORE_HOLD_SEC = 60.0
 
-# 경고(WARNING) 단계 대응: 해당 포트를 이 속도(초당 패킷)로 제한한다. 정상 사용자 한 명의
-# 실측 최대 속도(docs/specs/attack_criteria.md)보다 넉넉히 위로 잡는다.
-WARNING_RATE_LIMIT_PPS = 300
+# 경고(WARNING) 단계 대응: 해당 포트에서 그 공격 종류의 패킷만 이 속도(초당 패킷)로 제한한다.
+# 공격 최소 규모(초당 50개, docs/specs/attack_criteria.md)와 같게 둬서 공격으로 볼 만큼은 못 지나가게 하고,
+# 정상 사용자의 같은 종류 패킷(실측 최대 UDP 2.5, ICMP 18.5, SYN 55 — SYN은 몰릴 때만)은 거의 그대로 지나간다.
+WARNING_RATE_LIMIT_PPS = 50
 # 마지막 WARNING 경보 뒤 이 시간(초) 동안 경보가 없으면 속도 제한을 푼다 (경고는 10초 유지).
 WARNING_HOLD_SEC = 10.0
 

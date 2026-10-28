@@ -8,10 +8,12 @@
     - SYN Flood : SYN − (FIN+RST) 차이가 기준선을 넘는 동안의 누적(CUSUM)이 H 이상
     - UDP Flood : UDP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
     - ICMP Flood: ICMP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
-    - 포트 스캔 : 이 호스트가 받은 실패 응답(RST + ICMP 도달 불가)이 짧은 창(2주기, 약 4초) 또는
-                  긴 창(5분, Zeek 방식)에 15개 이상이고 보낸 연결 시도(SYN + UDP)의 절반 이상이 실패.
-                  UDP 스캔은 대상 서버가 ICMP 도달 불가를 초당 1개 정도로 제한해서(리눅스 기본값) 응답이
-                  적으므로, 짧은 창에 도달 불가 5개 이상이면 따로 스캔으로 본다
+    - 포트 스캔 : 이 호스트가 받은 실패 응답(RST + ICMP 도달 불가)으로 판단한다.
+                  빠른 스캔 = 짧은 창(2주기, 약 4초)에 15개 이상(Zeek)이고 보낸 연결 시도(SYN + UDP)의
+                  절반 이상이 실패(Jung 2004). 느린 스캔 = 긴 창(5분, Zeek)에 30개 이상이고 지금도 실패가
+                  나오는 중(짧은 창에 1개 이상). 긴 창에는 정상 연결도 수백 개 섞이므로 비율은 보지 않는다.
+                  UDP 스캔은 대상 서버가 ICMP 도달 불가를 처음 6개 뒤 초당 1개로 제한해서(리눅스 기본값)
+                  응답이 적으므로, 짧은 창에 도달 불가 3개 이상이면 따로 스캔으로 본다
 * 확정된 공격의 세기(값 / 판정선)가 M 이상이면 위험(DANGER, 격리 + 우회), 아니면 경고(WARNING, 속도 제한).
 * 평소값: 미리 학습해 저장한 값(criteria_baseline.json)으로 시작하고, 정상일 때만 2초마다 EWMA로
   갱신한다(최근 약 10분 기억). 갱신된 평균·표준편차는 사전 학습값 ~ 2배 사이에서만 움직인다.
@@ -39,24 +41,30 @@ DEFAULT_BASELINE_PATH = "model/criteria_baseline.json"
 
 @dataclass(frozen=True)
 class CriteriaConfig:
-    """판단 기준 숫자. 근거와 실측값은 docs/specs/attack_criteria.md."""
+    """판단 기준 숫자. 정상 10분 측정의 최댓값에 2배 여유를 두고 정했다 (docs/specs/attack_criteria.md)."""
 
     k_sigma: float = 3.0
-    # 평소 범위 최소값(초당): 평소 거의 0인 지표가 패킷 몇 개에 반응하지 않게
+    # 평소 범위 최소값(초당) = 정상 최댓값의 2배를 10 단위로 올림.
+    # 정상 최댓값: SYN 55 (몰림), SYN 차이 3.5, UDP 2.5, ICMP 18.5 (ping 0.05초 간격), 실패 응답 1
     floors: Dict[str, float] = field(default_factory=lambda: {
-        "syn": 60.0, "udp": 10.0, "icmp": 30.0, "gap": 20.0, "fail": 5.0})
-    # UDP·ICMP Flood: 평소 평균의 N배이면서 공격 최소 규모 이상
+        "syn": 110.0, "udp": 10.0, "icmp": 40.0, "gap": 10.0, "fail": 10.0})
+    # UDP·ICMP Flood: 평소 평균의 N배이면서 공격 최소 규모 이상.
+    # N = 정상에서 본 최대 배율(UDP 최대 2.5 / 평균 0.49 ≈ 5배)의 2배
     flood_multiplier: float = 10.0
-    attack_floors: Dict[str, float] = field(default_factory=lambda: {"udp": 100.0, "icmp": 100.0, "gap": 100.0})
-    # SYN Flood: 기준선을 넘은 차이의 누적(패킷)
+    # 공격 최소 규모(초당) = 측정한 약한 공격(초당 100개)의 절반 → 약한 공격도 2배 여유로 잡힌다
+    attack_floors: Dict[str, float] = field(default_factory=lambda: {"udp": 50.0, "icmp": 50.0, "gap": 50.0})
+    # SYN Flood: 기준선을 넘은 차이의 누적(패킷). 약한 공격(초당 100개)은 한 주기(2초) 안에 넘는다
     cusum_h: float = 100.0
-    # 포트 스캔: 짧은 창(scan_window주기)과 긴 창(scan_long_window주기 = 5분)의 실패 응답 수와 실패 비율
+    # 포트 스캔: 빠른 스캔(짧은 창, scan_window주기)과 느린 스캔(긴 창, scan_long_window주기 = 5분)의
+    # 실패 응답 수. 정상 최대: 짧은 창 2개, 긴 창 13개, 도달 불가 짧은 창 1개
     scan_min: float = 15.0
     scan_ratio: float = 0.5
     scan_window: int = 2
+    scan_long_min: float = 30.0
     scan_long_window: int = 150
-    scan_unreach_min: float = 5.0
-    # 확정된 공격이 판정선의 몇 배 이상이면 경고를 건너뛰고 위험
+    scan_unreach_min: float = 3.0
+    # 확정된 공격의 세기(값 / 판정선)가 M 이상이면 경고를 건너뛰고 위험.
+    # 측정한 약한 공격은 2배, 강한 공격(초당 1000개)은 20배 → 그 사이의 5배
     strong_multiplier: float = 5.0
     confirm_intervals: int = 2
     # 주의는 2주기(4초) 연속 정상이면 해제, 학습은 5주기(10초) 연속 정상부터 재개
@@ -180,22 +188,25 @@ class CriteriaEngine:
                    if r.get(ind, 0.0) > lines[ind]]
 
         candidates: Dict[str, float] = {}
-        # 포트 스캔: 실패 응답 수와 실패 비율 (Zeek 15개 + TRW 실패 비율), 짧은 창과 긴 창
+        # 포트 스캔: 받은 실패 응답 수. 빠른 스캔(Zeek 15개 + TRW 실패 비율), 느린 스캔(5분 30개),
+        # UDP 스캔(도달 불가 3개). 세기는 그중 가장 큰 배율
         st.window.append((r["fail"] * dt, r.get("unreach_in", 0.0) * dt,
                           (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt))
         while len(st.window) > cfg.scan_long_window:
             st.window.popleft()
-        for n in (cfg.scan_window, cfg.scan_long_window):
-            recent = list(st.window)[-n:]
-            fails = sum(w[0] for w in recent)
-            probes = sum(w[2] for w in recent)
-            if fails >= cfg.scan_min and fails >= cfg.scan_ratio * probes:
-                candidates[ThreatType.PORT_SCAN.value] = max(candidates.get(ThreatType.PORT_SCAN.value, 0.0),
-                                                             fails / cfg.scan_min)
-        unreach = sum(w[1] for w in list(st.window)[-cfg.scan_window:])
+        recent = list(st.window)[-cfg.scan_window:]
+        fails = sum(w[0] for w in recent)
+        fails_long = sum(w[0] for w in st.window)
+        unreach = sum(w[1] for w in recent)
+        scan = []
+        if fails >= cfg.scan_min and fails >= cfg.scan_ratio * sum(w[2] for w in recent):
+            scan.append(fails / cfg.scan_min)
+        if fails_long >= cfg.scan_long_min and fails > 0:
+            scan.append(fails_long / cfg.scan_long_min)
         if unreach >= cfg.scan_unreach_min:
-            candidates[ThreatType.PORT_SCAN.value] = max(candidates.get(ThreatType.PORT_SCAN.value, 0.0),
-                                                         unreach / cfg.scan_unreach_min)
+            scan.append(unreach / cfg.scan_unreach_min)
+        if scan:
+            candidates[ThreatType.PORT_SCAN.value] = max(scan)
         # SYN Flood: 기준선을 넘는 동안의 초과분 누적. 한 번이라도 기준선 아래로 내려오면 0부터 다시
         if r["gap"] > lines["gap"]:
             st.cusum += (r["gap"] - lines["gap"]) * dt

@@ -12,9 +12,7 @@ from model.criteria_engine import (
 
 KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")
 PORT = (1, 2)
-CFG = CriteriaConfig(floors={"syn": 60, "udp": 10, "icmp": 30, "gap": 20, "fail": 5},
-                     flood_multiplier=10, attack_floors={"udp": 100, "icmp": 100, "gap": 100},
-                     cusum_h=100, scan_min=15, scan_ratio=0.5, strong_multiplier=5)
+CFG = CriteriaConfig()  # the measured numbers: floors, N = 10, attack floor 50/s, M = 5
 # A user making about one web request per second plus a little DNS and ping
 NORMAL = {"syn": 1, "fin": 1, "udp": 0.5, "icmp": 1}
 BASE = {PORT: {"syn": (1.0, 1.0), "udp": (0.5, 0.5), "icmp": (1.0, 0.1), "gap": (0.0, 1.0), "fail": (0.0, 0.1)}}
@@ -65,7 +63,7 @@ def test_strong_flood_jumps_to_danger_on_second_report(kind, threat):
 
 def test_moderate_flood_is_warning():
     engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
-    out = run(engine, c, NORMAL, {**NORMAL, "udp": 300}, {**NORMAL, "udp": 300})
+    out = run(engine, c, NORMAL, {**NORMAL, "udp": 150}, {**NORMAL, "udp": 150})
     assert stages(out)[-1] == (RiskStage.WARNING, ThreatType.UDP_FLOOD.value)
     assert out[-1][0].strength == pytest.approx(3.0)
 
@@ -76,8 +74,8 @@ def test_syn_flood_strong_and_weak():
     assert stages(out)[-1] == (RiskStage.DANGER, ThreatType.SYN_FLOOD_SPOOFING.value)
 
     engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
-    # 60/s unanswered SYNs: 40/s over the gap line → +80 per report → CUSUM passes 100 on the 2nd report
-    out = run(engine, c, NORMAL, *[{"syn": 60}] * 3)
+    # 35/s unanswered SYNs: 25/s over the gap line → +50 per report → CUSUM reaches 100 on the 2nd report
+    out = run(engine, c, NORMAL, *[{"syn": 35}] * 3)
     assert stages(out)[1:] == [(RiskStage.WATCH, None), (RiskStage.WATCH, None),
                                (RiskStage.WARNING, ThreatType.SYN_FLOOD_SPOOFING.value)]
 
@@ -92,9 +90,12 @@ def test_tcp_port_scan_is_not_mistaken_for_syn_flood():
 def test_slow_scan_caught_by_the_long_window():
     engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
     slow = {"syn": 2, "rst_in": 2, "fin": 0}  # 2 closed ports a second: never 15 in 4 s
-    out = run(engine, c, NORMAL, *[slow] * 6)
-    assert all(s[1] is None for s in stages(out)[1:4])
-    assert stages(out)[-1][1] == ThreatType.PORT_SCAN.value  # 16 failures after 4 reports, confirmed on the 5th
+    out = run(engine, c, NORMAL, *[slow] * 9)
+    assert all(s[1] is None for s in stages(out)[1:9])
+    assert stages(out)[9] == (RiskStage.WARNING, ThreatType.PORT_SCAN.value)  # 32 failures after 8 reports
+    # Once the failures stop, the 5-minute count alone no longer flags the host
+    out = run(engine, c, *[NORMAL] * 3)
+    assert [s[1] for s in stages(out)] == [ThreatType.PORT_SCAN.value, None, None]
 
 
 def test_udp_scan_few_unreachables_still_count():
