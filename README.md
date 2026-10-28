@@ -55,7 +55,7 @@ Self_Defending_SDN_Tower/
 ├── topo/                                  # [박시현] Mininet 4-스위치 다이아몬드 토폴로지 (diamond_topo.py)
 ├── pipeline/                              # [유재민] 5대 파생 피처 실시간 추출기 및 CSV 로거 (feature_extractor.py, csv_logger.py)
 ├── model/                                 # [유재민] Isolation Forest 탐지 모델, 오탐 방지 가드, 추론 워커 (model.py, inference_worker.py)
-├── traffic/                               # [유재민] Scapy 정상/공격 트래픽 생성기 (traffic_normal.py, traffic_attack.py)
+├── traffic/                               # [유재민] Scapy 정상/공격 트래픽 생성기 (traffic_normal.py, traffic_attack.py, traffic_scan.py)
 ├── scripts/                               # [박시현] E2E 시나리오 데모 러너 및 환경 초기화 스크립트 (demo_scenario.sh, reset_env.sh)
 └── tests/                                 # 단위/통합/벤치마크 테스트 스위트 (api, benchmarks, harness, model, pipeline, ryu, traffic)
 ```
