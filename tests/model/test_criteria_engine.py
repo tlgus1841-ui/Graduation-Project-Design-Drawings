@@ -75,7 +75,7 @@ def test_syn_flood_strong_and_weak():
     assert stages(out)[-1] == (RiskStage.DANGER, ThreatType.SYN_FLOOD_SPOOFING.value)
 
     engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
-    # 35/s unanswered SYNs: 25/s over the gap line → +50 per report → CUSUM reaches 100 on the 2nd report
+    # 35/s unanswered SYNs: 15/s over the gap line (20) → +30 per 2 s report → CUSUM passes 50 on the 2nd report
     out = run(engine, c, NORMAL, *[{"syn": 35}] * 3)
     assert stages(out)[1:] == [(RiskStage.WATCH, None), (RiskStage.WATCH, None),
                                (RiskStage.WARNING, ThreatType.SYN_FLOOD_SPOOFING.value)]

@@ -56,16 +56,17 @@ class CriteriaConfig:
 
     k_sigma: float = 3.0
     # 평소 범위 최소값(초당) = 정상 최댓값의 2배를 10 단위로 올림.
-    # 정상 최댓값: SYN 55 (몰림), SYN 차이 3.5, UDP 2.5, ICMP 18.5 (ping 0.05초 간격), 실패 응답 1
+    # 정상 최댓값(1초 보고, 10분): SYN 55 (몰림), SYN 차이 8, UDP 4, ICMP 19.2 (ping 0.05초 간격), 실패 응답 1
     floors: Dict[str, float] = field(default_factory=lambda: {
-        "syn": 110.0, "udp": 10.0, "icmp": 40.0, "gap": 10.0, "fail": 10.0})
+        "syn": 110.0, "udp": 10.0, "icmp": 40.0, "gap": 20.0, "fail": 10.0})
     # UDP·ICMP Flood: 평소 평균의 N배이면서 공격 최소 규모 이상.
-    # N = 정상에서 본 최대 배율(UDP 최대 2.5 / 평균 0.49 ≈ 5배)의 2배
+    # N = 정상에서 본 최대 배율(2초 보고 UDP 최대 2.5 / 평균 0.49 ≈ 5배)의 2배. 1초 보고에서는 UDP가 8배까지 튀지만
+    # 평균이 초당 0.5개라 판정선은 공격 최소 규모(50)가 정한다. N이 실제로 쓰이는 ICMP(평균 18)는 최대 1.06배
     flood_multiplier: float = 10.0
     # 공격 최소 규모(초당) = 측정한 약한 공격(초당 100개)의 절반 → 약한 공격도 2배 여유로 잡힌다
     attack_floors: Dict[str, float] = field(default_factory=lambda: {"udp": 50.0, "icmp": 50.0, "gap": 50.0})
-    # SYN Flood: 기준선을 넘은 차이의 누적(패킷). 약한 공격(초당 100개)은 한 주기(2초) 안에 넘는다
-    cusum_h: float = 100.0
+    # SYN Flood: 기준선을 넘은 차이의 누적(패킷). 약한 공격(초당 100개)은 1초 보고 한 번(초과분 약 80개)에 넘는다
+    cusum_h: float = 50.0
     # 포트 스캔: 빠른 스캔(짧은 창 4초)과 느린 스캔(긴 창 5분)의 실패 응답 수.
     # 정상 최대: 짧은 창 2개, 긴 창 13개, 도달 불가 짧은 창 2개
     scan_min: float = 15.0
@@ -87,10 +88,10 @@ class CriteriaConfig:
     # 갱신된 평소값의 상한 = 사전 학습값 × cap_multiplier (하한 = 사전 학습값)
     cap_multiplier: float = 2.0
     # 서비스 악화: 서비스 상태 확인 ping의 손실(%) 또는 평균 왕복 시간(ms)이 이 값 이상인 보고가 health_confirm번 연속.
-    # 정상 10분 최대: 손실 11.1%(ping 1개, 연속 없음), 평균 왕복 4.4ms → 2배 여유로 25%, 10ms.
+    # 정상 10분 최대: 손실 11.1%(ping 1개, 연속 없음), 평균 왕복 5.7ms(1초 개수 요청 포함) → 2배 여유로 25%, 12ms.
     # 보고가 health_stale_sec보다 오래됐으면(컨트롤러 확인 중단) 쓰지 않는다
     health_loss_percent: float = 25.0
-    health_rtt_ms: float = 10.0
+    health_rtt_ms: float = 12.0
     health_confirm: int = 2
     health_stale_sec: float = 6.0
     # 특수 상황 재학습(관리자 승인): 다시 배우는 지표와 속도 (최근 약 1분 기억)
