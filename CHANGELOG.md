@@ -13,6 +13,19 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] fix(build): pydantic mypy 플러그인 활성화 — 이전 보고 정정
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Fix` / `Build`
+* **바로잡습니다:** 이전 항목(10-28 `chore: 저장소 전체 mypy/flake8 정리`)에서 "`TopologyNode`/`TopologyLink` 등 mypy call-arg 22건은 이 샌드박스의 pydantic==2.14.1 버전 불일치로 인한 오탐, 실제 결함 아님"이라고 보고했는데 **틀렸습니다**. 팀의 실제 핀 고정 mypy==2.3.1(uv.lock)을 설치해 Python 3.13에서 설치 가능한 가장 가까운 pydantic(2.8.0, 2.6.1은 pydantic-core가 Python 3.13 빌드 자체가 안 됨 — typing.ForwardRef._evaluate() API 변경으로 실패)으로 재현한 결과, **같은 22건이 동일하게 재현**됐습니다. 버전 문제가 아니라 `pyproject.toml`의 `[tool.mypy]`에 `plugins = ["pydantic.mypy"]`가 빠져 있어서 생기는 문제였습니다(pydantic 공식 문서가 권장하는 필수 설정). 플러그인을 켜니 pydantic==2.6.1 근접 버전·pydantic==2.14.1(이 샌드박스) 둘 다에서 22건이 전부 사라졌습니다.
+* **주요 변경 파일:**
+  - `pyproject.toml`: `[tool.mypy]`에 `plugins = ["pydantic.mypy"]` 추가.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 타입 체크 설정만 변경, 런타임 코드 무변경.
+* **검증:** mypy==2.3.1(팀 핀 고정 버전) + pydantic==2.8.0, 그리고 이 샌드박스의 mypy==2.4.0 + pydantic==2.14.1 양쪽에서 재현 → 수정 확인. `pytest` 265 passed, `flake8` 0건.
+* **남은 것:** 플러그인을 켜니 그동안 22건에 가려져 있던 진짜 타입 오류 1건이 드러났습니다 — `ryu/app/controller.py:148` `police_matches()`의 반환 타입이 `list`(비구체화)인데 실제로는 `dict.get(...)`의 추론 타입이 `object`로 번져 `Incompatible return value type` 경고가 납니다. 기능 결함은 아니지만(런타임엔 항상 `list`를 반환) **박시현님 확인 요청** — 반환 타입을 구체적으로 `-> List[Dict[str, object]]` 등으로 명시하면 해소됩니다.
+* **다음 작업자 인수인계 메모:**
+  - **[공통]** 이제부터 `mypy .`를 pyproject.toml 그대로 실행하면(플러그인 없이 수동으로 돌리던 과거 습관 주의) 위 1건 외엔 깨끗합니다.
+  - **[박시현]** `ryu/app/controller.py:148` `police_matches()` 반환 타입 구체화 검토 부탁드립니다.
+
 ### [2026-10-29] merge: PR #10(공격 판단 기준 세분화)을 main에 통합하며 충돌 해소
 * **작업자:** 유재민 (Domain Dev & QA) with Claude Code
 * **작업 유형:** `Fix` / `Test`
