@@ -109,3 +109,32 @@ def test_normal_error_free_traffic_never_triggers_port_scan(model):
     worker, c = InferenceWorker(model), ErrorCounters()
     for _ in range(5):
         assert worker.process(c.tick(NORMAL)) == []
+
+
+# ---------------------------------------------------------------------
+# Criteria mode: alerts come from per-kind counts, port stats only fill pps/bpp
+# ---------------------------------------------------------------------
+from harness.contracts import FlowCountItem, FlowCountMessage, RiskStage  # noqa: E402
+from model.criteria_engine import CriteriaEngine  # noqa: E402
+
+
+def _counts(t, udp_total):
+    return FlowCountMessage(timestamp=t, dpid=1, counts=[
+        FlowCountItem(port_no=2, kind=k, packets=udp_total if k == "udp" else 0)
+        for k in ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")])
+
+
+def test_criteria_mode_alerts_with_stage_and_threat_type(model):
+    worker, c = InferenceWorker(model, criteria=CriteriaEngine(ports=[(1, 2)])), Counters()
+    assert worker.process(c.tick(NORMAL)) == [] and worker.process(c.tick(ATTACK)) == []  # no legacy alerts
+    assert worker.process(c.tick(ATTACK)) == []
+    assert worker.process_counts(_counts(1000.0, 0)) == []
+    assert worker.process_counts(_counts(1002.0, 2000)) == []  # 1,000 UDP/s: first report → WATCH
+    alerts = worker.process_counts(_counts(1004.0, 4000))
+    assert [(a.in_port, a.threat_type, a.stage) for a in alerts] == [(2, "UDP_FLOOD", RiskStage.DANGER.value)]
+    assert alerts[0].pps == pytest.approx(1700, rel=0.01)  # from the latest port stats
+
+
+def test_legacy_mode_ignores_counts(model):
+    worker = InferenceWorker(model)
+    assert worker.process_counts(_counts(1000.0, 0)) == []

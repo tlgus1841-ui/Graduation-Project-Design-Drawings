@@ -15,6 +15,15 @@ count_cookie = _module["count_cookie"]
 decode_count_cookie = _module["decode_count_cookie"]
 count_rule_specs = _module["count_rule_specs"]
 TABLE_COUNT, TABLE_POLICE, TABLE_FORWARD = _module["TABLE_COUNT"], _module["TABLE_POLICE"], _module["TABLE_FORWARD"]
+police_match = _module["police_match"]
+
+
+def test_police_match_limits_only_the_attack_kind():
+    assert police_match("UDP_FLOOD") == {"eth_type": 0x0800, "ip_proto": 17}
+    assert police_match("ICMP_FLOOD") == {"eth_type": 0x0800, "ip_proto": 1}
+    assert police_match("SYN_FLOOD_SPOOFING")["tcp_flags"] == (0x002, 0x012)
+    assert police_match("PORT_SCAN") == police_match("SYN_FLOOD_SPOOFING")
+    assert police_match("UNKNOWN") == {}
 
 
 def test_count_cookie_round_trip_and_foreign_cookie():
@@ -75,7 +84,7 @@ def test_warning_rate_limits_once_and_lifts_after_hold():
     controller = _controller()
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _alert("WARNING"))
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _alert("WARNING"))
-    controller.rate_limit_port.assert_called_once_with(1, 2)
+    controller.rate_limit_port.assert_called_once_with(1, 2, "UDP_FLOOD")
     controller.isolate_port.assert_not_called()
     assert _actions(controller) == [DefenseAction.RATE_LIMIT.value]
 

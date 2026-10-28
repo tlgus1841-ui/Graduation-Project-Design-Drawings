@@ -42,6 +42,7 @@ from harness.contracts.sdn_events import (
     FlowCountItem,
     FlowCountMessage,
     RiskStage,
+    ThreatType,
     TopologyLink,
     TopologyNode,
     TopologySyncMessage,
@@ -87,6 +88,17 @@ def decode_count_cookie(cookie: int):
     if index >= len(COUNT_KINDS):
         return None
     return (cookie >> 24) & 0xFFFFFF, (cookie >> 8) & 0xFFFF, COUNT_KINDS[index]
+
+
+def police_match(threat_type: str) -> dict:
+    """경고 단계에서 속도를 제한할 패킷 종류 (in_port 외의 매칭 조건)."""
+    if threat_type == ThreatType.UDP_FLOOD.value:
+        return {"eth_type": 0x0800, "ip_proto": 17}
+    if threat_type == ThreatType.ICMP_FLOOD.value:
+        return {"eth_type": 0x0800, "ip_proto": 1}
+    if threat_type in (ThreatType.SYN_FLOOD_SPOOFING.value, ThreatType.PORT_SCAN.value):
+        return {"eth_type": 0x0800, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}
+    return {}
 
 
 def count_rule_specs(arp_table):
@@ -378,8 +390,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         )
         datapath.send_msg(mod)
 
-    def rate_limit_port(self, dpid: int, in_port: int, pps: int = WARNING_RATE_LIMIT_PPS):
-        """경고 단계: 해당 포트로 들어오는 패킷을 초당 pps개로 제한 (미터 + 1번 테이블 규칙)."""
+    def rate_limit_port(self, dpid: int, in_port: int, threat_type: str = "", pps: int = WARNING_RATE_LIMIT_PPS):
+        """경고 단계: 해당 포트에서 그 공격 종류의 패킷만 초당 pps개로 제한 (미터 + 1번 테이블 규칙).
+
+        UDP Flood면 UDP만, SYN Flood·포트 스캔이면 SYN만 제한해서 같은 포트의 다른 정상 트래픽
+        (웹 응답 ACK, 다운로드 등)은 그대로 지나가게 한다. 모르는 종류면 포트 전체를 제한한다.
+        """
         self.whitelist_guard.validate_isolation_target(dpid, in_port)
         datapath = self.datapaths.get(dpid)
         if not datapath:
@@ -391,10 +407,11 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             datapath.send_msg(parser.OFPMeterMod(
                 datapath, command=command, flags=ofproto.OFPMF_PKTPS | ofproto.OFPMF_BURST, meter_id=in_port,
                 bands=[parser.OFPMeterBandDrop(rate=pps, burst_size=pps)] if command == ofproto.OFPMC_ADD else []))
-        self.add_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port), actions=[],
-                      table_id=TABLE_POLICE,
+        self.delete_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port), table_id=TABLE_POLICE)
+        self.add_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port, **police_match(threat_type)),
+                      actions=[], table_id=TABLE_POLICE,
                       instructions=[parser.OFPInstructionMeter(in_port), parser.OFPInstructionGotoTable(TABLE_FORWARD)])
-        self.logger.info(f"[Defense] S{dpid}: In_port {in_port} RATE LIMITED to {pps} pps (WARNING)")
+        self.logger.info(f"[Defense] S{dpid}: In_port {in_port} {threat_type or 'all'} RATE LIMITED to {pps} pps")
         return True
 
     def unrate_limit_port(self, dpid: int, in_port: int):
@@ -679,10 +696,10 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             return
         first = target_key not in self.rate_limits
         self.rate_limits[target_key] = time.time()
-        if first and self.rate_limit_port(alert.dpid, alert.in_port):
+        if first and self.rate_limit_port(alert.dpid, alert.in_port, alert.threat_type):
             self._publish_control_command(
                 action=DefenseAction.RATE_LIMIT.value, dpid=alert.dpid, port=alert.in_port,
-                reason=f"Warning: {alert.threat_type} confirmed, limit to {WARNING_RATE_LIMIT_PPS} pps",
+                reason=f"Warning: {alert.threat_type} confirmed, limit those packets to {WARNING_RATE_LIMIT_PPS} pps",
                 priority=100)
             self._publish_topology_sync("ATTACK_DETECTED")
 

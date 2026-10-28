@@ -1,0 +1,293 @@
+"""Self-Defending SDN Tower - 공격 종류별 판단 기준 엔진 (8주차 기준표의 구현).
+
+입력은 컨트롤러가 2초마다 발행하는 접속 포트별·종류별 패킷 수(`sdn:stats:flowcount`)이고, 출력은
+포트마다의 위험도 단계와 공격 종류다. 기준표(docs/specs/attack_criteria.md)를 그대로 따른다:
+
+* 평소 범위 기준선 = max(평균 + 3 × 표준편차, 최소값). 지표 하나라도 넘으면 주의(WATCH).
+* 공격 종류별 규칙 (판정선을 넘은 상태가 2회 연속이면 확정):
+    - SYN Flood : SYN − (FIN+RST) 차이가 기준선을 넘는 동안의 누적(CUSUM)이 H 이상
+    - UDP Flood : UDP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
+    - ICMP Flood: ICMP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
+    - 포트 스캔 : 이 호스트가 받은 실패 응답(RST + ICMP 도달 불가)이 짧은 창(2주기, 약 4초) 또는
+                  긴 창(5분, Zeek 방식)에 15개 이상이고 보낸 연결 시도(SYN + UDP)의 절반 이상이 실패.
+                  UDP 스캔은 대상 서버가 ICMP 도달 불가를 초당 1개 정도로 제한해서(리눅스 기본값) 응답이
+                  적으므로, 짧은 창에 도달 불가 5개 이상이면 따로 스캔으로 본다
+* 확정된 공격의 세기(값 / 판정선)가 M 이상이면 위험(DANGER, 격리 + 우회), 아니면 경고(WARNING, 속도 제한).
+* 평소값: 미리 학습해 저장한 값(criteria_baseline.json)으로 시작하고, 정상일 때만 2초마다 EWMA로
+  갱신한다(최근 약 10분 기억). 갱신된 평균·표준편차는 사전 학습값 ~ 2배 사이에서만 움직인다.
+
+Slow HTTP와 내부 확산은 포트 카운터로는 볼 수 없어(연결 단위 정보 필요) 이 엔진에 없다.
+서비스 상태 신호(정상 사용자 손실·지연)도 아직 입력이 없어 위험 단계 조건에서 빠져 있다.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from collections import deque
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Deque, Dict, Iterable, List, Optional, Tuple
+
+from harness.contracts import FlowCountMessage, RiskStage, ThreatType
+
+PortKey = Tuple[int, int]
+# 주의(WATCH) 판단에 쓰는 지표. gap = syn − (fin + rst), fail = rst_in + unreach_in (모두 초당)
+WATCHED_INDICATORS = ("syn", "udp", "icmp", "gap", "fail")
+DEFAULT_BASELINE_PATH = "model/criteria_baseline.json"
+
+
+@dataclass(frozen=True)
+class CriteriaConfig:
+    """판단 기준 숫자. 근거와 실측값은 docs/specs/attack_criteria.md."""
+
+    k_sigma: float = 3.0
+    # 평소 범위 최소값(초당): 평소 거의 0인 지표가 패킷 몇 개에 반응하지 않게
+    floors: Dict[str, float] = field(default_factory=lambda: {
+        "syn": 60.0, "udp": 10.0, "icmp": 30.0, "gap": 20.0, "fail": 5.0})
+    # UDP·ICMP Flood: 평소 평균의 N배이면서 공격 최소 규모 이상
+    flood_multiplier: float = 10.0
+    attack_floors: Dict[str, float] = field(default_factory=lambda: {"udp": 100.0, "icmp": 100.0, "gap": 100.0})
+    # SYN Flood: 기준선을 넘은 차이의 누적(패킷)
+    cusum_h: float = 100.0
+    # 포트 스캔: 짧은 창(scan_window주기)과 긴 창(scan_long_window주기 = 5분)의 실패 응답 수와 실패 비율
+    scan_min: float = 15.0
+    scan_ratio: float = 0.5
+    scan_window: int = 2
+    scan_long_window: int = 150
+    scan_unreach_min: float = 5.0
+    # 확정된 공격이 판정선의 몇 배 이상이면 경고를 건너뛰고 위험
+    strong_multiplier: float = 5.0
+    confirm_intervals: int = 2
+    # 주의는 2주기(4초) 연속 정상이면 해제, 학습은 5주기(10초) 연속 정상부터 재개
+    watch_clear_intervals: int = 2
+    learn_resume_intervals: int = 5
+    # EWMA: 2초 주기로 최근 약 10분(300주기)을 기억 → α = 2 / (300 + 1)
+    ewma_alpha: float = 2.0 / 301.0
+    # 갱신된 평소값의 상한 = 사전 학습값 × cap_multiplier (하한 = 사전 학습값)
+    cap_multiplier: float = 2.0
+
+
+@dataclass
+class Baseline:
+    mean: float = 0.0
+    var: float = 0.0
+    base_mean: float = 0.0
+    base_std: float = 0.0
+
+    @property
+    def std(self) -> float:
+        return math.sqrt(max(self.var, 0.0))
+
+    def update(self, x: float, alpha: float, cap: float) -> None:
+        delta = x - self.mean
+        self.mean += alpha * delta
+        self.var = (1 - alpha) * (self.var + alpha * delta * delta)
+        # 사전 학습값 ~ cap배 사이에서만 움직인다 (천천히 키우는 공격에 끌려가지 않게, 한산할 때 너무 낮아지지 않게)
+        self.mean = min(max(self.mean, self.base_mean), cap * self.base_mean)
+        std = min(max(self.std, self.base_std), cap * self.base_std)
+        self.var = std * std
+
+
+@dataclass
+class Decision:
+    dpid: int
+    port: int
+    stage: RiskStage
+    threat_type: Optional[str]
+    strength: float
+    rates: Dict[str, float]
+    lines: Dict[str, float]
+    reasons: List[str]
+
+
+@dataclass
+class _PortState:
+    prev_t: Optional[float] = None
+    prev_counts: Dict[str, int] = field(default_factory=dict)
+    baselines: Dict[str, Baseline] = field(default_factory=dict)
+    cusum: float = 0.0
+    streaks: Dict[str, int] = field(default_factory=dict)
+    window: Deque[Tuple[float, float, float]] = field(default_factory=deque)  # (실패 응답, 도달 불가, 연결 시도)
+    stage: RiskStage = RiskStage.NORMAL
+    normal_streak: int = 0
+
+
+def indicator_rates(counts: Dict[str, int], prev: Dict[str, int], dt: float) -> Optional[Dict[str, float]]:
+    """누적 카운트 두 개 → 종류별 초당 수 + 파생 지표. 카운터가 줄었으면(리셋) None."""
+    if dt <= 0 or any(counts.get(k, 0) < prev.get(k, 0) for k in counts):
+        return None
+    r = {k: (counts.get(k, 0) - prev.get(k, 0)) / dt for k in counts}
+    r["gap"] = r.get("syn", 0.0) - r.get("fin", 0.0) - r.get("rst", 0.0)
+    r["fail"] = r.get("rst_in", 0.0) + r.get("unreach_in", 0.0)
+    return r
+
+
+class CriteriaEngine:
+    """FlowCountMessage를 받을 때마다 포트별 위험도 단계를 판단한다 (Redis와 분리, 테스트 가능)."""
+
+    def __init__(self, config: Optional[CriteriaConfig] = None,
+                 baselines: Optional[Dict[PortKey, Dict[str, Tuple[float, float]]]] = None,
+                 ports: Optional[Iterable[PortKey]] = None) -> None:
+        self.config = config or CriteriaConfig()
+        self.ports = set(ports) if ports is not None else None
+        self._state: Dict[PortKey, _PortState] = {}
+        for key, inds in (baselines or {}).items():
+            st = self._state.setdefault(key, _PortState())
+            for ind, (mean, std) in inds.items():
+                st.baselines[ind] = Baseline(mean=mean, var=std * std, base_mean=mean, base_std=std)
+
+    # ------------------------------------------------------------------
+    def line(self, key: PortKey, ind: str) -> float:
+        """평소 범위 기준선 = max(평균 + kσ, 최소값)."""
+        b = self._state.get(key, _PortState()).baselines.get(ind, Baseline())
+        return max(b.mean + self.config.k_sigma * b.std, self.config.floors.get(ind, 0.0))
+
+    def attack_line(self, key: PortKey, ind: str) -> float:
+        """UDP·ICMP·SYN 차이의 공격 판정선 = max(N × 평소 평균, 공격 최소 규모)."""
+        b = self._state.get(key, _PortState()).baselines.get(ind, Baseline())
+        return max(self.config.flood_multiplier * b.mean, self.config.attack_floors.get(ind, 0.0))
+
+    def baseline(self, key: PortKey, ind: str) -> Baseline:
+        return self._state.setdefault(key, _PortState()).baselines.setdefault(ind, Baseline())
+
+    # ------------------------------------------------------------------
+    def update(self, message: FlowCountMessage) -> List[Decision]:
+        by_port: Dict[int, Dict[str, int]] = {}
+        for c in message.counts:
+            by_port.setdefault(c.port_no, {})[c.kind] = c.packets
+        decisions = []
+        for port, counts in sorted(by_port.items()):
+            key = (message.dpid, port)
+            if self.ports is not None and key not in self.ports:
+                continue
+            st = self._state.setdefault(key, _PortState())
+            prev_t, prev = st.prev_t, st.prev_counts
+            st.prev_t, st.prev_counts = message.timestamp, counts
+            if prev_t is None:
+                continue
+            dt = message.timestamp - prev_t
+            rates = indicator_rates(counts, prev, dt)
+            if rates is None:
+                continue
+            decisions.append(self._evaluate(key, st, rates, dt))
+        return decisions
+
+    def _evaluate(self, key: PortKey, st: _PortState, r: Dict[str, float], dt: float) -> Decision:
+        cfg = self.config
+        lines = {ind: self.line(key, ind) for ind in WATCHED_INDICATORS}
+        reasons = [f"{ind} {r.get(ind, 0.0):.0f}/s > {lines[ind]:.0f}" for ind in WATCHED_INDICATORS
+                   if r.get(ind, 0.0) > lines[ind]]
+
+        candidates: Dict[str, float] = {}
+        # 포트 스캔: 실패 응답 수와 실패 비율 (Zeek 15개 + TRW 실패 비율), 짧은 창과 긴 창
+        st.window.append((r["fail"] * dt, r.get("unreach_in", 0.0) * dt,
+                          (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt))
+        while len(st.window) > cfg.scan_long_window:
+            st.window.popleft()
+        for n in (cfg.scan_window, cfg.scan_long_window):
+            recent = list(st.window)[-n:]
+            fails = sum(w[0] for w in recent)
+            probes = sum(w[2] for w in recent)
+            if fails >= cfg.scan_min and fails >= cfg.scan_ratio * probes:
+                candidates[ThreatType.PORT_SCAN.value] = max(candidates.get(ThreatType.PORT_SCAN.value, 0.0),
+                                                             fails / cfg.scan_min)
+        unreach = sum(w[1] for w in list(st.window)[-cfg.scan_window:])
+        if unreach >= cfg.scan_unreach_min:
+            candidates[ThreatType.PORT_SCAN.value] = max(candidates.get(ThreatType.PORT_SCAN.value, 0.0),
+                                                         unreach / cfg.scan_unreach_min)
+        # SYN Flood: 기준선을 넘는 동안의 초과분 누적. 한 번이라도 기준선 아래로 내려오면 0부터 다시
+        if r["gap"] > lines["gap"]:
+            st.cusum += (r["gap"] - lines["gap"]) * dt
+        else:
+            st.cusum = 0.0
+        if st.cusum >= cfg.cusum_h and ThreatType.PORT_SCAN.value not in candidates:
+            candidates[ThreatType.SYN_FLOOD_SPOOFING.value] = r["gap"] / self.attack_line(key, "gap")
+        # UDP·ICMP Flood
+        for ind, threat in (("udp", ThreatType.UDP_FLOOD.value), ("icmp", ThreatType.ICMP_FLOOD.value)):
+            a_line = self.attack_line(key, ind)
+            if r.get(ind, 0.0) >= a_line and r.get(ind, 0.0) > lines[ind]:
+                candidates[threat] = r[ind] / a_line
+
+        for threat in set(st.streaks) | set(candidates):
+            st.streaks[threat] = st.streaks.get(threat, 0) + 1 if threat in candidates else 0
+        confirmed = {t: s for t, s in candidates.items() if st.streaks[t] >= cfg.confirm_intervals}
+
+        threat_type: Optional[str] = None
+        strength = 0.0
+        if confirmed:
+            threat_type, strength = max(confirmed.items(), key=lambda kv: kv[1])
+            st.stage = RiskStage.DANGER if strength >= cfg.strong_multiplier else RiskStage.WARNING
+            st.normal_streak = 0
+            reasons.append(f"{threat_type} x{strength:.1f}")
+        elif reasons or candidates:
+            st.stage = RiskStage.WATCH
+            st.normal_streak = 0
+        else:
+            st.normal_streak += 1
+            if st.normal_streak >= cfg.watch_clear_intervals:
+                st.stage = RiskStage.NORMAL
+            if st.normal_streak >= cfg.learn_resume_intervals:
+                for ind in WATCHED_INDICATORS:
+                    self.baseline(key, ind).update(r.get(ind, 0.0), cfg.ewma_alpha, cfg.cap_multiplier)
+        return Decision(dpid=key[0], port=key[1], stage=st.stage, threat_type=threat_type, strength=strength,
+                        rates={k: round(v, 2) for k, v in r.items()}, lines=lines, reasons=reasons)
+
+
+# ----------------------------------------------------------------------
+# 사전 학습: 정상 구간의 초당 값들 → 포트·지표별 평균/표준편차 → JSON 파일
+# ----------------------------------------------------------------------
+class BaselineLearner:
+    """정상 트래픽만 흐르는 동안 FlowCountMessage를 모아 평소값을 계산한다."""
+
+    def __init__(self, ports: Optional[Iterable[PortKey]] = None) -> None:
+        self.ports = set(ports) if ports is not None else None
+        self._prev: Dict[PortKey, Tuple[float, Dict[str, int]]] = {}
+        self.samples: Dict[PortKey, Dict[str, List[float]]] = {}
+
+    def update(self, message: FlowCountMessage) -> None:
+        by_port: Dict[int, Dict[str, int]] = {}
+        for c in message.counts:
+            by_port.setdefault(c.port_no, {})[c.kind] = c.packets
+        for port, counts in by_port.items():
+            key = (message.dpid, port)
+            if self.ports is not None and key not in self.ports:
+                continue
+            prev = self._prev.get(key)
+            self._prev[key] = (message.timestamp, counts)
+            if prev is None:
+                continue
+            rates = indicator_rates(counts, prev[1], message.timestamp - prev[0])
+            if rates is None:
+                continue
+            for ind in WATCHED_INDICATORS:
+                self.samples.setdefault(key, {}).setdefault(ind, []).append(rates.get(ind, 0.0))
+
+    def baselines(self) -> Dict[PortKey, Dict[str, Tuple[float, float]]]:
+        out: Dict[PortKey, Dict[str, Tuple[float, float]]] = {}
+        for key, inds in self.samples.items():
+            for ind, vals in inds.items():
+                mean = sum(vals) / len(vals)
+                std = math.sqrt(sum((v - mean) ** 2 for v in vals) / len(vals))
+                out.setdefault(key, {})[ind] = (round(mean, 3), round(std, 3))
+        return out
+
+
+def save_baselines(path: str, baselines: Dict[PortKey, Dict[str, Tuple[float, float]]], seconds: float) -> None:
+    doc = {"version": 1, "learned_seconds": round(seconds),
+           "ports": {f"{d}:{p}": {ind: {"mean": m, "std": s} for ind, (m, s) in inds.items()}
+                     for (d, p), inds in sorted(baselines.items())}}
+    Path(path).write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+
+
+def load_baselines(path: str) -> Optional[Dict[PortKey, Dict[str, Tuple[float, float]]]]:
+    """저장된 평소값. 없으면 None (그때는 최소값만으로 판단한다 — 고정 기준)."""
+    p = Path(path)
+    if not p.exists():
+        return None
+    doc = json.loads(p.read_text())
+    out: Dict[PortKey, Dict[str, Tuple[float, float]]] = {}
+    for key, inds in doc.get("ports", {}).items():
+        dpid, port = (int(x) for x in key.split(":"))
+        out[(dpid, port)] = {ind: (v["mean"], v["std"]) for ind, v in inds.items()}
+    return out
