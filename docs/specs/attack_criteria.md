@@ -58,23 +58,25 @@
 
 포트 · 지표별 평균과 표준편차는 [`model/criteria_baseline.json`](../../model/criteria_baseline.json)에 저장돼 있고, 추론 워커가 켜질 때 읽는다.
 기준선 = max(평균 + 3 × 표준편차, 최소값). 기준선을 넘으면 주의(WATCH, 기록만).
+평균 + kσ(3-시그마) 통계적 기준선과, 정상일 때만 지수가중이동평균(EWMA)으로 기준선을 갱신하는 방식은
+침입 탐지에서의 EWMA 적용을 다룬 Ye, Borror & Zhang 2002[8]을 따른다.
 
 ### 2.3 숫자와 정한 방법
 
 | 숫자 | 값 | 정한 방법 |
 |---|---|---|
 | 최소값 | 위 표 | 정상 최대 × 2, 10 단위로 올림 |
-| N (UDP · ICMP Flood) | **10배** | 정상에서 최대가 평균의 약 5배(UDP 2.5 ÷ 0.49)까지 올라감 → 2배 여유 |
+| N (UDP · ICMP Flood) | **10배** | 정상에서 최대가 평균의 약 5배(UDP 2.5 ÷ 0.49)까지 올라감 → 2배 여유. SYN/UDP/ICMP Flood를 별개 공격 유형으로 나눠 다루는 분류는 Mirkovic & Reiher 2004[10]의 DDoS 공격 분류체계를 따름 |
 | 공격 최소 규모 | **초당 50개** (UDP · ICMP · SYN 차이) | 측정한 약한 공격(초당 100개)의 절반 → 약한 공격도 2배 여유로 잡힘. 평소가 0에 가까운 포트에서 10배가 너무 작은 수가 되는 것을 막음 |
-| SYN Flood 누적 H | **100개** | 약한 공격(초당 100개)은 한 보고(2초) 안에 넘음. 정상 최대 차이 3.5는 기준선 10 아래라 누적되지 않음 |
+| SYN Flood 누적 H | **100개** | 약한 공격(초당 100개)은 한 보고(2초) 안에 넘음. 정상 최대 차이 3.5는 기준선 10 아래라 누적되지 않음. 기준선 초과분을 CUSUM(누적합)으로 쌓아 경보하는 방식은 Wang, Zhang & Shin 2002[4]의 SYN Flood CUSUM 탐지를 따름 |
 | M (위험) | 판정선의 **5배** | 측정한 약한 공격은 판정선의 2배, 강한 공격(초당 1,000개)은 20배 → 그 사이 |
-| 빠른 포트 스캔 | 4초에 실패 응답 **15개** 이상 + 연결 시도의 50% 이상 실패 | Zeek 15개, Jung 2004 실패 비율. 정상 최대 4초 2개 |
-| 느린 포트 스캔 | 5분에 실패 응답 **30개** 이상 + 최근 4초에 실패 1개 이상 | Zeek 5분 창. 정상 최대 5분 13개 × 2 → 30. 5분 동안 정상 연결도 수백 개 섞이므로 비율은 보지 않음 |
+| 빠른 포트 스캔 | 4초에 실패 응답 **15개** 이상 + 연결 시도의 50% 이상 실패 | Zeek[6] 기본 임계치 15개, 실패 비율 판정은 TRW[5] 방식. 정상 최대 4초 2개 |
+| 느린 포트 스캔 | 5분에 실패 응답 **30개** 이상 + 최근 4초에 실패 1개 이상 | Zeek[6] 5분 창. 정상 최대 5분 13개 × 2 → 30. 5분 동안 정상 연결도 수백 개 섞이므로 비율은 보지 않음 |
 | UDP 스캔 | 4초에 ICMP 도달 불가 **4개** 이상 | 리눅스는 도달 불가를 처음 6개 뒤 초당 1개로 제한 → 300포트 스캔에도 6개. 정상 최대 4초 2개 × 2 |
 | 스캔 실패 응답의 상한 | 한 주기의 실패 응답은 **보낸 연결 시도의 2배까지만** 센다 | 스캔이라면 실패는 자기가 보낸 시도에 대한 답이다. 서버가 이 PC의 오래된 연결을 한꺼번에 끊으며 보낸 RST 묶음(Slow HTTP 뒤처리)은 스캔이 아니다 |
 | 서비스 악화 | 확인 ping 손실 **25%** 이상 또는 평균 왕복 **10ms** 이상이 **2회 연속** | 정상 10분(303회) 최대: 손실 11.1%(ping 1개, 연속 없음), 평균 왕복 4.4ms → 2배 |
-| Slow HTTP | 한 PC의 느린 요청 **10개** 이상 (2회 연속) | 정상 측정 0개. Slowloris 기본값 150개는 15배 → 위험 |
-| 내부 확산 | 5분에 없는 내부 주소 **25개** 이상 + 최근 4초에도 새 주소 | Zeek(5분 안에 서로 다른 호스트 25개 연결 실패). 정상 측정 0개 |
+| Slow HTTP | 한 PC의 느린 요청 **10개** 이상 (2회 연속) | 정상 측정 0개. Slowloris 기본값 150개는 15배 → 위험. 느린 요청(응답 지연 20초 · 저속 전송) 기준의 분류는 Cambiaso et al. 2013[9]의 Slow DoS 분류를 따름 |
+| 내부 확산 | 5분에 없는 내부 주소 **25개** 이상 + 최근 4초에도 새 주소 | Zeek[6](5분 안에 서로 다른 호스트 25개 연결 실패) 임계치, 스캔형 내부 전파 차단 설계는 Weaver 2004[7]. 정상 측정 0개 |
 | 경고 속도 제한 | 그 종류 패킷만 **초당 50개** | 공격 최소 규모와 같음. 정상 사용자의 같은 종류 패킷(UDP 2.5, ICMP 18.5)은 그대로 지나감 |
 
 ### 2.4 공격별 판정선과 측정 크기 (H_attacker, 사전 학습값 기준)
@@ -229,3 +231,21 @@ H_legit은 그동안 0.05초마다 ping을 보내 정상 사용자 손실을 쟀
 - **서로 다른 포트 수:** 카운터는 개수만 세므로, 포트 스캔은 실패 응답 개수와 실패 비율로 판단한다.
   그래서 죽은 서비스(예: 멈춘 DNS 서버)를 1분 넘게 계속 다시 두드리는 PC는 느린 스캔(5분 30개)처럼 보일 수 있다.
   이때는 경고(새 연결 초당 50개 제한)라서 그 PC의 정상 사용은 거의 막히지 않는다.
+
+## 6. 참고문헌 (References)
+
+번호는 [`docs/writing/thesis/thesis_draft.md`](../writing/thesis/thesis_draft.md) 참고문헌의 [4]부터 이어 쓴다.
+
+[4] Wang, H., Zhang, D., & Shin, K. G. "Detecting SYN flooding attacks." *Proceedings of IEEE INFOCOM 2002*, pp. 1530–1539, 2002. — §2.1·2.3 SYN Flood 기준선 초과분을 CUSUM(비모수 누적합)으로 쌓아 경보하는 방식의 근거.
+
+[5] Jung, J., Paxson, V., Berger, A. W., & Balakrishnan, H. "Fast portscan detection using sequential hypothesis testing." *Proceedings of the 2004 IEEE Symposium on Security and Privacy*, pp. 211–225, 2004. (DOI: 10.1109/SECPRI.2004.1301325) — §2.3 빠른 포트 스캔의 "연결 시도 대비 실패 비율 50% 이상" 판정(TRW, Threshold Random Walk 방식)의 근거.
+
+[6] Paxson, V. "Bro: A system for detecting network intruders in real-time." *Computer Networks*, 31(23–24), pp. 2435–2463, 1999. — 이 프로젝트가 참고한 Zeek(옛 이름 Bro)의 짧은 창(4초) 15개 · 긴 창(5분) 30개 · 내부 확산 25개 스캔 임계치 관례의 원 출처.
+
+[7] Weaver, N., Staniford, S., & Paxson, V. "Very fast containment of scanning worms." *Proceedings of the 13th USENIX Security Symposium*, pp. 29–44, 2004. — §1·§2.3 내부 확산(스캔형 내부 전파) 탐지를 "짧은 창에서의 반복 실패 접속 수"로 판단하는 설계의 근거(간소화된 TRW를 이용한 스캐닝 웜 차단).
+
+[8] Ye, N., Borror, C., & Zhang, Y. "EWMA techniques for computer intrusion detection through anomalous changes in event intensity." *Quality and Reliability Engineering International*, 18(6), pp. 443–451, 2002. — §2.2·§4 평소값 기준선을 평균 + 3 × 표준편차(3-시그마)로 두고, 정상 구간에서만 EWMA로 갱신하는 통계적 이상 탐지 방식의 근거.
+
+[9] Cambiaso, E., Papaleo, G., Chiola, G., & Aiello, M. "Slow DoS attacks: definition and categorisation." *International Journal of Trust Management in Computing and Communications*, 1(3/4), pp. 300–319, 2013. — §1·§2.3 Slow HTTP(저속 연결 점유형 공격) 탐지 기준의 분류 근거.
+
+[10] Mirkovic, J., & Reiher, P. "A taxonomy of DDoS attack and DDoS defense mechanisms." *ACM SIGCOMM Computer Communication Review*, 34(2), pp. 39–53, 2004. (DOI: 10.1145/997150.997156) — §2.3 SYN/UDP/ICMP Flood를 서로 다른 유형으로 나누어 별도 기준선을 두는 공격 분류체계의 근거.

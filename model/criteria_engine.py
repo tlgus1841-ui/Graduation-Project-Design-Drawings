@@ -24,6 +24,11 @@
   갱신한다(최근 약 10분 기억). 갱신된 평균·표준편차는 사전 학습값 ~ 2배 사이에서만 움직인다.
 * 특수 상황 재학습: 관리자가 승인한 기간 동안은 양(SYN·UDP·ICMP 초당 수)만 상하한 없이 빠르게(최근 약 1분)
   다시 배우고, 기간이 끝나면 사전 학습값으로 돌아간다. 짝이 안 맞는 연결·실패 응답 같은 공격 신호는 다시 배우지 않는다.
+
+참고문헌(전체 서지 정보는 docs/specs/attack_criteria.md §6): CUSUM(SYN Flood)은 Wang·Zhang·Shin 2002[4],
+포트 스캔 실패 비율(TRW)은 Jung et al. 2004[5], Zeek 스캔 임계치는 Paxson 1999[6], 내부 확산 차단 설계는
+Weaver et al. 2004[7], 평균+3σ EWMA 기준선은 Ye·Borror·Zhang 2002[8], Slow HTTP 분류는 Cambiaso et al. 2013[9],
+Flood 유형 분류는 Mirkovic·Reiher 2004[10]을 따른다.
 """
 
 from __future__ import annotations
