@@ -31,10 +31,17 @@ from harness.contracts.sdn_events import (
     MANUAL_RESTORE_HOLD_SEC,
     REDIS_CHANNEL_ANOMALY_ALERT,
     REDIS_CHANNEL_CONTROL_COMMAND,
+    REDIS_CHANNEL_FLOW_COUNTS,
     REDIS_CHANNEL_TOPOLOGY_SYNC,
+    WARNING_HOLD_SEC,
+    WARNING_RATE_LIMIT_PPS,
     AnomalyAlertMessage,
     ControlCommandMessage,
+    CountKind,
     DefenseAction,
+    FlowCountItem,
+    FlowCountMessage,
+    RiskStage,
     TopologyLink,
     TopologyNode,
     TopologySyncMessage,
@@ -52,6 +59,58 @@ except ImportError:
         from pathlib import Path
         sys.path.append(str(Path(__file__).resolve().parent))
         from reroute import RerouteEngine
+
+
+# 3단 플로우 테이블: 0 = 종류별로 세기 → 1 = 경고 단계 속도 제한 → 2 = 전달(격리·우회·최단 경로).
+# 세는 규칙이 맨 앞에 있어서 격리 중에도 공격 패킷 수를 계속 셀 수 있다 (공격이 멈췄는지 판단용).
+TABLE_COUNT = 0
+TABLE_POLICE = 1
+TABLE_FORWARD = 2
+
+# 세는 규칙의 cookie: 상위 16비트 태그 + dpid(24비트) + 포트(16비트) + 종류 번호(8비트)
+COUNT_COOKIE_TAG = 0xC0DE << 48
+COUNT_COOKIE_MASK = 0xFFFF << 48
+COUNT_KINDS = [k.value for k in CountKind]
+
+TCP_FIN, TCP_SYN, TCP_RST, TCP_ACK = 0x001, 0x002, 0x004, 0x010
+
+
+def count_cookie(dpid: int, port: int, kind: str) -> int:
+    return COUNT_COOKIE_TAG | (dpid << 24) | (port << 8) | COUNT_KINDS.index(kind)
+
+
+def decode_count_cookie(cookie: int):
+    """세는 규칙 cookie → (dpid, port, kind). 다른 규칙이면 None."""
+    if cookie & COUNT_COOKIE_MASK != COUNT_COOKIE_TAG:
+        return None
+    index = cookie & 0xFF
+    if index >= len(COUNT_KINDS):
+        return None
+    return (cookie >> 24) & 0xFFFFFF, (cookie >> 8) & 0xFFFF, COUNT_KINDS[index]
+
+
+def count_rule_specs(arp_table):
+    """접속 호스트마다 0번 테이블에 깔 세는 규칙 (dpid, port, kind, priority, match 인자).
+
+    한 패킷은 한 테이블에서 규칙 하나에만 걸리므로 우선순위로 겹침을 정리한다: 호스트가 '보내는'
+    패킷(in_port 기준)이 먼저, 호스트로 '들어오는' 실패 응답(ipv4_dst 기준)이 그다음이다.
+    """
+    specs = []
+    for ip, host in arp_table.items():
+        dpid, port = host["dpid"], host["port"]
+        out = {"in_port": port, "eth_type": 0x0800}
+        specs += [
+            (dpid, port, CountKind.SYN.value, 204, {**out, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}),
+            (dpid, port, CountKind.RST.value, 203, {**out, "ip_proto": 6, "tcp_flags": (TCP_RST, TCP_RST)}),
+            (dpid, port, CountKind.FIN.value, 202, {**out, "ip_proto": 6, "tcp_flags": (TCP_FIN, TCP_FIN)}),
+            (dpid, port, CountKind.UDP.value, 201, {**out, "ip_proto": 17}),
+            (dpid, port, CountKind.ICMP.value, 200, {**out, "ip_proto": 1}),
+            (dpid, port, CountKind.RST_IN.value, 150,
+             {"eth_type": 0x0800, "ipv4_dst": ip, "ip_proto": 6, "tcp_flags": (TCP_RST, TCP_RST)}),
+            (dpid, port, CountKind.UNREACH_IN.value, 150,
+             {"eth_type": 0x0800, "ipv4_dst": ip, "ip_proto": 1, "icmpv4_type": 3}),
+        ]
+    return specs
 
 
 class SelfDefendingSDNController(app_manager.RyuApp):
@@ -95,6 +154,10 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         )
         # 수동 RESTORE 보류: {"dpid:port": 보류 만료 시각}. 이 시각 전까지는 AI 경보로 다시 격리하지 않음
         self.manual_holds = {}
+        # 경고 단계 속도 제한 중인 포트: {"dpid:port": 마지막 WARNING 경보 시각}
+        self.rate_limits = {}
+        # 세는 규칙이 있는 스위치 (접속 호스트가 붙은 스위치만 카운트를 요청한다)
+        self.count_dpids = {host["dpid"] for host in self.arp_table.values()}
 
         # 2초 주기 비차단 포트 통계 폴링 그린스레드 가동
         self.monitor_thread = hub.spawn(self._monitor_loop)
@@ -146,6 +209,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             for dp in list(self.datapaths.values()):
                 try:
                     self._request_stats(dp)
+                    if dp.id in self.count_dpids:
+                        self._request_count_stats(dp)
                 except Exception as e:
                     self.logger.warning(
                         f"[Telemetry] Stats request failed for S{dp.id}: {e}"
@@ -157,6 +222,38 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         parser = datapath.ofproto_parser
         req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
         datapath.send_msg(req)
+
+    def _request_count_stats(self, datapath):
+        """0번 테이블의 세는 규칙(cookie 태그)만 골라 플로우 통계 요청"""
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        req = parser.OFPFlowStatsRequest(
+            datapath, 0, TABLE_COUNT, ofproto.OFPP_ANY, ofproto.OFPG_ANY,
+            COUNT_COOKIE_TAG, COUNT_COOKIE_MASK, parser.OFPMatch(),
+        )
+        datapath.send_msg(req)
+
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    def flow_stats_reply_handler(self, ev):
+        """세는 규칙의 누적 패킷 수를 sdn:stats:flowcount 채널로 발행"""
+        counts = []
+        for stat in ev.msg.body:
+            decoded = decode_count_cookie(stat.cookie)
+            if decoded is None:
+                continue
+            _, port, kind = decoded
+            counts.append(FlowCountItem(port_no=port, kind=kind, packets=stat.packet_count))
+        if not counts:
+            return
+        msg = FlowCountMessage(timestamp=time.time(), dpid=ev.msg.datapath.id, counts=counts)
+        try:
+            if not self.redis_client:
+                self._init_redis()
+            if self.redis_client:
+                self.redis_client.publish(REDIS_CHANNEL_FLOW_COUNTS, msg.model_dump_json())
+        except Exception as e:
+            self.logger.warning(f"[Telemetry] Failed to publish flow counts: {e}")
+            self.redis_client = None
 
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def port_stats_reply_handler(self, ev):
@@ -217,7 +314,19 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # Table-Miss Flow (Priority 0) 등록: 미매칭 패킷은 컨트롤러로 보고
+        # 0번(세기)·1번(속도 제한) 테이블: 걸리지 않은 패킷은 다음 테이블로
+        for table_id in (TABLE_COUNT, TABLE_POLICE):
+            self.add_flow(datapath, priority=0, match=parser.OFPMatch(), actions=[], table_id=table_id,
+                          instructions=[parser.OFPInstructionGotoTable(table_id + 1)])
+        # 0번 테이블: 이 스위치에 붙은 호스트의 종류별 세는 규칙
+        for dpid, port, kind, priority, match_kwargs in count_rule_specs(self.arp_table):
+            if dpid != datapath.id:
+                continue
+            self.add_flow(datapath, priority=priority, match=parser.OFPMatch(**match_kwargs), actions=[],
+                          table_id=TABLE_COUNT, cookie=count_cookie(dpid, port, kind),
+                          instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)])
+
+        # 전달 테이블 Table-Miss Flow (Priority 0) 등록: 미매칭 패킷은 컨트롤러로 보고
         match = parser.OFPMatch()
         actions = [
             parser.OFPActionOutput(
@@ -226,22 +335,24 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         ]
         self.add_flow(datapath, priority=0, match=match, actions=actions)
         self.logger.info(
-            f"Switch S{datapath.id} Connected. Table-Miss Installed."
+            f"Switch S{datapath.id} Connected. Count/Police/Forward tables and Table-Miss Installed."
         )
 
     def add_flow(
         self, datapath, priority, match, actions,
-        idle_timeout=0, hard_timeout=0
+        idle_timeout=0, hard_timeout=0, table_id=TABLE_FORWARD, cookie=0, instructions=None
     ):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-        inst = [
+        inst = instructions if instructions is not None else [
             parser.OFPInstructionActions(
                 ofproto.OFPIT_APPLY_ACTIONS, actions
             )
         ]
         mod = parser.OFPFlowMod(
             datapath=datapath,
+            table_id=table_id,
+            cookie=cookie,
             priority=priority,
             match=match,
             instructions=inst,
@@ -251,12 +362,13 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         )
         datapath.send_msg(mod)
 
-    def delete_flow(self, datapath, priority, match):
+    def delete_flow(self, datapath, priority, match, table_id=TABLE_FORWARD):
         """특정 우선순위 및 매칭 규칙의 플로우 엔트리 명시적 삭제 (OFPFC_DELETE)"""
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         mod = parser.OFPFlowMod(
             datapath=datapath,
+            table_id=table_id,
             command=ofproto.OFPFC_DELETE,
             out_port=ofproto.OFPP_ANY,
             out_group=ofproto.OFPG_ANY,
@@ -265,6 +377,38 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             buffer_id=ofproto.OFP_NO_BUFFER,
         )
         datapath.send_msg(mod)
+
+    def rate_limit_port(self, dpid: int, in_port: int, pps: int = WARNING_RATE_LIMIT_PPS):
+        """경고 단계: 해당 포트로 들어오는 패킷을 초당 pps개로 제한 (미터 + 1번 테이블 규칙)."""
+        self.whitelist_guard.validate_isolation_target(dpid, in_port)
+        datapath = self.datapaths.get(dpid)
+        if not datapath:
+            return False
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        # 포트 번호를 미터 번호로 쓴다 (스위치마다 따로라 겹치지 않음). 다시 설치하면 덮어쓴다.
+        for command in (ofproto.OFPMC_DELETE, ofproto.OFPMC_ADD):
+            datapath.send_msg(parser.OFPMeterMod(
+                datapath, command=command, flags=ofproto.OFPMF_PKTPS | ofproto.OFPMF_BURST, meter_id=in_port,
+                bands=[parser.OFPMeterBandDrop(rate=pps, burst_size=pps)] if command == ofproto.OFPMC_ADD else []))
+        self.add_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port), actions=[],
+                      table_id=TABLE_POLICE,
+                      instructions=[parser.OFPInstructionMeter(in_port), parser.OFPInstructionGotoTable(TABLE_FORWARD)])
+        self.logger.info(f"[Defense] S{dpid}: In_port {in_port} RATE LIMITED to {pps} pps (WARNING)")
+        return True
+
+    def unrate_limit_port(self, dpid: int, in_port: int):
+        """경고 단계 해제: 속도 제한 규칙과 미터 삭제."""
+        datapath = self.datapaths.get(dpid)
+        if not datapath:
+            return False
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        self.delete_flow(datapath, priority=100, match=parser.OFPMatch(in_port=in_port), table_id=TABLE_POLICE)
+        datapath.send_msg(parser.OFPMeterMod(datapath, command=ofproto.OFPMC_DELETE, flags=0,
+                                             meter_id=in_port, bands=[]))
+        self.logger.info(f"[Defense] S{dpid}: In_port {in_port} rate limit lifted")
+        return True
 
     def isolate_port(self, dpid: int, in_port: int, priority: int = 100):
         """
@@ -477,8 +621,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 while True:
                     # timeout=0.1로 짧게 대기하여 Eventlet 코루틴 협력적 스케줄링 양보 보장
                     msg = pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
-                    # 주기적 FSM 쿨다운 하트비트 평가
+                    # 주기적 FSM 쿨다운 하트비트 평가 + 경고 단계 속도 제한 만료 처리
                     self.fsm.evaluate_heartbeat()
+                    self._expire_rate_limits()
 
                     if not msg:
                         hub.sleep(0.05)
@@ -510,6 +655,37 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         del self.manual_holds[key]
         return False
 
+    def _expire_rate_limits(self, now=None):
+        """마지막 WARNING 경보 뒤 WARNING_HOLD_SEC 동안 경보가 없으면 속도 제한을 푼다."""
+        now = now if now is not None else time.time()
+        for key, last in list(self.rate_limits.items()):
+            if now - last < WARNING_HOLD_SEC:
+                continue
+            dpid, port = (int(x) for x in key.split(":"))
+            del self.rate_limits[key]
+            self.unrate_limit_port(dpid, port)
+            self._publish_control_command(
+                action=DefenseAction.UNLIMIT.value, dpid=dpid, port=port,
+                reason=f"Warning ceased: {WARNING_HOLD_SEC:.0f}s without alerts, rate limit lifted", priority=100)
+            if self.fsm.get_state() == DefenseState.NORMAL and not self.rate_limits:
+                self._publish_topology_sync("NORMAL")
+
+    def _handle_warning_alert(self, alert):
+        """경고(WARNING) 경보: 격리하지 않고 그 포트만 속도 제한. 이미 격리된 포트면 격리 유지(하트비트)."""
+        target_key = f"{alert.dpid}:{alert.in_port}"
+        if self.fsm.get_state() != DefenseState.NORMAL and target_key in self.fsm.mitigated_targets:
+            # 위험 단계에서 격리 중인데 공격이 약해진 경우: 공격이 이어지는 동안 격리를 유지한다.
+            self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
+            return
+        first = target_key not in self.rate_limits
+        self.rate_limits[target_key] = time.time()
+        if first and self.rate_limit_port(alert.dpid, alert.in_port):
+            self._publish_control_command(
+                action=DefenseAction.RATE_LIMIT.value, dpid=alert.dpid, port=alert.in_port,
+                reason=f"Warning: {alert.threat_type} confirmed, limit to {WARNING_RATE_LIMIT_PPS} pps",
+                priority=100)
+            self._publish_topology_sync("ATTACK_DETECTED")
+
     def _handle_redis_message(self, channel: str, data_str: str):
         """수신된 Redis 채널 메시지 파싱 및 제어 디스패치"""
         try:
@@ -527,11 +703,19 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
                 self.logger.info(
                     f"[Alert Ingested] Anomaly on S{alert.dpid}:P{alert.in_port} "
-                    f"(threat: {alert.threat_type}, score: {alert.score})"
+                    f"(threat: {alert.threat_type}, stage: {alert.stage}, score: {alert.score})"
                 )
-                # 1. In_port 차단 (트렁크는 화이트리스트가 방어)
+                if alert.stage == RiskStage.WARNING.value:
+                    if self.whitelist_guard.can_isolate(alert.dpid, alert.in_port):
+                        self._handle_warning_alert(alert)
+                    return
+                # 위험(DANGER): In_port 차단 (트렁크는 화이트리스트가 방어)
                 if self.whitelist_guard.can_isolate(alert.dpid, alert.in_port):
                     target_key = f"{alert.dpid}:{alert.in_port}"
+                    if target_key in self.rate_limits:
+                        # 경고에서 위험으로 올라감: 속도 제한 대신 격리
+                        del self.rate_limits[target_key]
+                        self.unrate_limit_port(alert.dpid, alert.in_port)
                     already_mitigated = (
                         self.fsm.get_state() != DefenseState.NORMAL
                         and target_key in self.fsm.mitigated_targets
@@ -583,6 +767,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     self.isolate_port(cmd.target_dpid, cmd.target_port, priority=cmd.priority)
                     self._publish_topology_sync("MITIGATED")
                 elif cmd.action == "RESTORE":
+                    if self.rate_limits.pop(target_key, None) is not None:
+                        self.unrate_limit_port(cmd.target_dpid, cmd.target_port)
                     self.restore_port(cmd.target_dpid, cmd.target_port, priority=cmd.priority)
                     self.restore_reroute_traffic(
                         source_dpid=cmd.target_dpid, target_dpid=4, dst_ip="10.0.0.4"

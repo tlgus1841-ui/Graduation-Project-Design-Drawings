@@ -23,10 +23,18 @@ REDIS_CHANNEL_PORT_STATS = "sdn:stats:port"
 REDIS_CHANNEL_ANOMALY_ALERT = "sdn:anomaly:alert"
 REDIS_CHANNEL_CONTROL_COMMAND = "sdn:control:command"
 REDIS_CHANNEL_TOPOLOGY_SYNC = "sdn:topology:sync"
+# Ryu -> AI Worker: 접속 포트별·패킷 종류별 누적 개수 (공격 종류별 판단 기준용, 2초 주기)
+REDIS_CHANNEL_FLOW_COUNTS = "sdn:stats:flowcount"
 
 # 수동 RESTORE(command_id "manual-…") 직후 같은 포트의 자동 재격리를 보류하는 시간(초).
 # 운영자가 AI 오탐을 의심해 풀어 준 포트를, 2초 뒤 다음 경보가 곧바로 다시 막지 않게 한다.
 MANUAL_RESTORE_HOLD_SEC = 60.0
+
+# 경고(WARNING) 단계 대응: 해당 포트를 이 속도(초당 패킷)로 제한한다. 정상 사용자 한 명의
+# 실측 최대 속도(docs/specs/attack_criteria.md)보다 넉넉히 위로 잡는다.
+WARNING_RATE_LIMIT_PPS = 300
+# 마지막 WARNING 경보 뒤 이 시간(초) 동안 경보가 없으면 속도 제한을 푼다 (경고는 10초 유지).
+WARNING_HOLD_SEC = 10.0
 
 
 # =====================================================================
@@ -36,6 +44,27 @@ class DefenseAction(str, Enum):
     ISOLATE = "ISOLATE"
     RESTORE = "RESTORE"
     REROUTE = "REROUTE"
+    RATE_LIMIT = "RATE_LIMIT"
+    UNLIMIT = "UNLIMIT"
+
+
+class RiskStage(str, Enum):
+    """위험도 단계 (docs/specs/attack_criteria.md). 경보는 WARNING·DANGER만 발행한다."""
+    NORMAL = "NORMAL"
+    WATCH = "WATCH"        # 주의: 지표 하나가 기준선을 넘음 → 기록만
+    WARNING = "WARNING"    # 경고: 공격 종류 확정(2회 연속) → 해당 포트만 속도 제한
+    DANGER = "DANGER"      # 위험: 기준의 몇 배 이상 → 격리 + 우회 (기존 방식)
+
+
+class CountKind(str, Enum):
+    """스위치 0번 테이블의 세는 규칙 종류. *_IN은 그 호스트로 '들어가는' 실패 응답이다."""
+    SYN = "syn"                # TCP SYN(ACK 없음) — 연결 요청
+    FIN = "fin"                # TCP FIN — 정상 종료
+    RST = "rst"                # TCP RST — 거절/강제 종료
+    UDP = "udp"
+    ICMP = "icmp"
+    RST_IN = "rst_in"          # 이 호스트가 받은 RST (닫힌 포트의 거절)
+    UNREACH_IN = "unreach_in"  # 이 호스트가 받은 ICMP 도달 불가(type 3)
 
 
 class ThreatType(str, Enum):
@@ -69,6 +98,20 @@ class PortStatsMessage(BaseModel):
     stats: List[PortStatItem] = Field(default_factory=list, description="List of per-port stats")
 
 
+class FlowCountItem(BaseModel):
+    """One counting rule's cumulative packet count (switch table 0)."""
+    port_no: int = Field(..., description="Access port the count belongs to")
+    kind: str = Field(..., description="CountKind value (syn, fin, rst, udp, icmp, rst_in, unreach_in)")
+    packets: int = Field(..., description="Cumulative matched packets")
+
+
+class FlowCountMessage(BaseModel):
+    """Per-kind packet counts published by Ryu every 2 seconds (Channel: sdn:stats:flowcount)."""
+    timestamp: float = Field(default_factory=time.time, description="Unix timestamp (seconds)")
+    dpid: int = Field(..., description="Switch Datapath ID reporting the counts")
+    counts: List[FlowCountItem] = Field(default_factory=list)
+
+
 # =====================================================================
 # 2. AI Anomaly Alert Models (Channel: sdn:anomaly:alert)
 # =====================================================================
@@ -96,6 +139,10 @@ class AnomalyAlertMessage(BaseModel):
     err_rate: float = Field(
         default=0.0,
         description="Error packet rate (Δrx_errors / Δpackets)",
+    )
+    stage: str = Field(
+        RiskStage.DANGER.value,
+        description="WARNING (rate limit) | DANGER (isolate + reroute); older senders mean DANGER",
     )
     metadata: Dict[str, str] = Field(
         default_factory=dict,
