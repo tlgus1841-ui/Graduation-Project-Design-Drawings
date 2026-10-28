@@ -46,12 +46,12 @@ try:
     from ryu.app.reroute import RerouteEngine
 except ImportError:
     try:
-        from reroute import RerouteEngine
+        from reroute import RerouteEngine  # type: ignore[no-redef]
     except ImportError:
         import sys
         from pathlib import Path
         sys.path.append(str(Path(__file__).resolve().parent))
-        from reroute import RerouteEngine
+        from reroute import RerouteEngine  # type: ignore[no-redef]
 
 
 class SelfDefendingSDNController(app_manager.RyuApp):

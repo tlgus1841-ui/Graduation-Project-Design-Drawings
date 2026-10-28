@@ -50,8 +50,10 @@ def _random_payload(size: int) -> bytes:
 def build_http_packet(profile: PacketProfile) -> Packet:
     """패턴 A: HTTP GET 웹 서핑 모사 (페이로드 500~1000B)."""
     payload_size = random.randint(*HTTP_PAYLOAD_RANGE)
+    # scapy의 Packet.__truediv__는 Self 타입 변수를 속성 할당(__truediv__ = __div__)으로
+    # 선언해 mypy가 2단 체이닝에서 타입을 못 풀어낸다(런타임 동작과는 무관한 스텁 한계).
     pkt = (
-        IP(src=profile.src, dst=profile.dst)
+        IP(src=profile.src, dst=profile.dst)  # type: ignore[operator]
         / TCP(sport=profile.sport, dport=HTTP_PORT, flags="PA")
         / _random_payload(payload_size)
     )
@@ -64,7 +66,7 @@ def build_bulk_packets(profile: PacketProfile) -> list[Packet]:
     packets = []
     for _ in range(burst_count):
         pkt = (
-            IP(src=profile.src, dst=profile.dst)
+            IP(src=profile.src, dst=profile.dst)  # type: ignore[operator]
             / TCP(sport=profile.sport, dport=BULK_PORT, flags="PA")
             / _random_payload(BULK_PAYLOAD_SIZE)
         )
