@@ -108,3 +108,59 @@ def test_normal_steady_traffic_never_triggers_secondary_classifier(model):
     worker, c = InferenceWorker(model), Counters()
     for _ in range(20):
         assert worker.process(c.tick(NORMAL)) == []
+
+
+# ---------------------------------------------------------------------
+# Criteria mode: alerts come from per-kind counts, port stats only fill pps/bpp
+# ---------------------------------------------------------------------
+from harness.contracts import FlowCountItem, FlowCountMessage, RiskStage  # noqa: E402
+from model.criteria_engine import CriteriaEngine  # noqa: E402
+
+
+def _counts(t, udp_total):
+    return FlowCountMessage(timestamp=t, dpid=1, counts=[
+        FlowCountItem(port_no=2, kind=k, packets=udp_total if k == "udp" else 0)
+        for k in ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")])
+
+
+def test_criteria_mode_alerts_with_stage_and_threat_type(model):
+    worker, c = InferenceWorker(model, criteria=CriteriaEngine(ports=[(1, 2)])), Counters()
+    assert worker.process(c.tick(NORMAL)) == [] and worker.process(c.tick(ATTACK)) == []  # no legacy alerts
+    assert worker.process(c.tick(ATTACK)) == []
+    assert worker.process_counts(_counts(1000.0, 0)) == []
+    assert worker.process_counts(_counts(1002.0, 2000)) == []  # 1,000 UDP/s: first report → WATCH
+    alerts = worker.process_counts(_counts(1004.0, 4000))
+    assert [(a.in_port, a.threat_type, a.stage) for a in alerts] == [(2, "UDP_FLOOD", RiskStage.DANGER.value)]
+    assert alerts[0].pps == pytest.approx(1700, rel=0.01)  # from the latest port stats
+
+
+def test_legacy_mode_ignores_counts(model):
+    worker = InferenceWorker(model)
+    assert worker.process_counts(_counts(1000.0, 0)) == []
+
+
+def test_criteria_mode_uses_service_health_for_danger(model):
+    from harness.contracts import ServiceHealthMessage
+    worker = InferenceWorker(model, criteria=CriteriaEngine(ports=[(1, 2)]))
+    worker.process_counts(_counts(1000.0, 0))
+    worker.process_counts(_counts(1002.0, 300))  # 150 UDP/s: 3x the line, WARNING on its own
+    for t in (1003.0, 1005.0):
+        worker.process_health(ServiceHealthMessage(timestamp=t, target_ip="10.0.0.4", sent=10, received=5,
+                                                   loss_percent=50.0, rtt_avg_ms=3.0))
+    [alert] = worker.process_counts(_counts(1006.0, 600))
+    assert (alert.threat_type, alert.stage) == ("UDP_FLOOD", RiskStage.DANGER.value)
+    assert "service degraded" in alert.metadata["reasons"]
+    InferenceWorker(model).process_health(ServiceHealthMessage(target_ip="10.0.0.4", sent=1, received=0,
+                                                               loss_percent=100.0))  # legacy: ignored
+
+
+def test_relearn_command_reaches_the_criteria_engine(model):
+    from harness.contracts import ControlCommandMessage
+    worker = InferenceWorker(model, criteria=CriteriaEngine(ports=[(1, 2)]))
+    cmd = ControlCommandMessage(command_id="manual-relearn-1", action="RELEARN", target_dpid=0, target_port=0,
+                                reason="[MANUAL] admin: 수강신청", duration_sec=600.0)
+    assert worker.process_command(cmd, now=1000.0) == [(1, 2)]
+    isolate = ControlCommandMessage(command_id="manual-isolate-1", action="ISOLATE", target_dpid=1,
+                                    target_port=2, reason="x")
+    assert worker.process_command(isolate) == []
+    assert InferenceWorker(model).process_command(cmd) == []  # legacy mode has no baselines to relearn

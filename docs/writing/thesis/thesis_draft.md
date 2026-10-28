@@ -265,3 +265,12 @@ IP 스푸핑 공격은 패킷마다 출발지 IP를 바꾼다. 출발지 IP나 5
 [1] McKeown, N., et al. "OpenFlow: enabling innovation in campus networks." ACM SIGCOMM CCR, 2008.  
 [2] Liu, F. T., Ting, K. M., & Zhou, Z. H. "Isolation forest." IEEE ICDM, 2008.  
 [3] Ryu SDN Controller Documentation (Release 4.34).  
+[4] Wang, H., Zhang, D., & Shin, K. G. "Detecting SYN flooding attacks." *Proceedings of IEEE INFOCOM 2002*, pp. 1530–1539, 2002.  
+[5] Jung, J., Paxson, V., Berger, A. W., & Balakrishnan, H. "Fast portscan detection using sequential hypothesis testing." *Proceedings of the 2004 IEEE Symposium on Security and Privacy*, pp. 211–225, 2004. (DOI: 10.1109/SECPRI.2004.1301325)  
+[6] Paxson, V. "Bro: A system for detecting network intruders in real-time." *Computer Networks*, 31(23–24), pp. 2435–2463, 1999.  
+[7] Weaver, N., Staniford, S., & Paxson, V. "Very fast containment of scanning worms." *Proceedings of the 13th USENIX Security Symposium*, pp. 29–44, 2004.  
+[8] Ye, N., Borror, C., & Zhang, Y. "EWMA techniques for computer intrusion detection through anomalous changes in event intensity." *Quality and Reliability Engineering International*, 18(6), pp. 443–451, 2002.  
+[9] Cambiaso, E., Papaleo, G., Chiola, G., & Aiello, M. "Slow DoS attacks: definition and categorisation." *International Journal of Trust Management in Computing and Communications*, 1(3/4), pp. 300–319, 2013.  
+[10] Mirkovic, J., & Reiher, P. "A taxonomy of DDoS attack and DDoS defense mechanisms." *ACM SIGCOMM Computer Communication Review*, 34(2), pp. 39–53, 2004. (DOI: 10.1145/997150.997156)  
+
+[4]–[10]은 8주차 "공격 · 정상 판단 기준 세분화"(`docs/specs/attack_criteria.md`)의 판정 설계(§2) 근거이며, 각 기준과의 대응은 해당 문서 6절 참고문헌에 상세히 표기했다.  

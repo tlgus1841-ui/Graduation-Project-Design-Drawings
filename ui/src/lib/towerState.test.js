@@ -110,6 +110,16 @@ describe("applyEnvelope", () => {
     expect(s.events[0].kind).toBe("manual");
   });
 
+  it("shows an approved relearn for every port as one feed entry", () => {
+    const s = applyEnvelope(initialState, {
+      type: "sdn:control:command",
+      data: { timestamp: 6, command_id: "manual-relearn-1", action: "RELEARN", target_dpid: 0, target_port: 0,
+        reason: "[MANUAL] admin: 수강신청 (60분 재학습 승인)", priority: 0, duration_sec: 3600 },
+    });
+    expect(s.events[0]).toMatchObject({ kind: "manual", title: "RELEARN · 모든 접속 포트" });
+    expect(s.incident).toBeNull();
+  });
+
   it("applies a batch of envelopes in order as one update", () => {
     const one = applyEnvelope(applyEnvelope(initialState, stats(100, 1000, 800000)), stats(102, 7000, 1184000));
     const batched = applyEnvelope(initialState, { type: "batch", data: [stats(100, 1000, 800000), stats(102, 7000, 1184000)] });

@@ -5,6 +5,7 @@ import ManualControl from "./components/ManualControl.jsx";
 import PhaseBadge from "./components/PhaseBadge.jsx";
 import PortStatsPanel from "./components/PortStatsPanel.jsx";
 import RecoveryNotice from "./components/RecoveryNotice.jsx";
+import RelearnControl from "./components/RelearnControl.jsx";
 import TopologyMap from "./components/TopologyMap.jsx";
 import TrafficCharts from "./components/TrafficCharts.jsx";
 import { useControlTowerSocket } from "./hooks/useControlTowerSocket.js";
@@ -31,6 +32,7 @@ export default function App() {
           )}
           <PhaseBadge phase={state.phase} />
           <ConnectionBadge status={status} retries={retries} />
+          <RelearnControl />
           <ManualControl />
         </>
       }

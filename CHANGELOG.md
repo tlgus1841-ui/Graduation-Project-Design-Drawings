@@ -13,6 +13,82 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] merge: PR #10(공격 판단 기준 세분화)을 main에 통합하며 충돌 해소
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Fix` / `Test`
+* **배경:** `claude/quirky-cerf-h51gg3`(PR #10)과 main이 그사이 각자 `traffic/traffic_scan.py`를 독립적으로 만들어, 이름은 같지만 완전히 다른 두 생성기가 충돌했다. main 쪽 버전은 이번에 superseded된 구(舊) `model/attack_classifier.py`(PORT_SCAN/SLOW_DRIFT, PR #6) 검증용이었고, PR #10 쪽 버전은 새 `model/criteria_engine.py`의 실측 도구(`harness/verification/criteria_measure.py`)가 모듈 경로로 직접 호출하는 쪽이라 PR #10 버전을 남겼다.
+* **주요 변경 파일:**
+  - `traffic/traffic_scan.py`: PR #10 버전(`--kind tcp/udp`, `build_probe`/`run`) 유지. main 버전(`ScanProfile`/`dport_cycle` 기반)은 버림 — `model/attack_classifier.py`가 PR #10에서 그대로(PR #6에서 수정한 delta_pps 기준 유지, `--legacy` 경로로 공존) 들어왔으므로 기능 손실 없음.
+  - `tests/traffic/test_traffic_scan.py`: 옛 API(`ScanProfile` 등) 기준 테스트를 PR #10 버전 API(`parse_ports`/`build_probe`/`run`) 기준으로 새로 작성 (4개).
+  - `traffic/traffic_scan.py`, `traffic/traffic_flood.py`: 병합 후 재검사에서 드러난 scapy `Packet.__truediv__`(2단 체이닝) mypy 오탐 2건을 PR #5와 동일한 `# type: ignore[operator]` 관례로 처리.
+  - `CHANGELOG.md`, `model/inference_worker.py`(모듈 docstring): 두 브랜치가 각자 추가한 안내문 병합(내용 중복 없음, 양쪽 다 유지).
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. `model/attack_classifier.py`·`model/criteria_engine.py` 로직은 병합 중 변경하지 않음(파일명 충돌과 문서 텍스트 충돌만 해소).
+* **검증:** 병합 후 `flake8` 0건, `mypy` 신규 에러 없음(기존 pydantic 버전 불일치 오탐 22건 제외), `pytest` 265 passed.
+* **다음 작업자 인수인계 메모:**
+  - **[공통]** `model/attack_classifier.py`(`SecondaryAttackClassifier`, `--legacy` 경로)와 `model/criteria_engine.py`(기본 경로)가 지금 둘 다 켜져 있습니다. 전자가 여전히 필요한지(이중 탐지 의도) 정리가 필요하면 논의해주세요.
+
+### [2026-10-28] docs(specs): 공격 판단 기준에 실제 논문 출처 추가
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Docs`
+* **배경:** `docs/specs/attack_criteria.md`·`model/criteria_engine.py`에 있던 "Zeek", "Jung 2004" 같은 약식 언급을 검증된 정식 참고문헌으로 교체.
+* **주요 변경 파일:**
+  - `docs/specs/attack_criteria.md` §6 (신규): 서지 정보 7건 추가 — SYN Flood CUSUM(Wang·Zhang·Shin, INFOCOM 2002), 포트 스캔 실패 비율/TRW(Jung et al., IEEE S&P 2004), Zeek 스캔 임계치 원 논문(Paxson, Computer Networks 1999), 내부 확산 차단(Weaver et al., USENIX Security 2004), 평균+3σ EWMA 기준선(Ye·Borror·Zhang, QREI 2002), Slow HTTP 분류(Cambiaso et al., IJTMCC 2013), Flood 유형 분류(Mirkovic·Reiher, ACM SIGCOMM CCR 2004).
+  - `docs/writing/thesis/thesis_draft.md`: 참고문헌 [1]~[3]에 이어 [4]~[10]으로 위 서지 추가.
+  - `model/criteria_engine.py`: 모듈 docstring에 참고문헌 요약 포인터 추가.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 로직·숫자 변경 없이 문서·주석만 수정.
+* **검증:** 각 논문의 제목·저자·학회(지)·연도·DOI를 실제 검색으로 확인. 관련 테스트(`tests/model/test_criteria_engine.py` 26개) 통과, flake8 0건.
+
+### [2026-10-28] perf(ryu,model): 종류별 개수를 1초마다 읽어 탐지 시간 단축
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Performance` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`, `harness/contracts/sdn_events.py`: 종류별 개수(`sdn:stats:flowcount`)는 1초마다(`FLOW_COUNT_INTERVAL_SEC`), 포트 통계 · 서비스 상태는 그대로 2초마다(`PORT_STATS_INTERVAL_SEC`). 관제탑 화면 갱신 주기는 그대로
+  - `model/criteria_engine.py`: 시간 창을 보고 횟수가 아니라 초로 바꿈 (스캔 4초 · 5분, 주의 해제 4초, 학습 재개 10초, EWMA 10분 · 재학습 1분 기억). 보고 주기가 바뀌어도 뜻이 같다. "2회 연속 확인"은 그대로라 확정까지 걸리는 시간만 절반
+  - `harness/verification/criteria_measure.py`: 공격 시작을 0~2초 무작위로 늦춰 보고 주기와 엇갈리게 함 (전에는 매번 보고 직후에 시작해 가장 늦은 경우만 쟀다)
+  - `tests/`: 1초 보고에서도 같은 창 · 2초 만에 확정, 컨트롤러가 개수는 1초 · 포트 통계는 2초마다 요청하는지
+* **영향 범위 및 주의사항 (Breaking Changes):** `sdn:stats:flowcount`가 1초마다 온다 (구독자는 추론 워커뿐). `CriteriaConfig`의 `scan_window` · `scan_long_window` · `watch_clear_intervals` · `learn_resume_intervals` · `ewma_alpha` · `relearn_alpha`가 초 단위 이름으로 바뀜
+* **결과:** 1초 단위 정상 10분으로 숫자를 다시 확인(SYN 차이 최소값 20, 서비스 지연 12ms, SYN 누적 H 50, 평소값 다시 학습). 방어를 켠 공격 14종: 강한 Flood 1.8~2.5초, 약한 Flood 2.4~2.6초, 스캔 1.7~2.4초 (전에는 3.5~4.4초), 정상 5분 경보 0회. 명세 §2.7
+* **다음 작업자 인수인계 메모:** 발표 자료의 "2초마다" · 탐지 지연 "약 4초"는 1초 · 약 2초로 바뀌었습니다
+
+
+### [2026-10-28] feat(ryu,model,api,ui): 서비스 악화 조건 · Slow HTTP · 내부 확산 · 특수 상황 재학습 승인
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feature` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`: **서비스 상태 확인** — 정상 사용자 자리(S1)에서 보호 서버로 0.2초마다 ICMP echo(가상 출발지 10.0.0.250, 컨트롤러가 ARP 대답)를 넣고, 2초마다 손실 · 왕복 시간을 `sdn:health:service`로 발행. **내부 확산** — Proxy ARP에서 접속 호스트가 물어본 없는 내부 주소를 세어 `arp_fail`로 함께 발행. 경고 단계 속도 제한에 Slow HTTP · 내부 확산(SYN) 추가
+  - `pipeline/server_conn_agent.py` (신규): 서버의 열린 HTTP 연결을 `ss`로 2초마다 읽어 접속 PC별 느린 요청 수를 `sdn:stats:serverconn`으로 발행 (20초 넘게 요청이 안 끝나고 응답 전, 초당 500B 미만. Apache mod_reqtimeout과 같은 기준)
+  - `model/criteria_engine.py`: 위험 = 공격 확정 + (판정선 5배 이상 **또는 서비스 악화 2회 연속**: 손실 25% · 평균 왕복 10ms, 정상 10분 최대의 2배). Slow HTTP(느린 요청 10개), 내부 확산(5분 25개, Zeek), 스캔 실패 응답은 보낸 연결 시도의 2배까지만 셈, 승인된 재학습(양만 · 위험 크기 제외 · 기간 뒤 복귀)
+  - `model/inference_worker.py`: 서비스 상태 · 서버 연결 · RELEARN 명령 구독
+  - `harness/contracts/sdn_events.py`: `ServiceHealthMessage`, `ServerConnMessage`, `ACCESS_HOST_PORTS`, `ThreatType.INTERNAL_SPREAD`, `CountKind.ARP_FAIL`, `DefenseAction.RELEARN`, `ControlCommandMessage.duration_sec`(선택)
+  - `api/main.py`, `api/manual_control.py`: `POST /api/control/relearn` (기간 1~240분, 사유, 관리자 토큰)
+  - `ui/src/components/RelearnControl.jsx` (신규), `ui/src/App.jsx`, `ui/src/lib/api.js`, `ui/src/lib/towerState.js`: 관제탑 "특수 상황 재학습" 승인 버튼 · 창
+  - `traffic/traffic_slowhttp.py`, `traffic/traffic_spread.py` (신규): Slowloris 방식 Slow HTTP, 내부 확산(445 포트)
+  - `harness/verification/criteria_measure.py`: 서비스 상태 · 서버 연결 기록, 시나리오 추가(중간 ICMP, 서버 장애 + 약한 UDP, Slow HTTP 30 · 150개, 내부 확산), 마지막 공격 뒤에도 쉬는 구간
+  - `docs/specs/attack_criteria.md`: 새 기준과 숫자, 검증 결과, 한계
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음 (새 채널 · 필드는 추가만). 컨트롤러가 S1에 초당 5개의 확인 ping을 넣는다
+* **다음 작업자 인수인계 메모:**
+  - **[박시현]** 컨트롤러에 `_probe_loop`(서비스 상태 확인)와 `arp_fail_targets`(내부 확산)가 생겼습니다. 가상 주소 10.0.0.250은 실제 호스트에 쓰면 안 됩니다.
+  - **[유재민]** Slow HTTP를 쓰려면 서버에서 `python -m pipeline.server_conn_agent`를 같이 띄워야 합니다 (테스트베드는 `criteria_measure`가 자동으로 띄움).
+
+### [2026-10-28] feat(ryu,model): 8주차 공격 · 정상 판단 기준 구현, 기준 숫자 실측
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feature` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`: 파이프라인을 3단 테이블로 변경 (0 = 종류별로 세는 규칙, 1 = 경고 단계 속도 제한, 2 = 기존 전달 · 격리 · 우회). 접속 호스트마다 SYN · FIN · RST · UDP · ICMP · 받은 RST · 받은 도달 불가를 세고 2초마다 `sdn:stats:flowcount`로 발행. 경고(WARNING) 경보는 그 포트의 그 공격 종류 패킷만 미터로 초당 50개 제한, 10초 동안 경보가 없으면 해제. 위험(DANGER)은 기존 격리 + 우회
+  - `harness/contracts/sdn_events.py`: `FlowCountMessage`, `RiskStage`, `AnomalyAlertMessage.stage`(기본값 DANGER라 기존 송신자 호환), `DefenseAction.RATE_LIMIT/UNLIMIT`, `WARNING_RATE_LIMIT_PPS = 50`, `WARNING_HOLD_SEC = 10`
+  - `model/criteria_engine.py` (신규): 기준표 판단 엔진. 기준선 = max(평균 + 3σ, 최소값), SYN Flood = SYN − (FIN+RST) 누적(CUSUM), UDP · ICMP Flood = 평소의 10배 + 초당 50개, 포트 스캔 = 받은 실패 응답(4초 15개 · 5분 30개 · 도달 불가 4개), 2회 연속 확정, 판정선의 5배 이상이면 위험. 평소값은 사전 학습 파일로 시작해 EWMA(약 10분)로 갱신, 사전 학습값 ~ 2배로 제한
+  - `model/criteria_baseline.json` (신규): 정상 10분 실측으로 학습한 포트 · 지표별 평소값
+  - `model/inference_worker.py`: 기준표 모드가 기본 (`--legacy`로 기존 AI 점수 판단). 경보에 단계 · 공격 종류 · 이유를 담고, AI 점수는 metadata에 참고로만 남김. `--learn 초`로 평소값 학습
+  - `traffic/normal_user.py`, `traffic/traffic_flood.py`, `traffic/traffic_scan.py` (신규): 정상 사용자 시나리오 5종 + 닫힌 포트 실수, UDP · ICMP Flood, TCP · UDP 포트 스캔
+  - `harness/verification/criteria_measure.py` (신규): 정상 10분 + 공격 9종 측정, 평소값 파일 생성, 방어를 켠 검증 리포트
+  - `docs/specs/attack_criteria.md` (신규): 세는 규칙, 실측 평소값, 숫자를 정한 방법(정상 최대의 2배 여유), 단계별 대응, 검증 결과
+  - `tests/ryu/test_count_and_warning.py`, `tests/model/test_criteria_engine.py`, `tests/harness/test_criteria_measure.py`, `tests/model/test_inference_worker.py`: 회귀 테스트
+* **영향 범위 및 주의사항 (Breaking Changes):** 컨트롤러의 전달 · 격리 · 우회 규칙이 2번 테이블로 옮겨짐 (`add_flow` 기본 `table_id=2`). 기존 경보 송신자(`stage` 없음)는 그대로 위험 단계로 처리됨. 추론 워커 기본 동작이 기준표 판단으로 바뀜 (기존 방식은 `--legacy`)
+* **다음 작업자 인수인계 메모:**
+  - **[박시현]** 컨트롤러에 0 · 1번 테이블이 생겼습니다. 새 전달 규칙은 `add_flow`가 2번 테이블에 넣고, 세는 규칙은 쿠키(`0xC0DE…`)로 구분합니다.
+  - **[유재민]** 판단 숫자는 `CriteriaConfig` 한 곳에 있고, 근거는 `docs/specs/attack_criteria.md` §2입니다. 평소값을 다시 학습하려면 `python -m model.inference_worker --learn 600`.
+  - Slow HTTP · 내부 확산 · 서비스 상태 신호 · 특수 상황 재학습 승인은 바로 위 항목에서 추가했습니다.
+
 ### [2026-10-28] chore: 저장소 전체 mypy/flake8 정리 및 GitHub 브랜치 정리
 * **작업자:** 유재민 (Domain Dev & QA) with Claude Code
 * **작업 유형:** `Chore` / `Docs`

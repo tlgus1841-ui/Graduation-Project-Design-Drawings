@@ -9,6 +9,8 @@ Endpoints:
 - WS  /ws           : real-time envelope stream (docs/specs/defense_scenarios.md §5.1)
 - POST /api/control/manual : operator emergency ISOLATE/RESTORE (week 13, api/manual_control.py).
                              If SDN_ADMIN_TOKEN is set, the X-Admin-Token header must match.
+- POST /api/control/relearn: special-situation relearn approval (minutes, reason) -> RELEARN command for
+                             the AI worker. Same admin token rule.
 
 Data source:
 - mock (default): api/mock_generator.py replays the defense scenario in-process
@@ -29,7 +31,13 @@ from typing import Any, AsyncIterator, Dict, Optional, Union
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.manual_control import ManualControlRejected, ManualControlRequest, build_manual_command
+from api.manual_control import (
+    ManualControlRejected,
+    ManualControlRequest,
+    RelearnRequest,
+    build_manual_command,
+    build_relearn_command,
+)
 from api.mock_generator import SYSTEM_STATUS_TYPE, MockTelemetryGenerator
 from api.redis_bridge import RedisBridge, RedisFactory
 from api.websocket_hub import ConnectionManager, make_envelope
@@ -121,6 +129,29 @@ def create_app(enable_mock: Optional[bool] = None, *, start_source: bool = True,
         await hub.broadcast(make_envelope(REDIS_CHANNEL_CONTROL_COMMAND, payload))
         return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload,
                 "auto_isolation_hold_sec": 0}
+
+    @app.post("/api/control/relearn")
+    async def relearn_control(
+        req: RelearnRequest, x_admin_token: Optional[str] = Header(default=None)
+    ) -> Dict[str, Any]:
+        """특수 상황 재학습 승인: 정해진 기간 동안 AI 워커가 트래픽 양을 다시 배우고, 끝나면 원래 평소값으로 돌아간다."""
+        expected = os.getenv("SDN_ADMIN_TOKEN")
+        if expected and x_admin_token != expected:
+            raise HTTPException(status_code=401, detail="관리자 토큰이 올바르지 않습니다.")
+        try:
+            command = build_relearn_command(req)
+        except ManualControlRejected as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        payload = command.model_dump(mode="json")
+        if isinstance(source, RedisBridge):
+            try:
+                receivers = await source.publish(REDIS_CHANNEL_CONTROL_COMMAND, command)
+            except Exception as exc:
+                logger.warning("Relearn command publish failed: %s", exc)
+                raise HTTPException(status_code=503, detail="Redis에 연결할 수 없어 명령을 보내지 못했습니다.") from exc
+            return {"accepted": True, "delivered_to": "redis", "receivers": receivers, "command": payload}
+        await hub.broadcast(make_envelope(REDIS_CHANNEL_CONTROL_COMMAND, payload))
+        return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload}
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

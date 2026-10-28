@@ -20,3 +20,19 @@ export async function sendManualControl({ action, dpid, port, reason, operator, 
   }
   return body;
 }
+
+// Special-situation relearn approval: the AI worker relearns traffic volume for `minutes`, then reverts.
+// dpid/port 0 = every watched access port. Throws Error(detail) on refusal.
+export async function sendRelearn({ minutes, dpid = 0, port = 0, reason, operator, token }) {
+  const res = await fetch(`${resolveApiBase()}/api/control/relearn`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}) },
+    body: JSON.stringify({ minutes, dpid, port, reason, operator }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = Array.isArray(body.detail) ? "입력값을 확인해 주세요." : body.detail;
+    throw new Error(detail || `요청 실패 (${res.status})`);
+  }
+  return body;
+}
