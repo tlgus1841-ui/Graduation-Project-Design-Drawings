@@ -28,11 +28,15 @@ KINDS = ("udp", "icmp")
 
 
 def build_packet(kind: str, dst: str) -> Packet:
+    # scapy의 Packet.__truediv__는 Self 타입 변수를 속성 할당(__truediv__ = __div__)으로
+    # 선언해 mypy가 2단 체이닝에서 타입을 못 풀어낸다(런타임 동작과는 무관한 스텁 한계).
     ip = IP(src=random_public_ip(), dst=dst)
     if kind == "udp":
-        pkt = ip / UDP(sport=random.randint(1024, 65535), dport=random.randint(1, 65535)) / (b"x" * 32)
+        payload = UDP(sport=random.randint(1024, 65535), dport=random.randint(1, 65535))
+        pkt = ip / payload / (b"x" * 32)  # type: ignore[operator]
     elif kind == "icmp":
-        pkt = ip / ICMP(type=8, id=random.randint(0, 65535), seq=random.randint(0, 65535)) / (b"x" * 32)
+        echo = ICMP(type=8, id=random.randint(0, 65535), seq=random.randint(0, 65535))
+        pkt = ip / echo / (b"x" * 32)  # type: ignore[operator]
     else:
         raise ValueError(f"알 수 없는 종류: {kind}")
     return finalize_checksum(pkt)

@@ -64,12 +64,12 @@ try:
     from ryu.app.reroute import RerouteEngine
 except ImportError:
     try:
-        from reroute import RerouteEngine
+        from reroute import RerouteEngine  # type: ignore[no-redef]
     except ImportError:
         import sys
         from pathlib import Path
         sys.path.append(str(Path(__file__).resolve().parent))
-        from reroute import RerouteEngine
+        from reroute import RerouteEngine  # type: ignore[no-redef]
 
 
 # 3단 플로우 테이블: 0 = 종류별로 세기 → 1 = 경고 단계 속도 제한 → 2 = 전달(격리·우회·최단 경로).

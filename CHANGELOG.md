@@ -13,6 +13,31 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] merge: PR #10(공격 판단 기준 세분화)을 main에 통합하며 충돌 해소
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Fix` / `Test`
+* **배경:** `claude/quirky-cerf-h51gg3`(PR #10)과 main이 그사이 각자 `traffic/traffic_scan.py`를 독립적으로 만들어, 이름은 같지만 완전히 다른 두 생성기가 충돌했다. main 쪽 버전은 이번에 superseded된 구(舊) `model/attack_classifier.py`(PORT_SCAN/SLOW_DRIFT, PR #6) 검증용이었고, PR #10 쪽 버전은 새 `model/criteria_engine.py`의 실측 도구(`harness/verification/criteria_measure.py`)가 모듈 경로로 직접 호출하는 쪽이라 PR #10 버전을 남겼다.
+* **주요 변경 파일:**
+  - `traffic/traffic_scan.py`: PR #10 버전(`--kind tcp/udp`, `build_probe`/`run`) 유지. main 버전(`ScanProfile`/`dport_cycle` 기반)은 버림 — `model/attack_classifier.py`가 PR #10에서 그대로(PR #6에서 수정한 delta_pps 기준 유지, `--legacy` 경로로 공존) 들어왔으므로 기능 손실 없음.
+  - `tests/traffic/test_traffic_scan.py`: 옛 API(`ScanProfile` 등) 기준 테스트를 PR #10 버전 API(`parse_ports`/`build_probe`/`run`) 기준으로 새로 작성 (4개).
+  - `traffic/traffic_scan.py`, `traffic/traffic_flood.py`: 병합 후 재검사에서 드러난 scapy `Packet.__truediv__`(2단 체이닝) mypy 오탐 2건을 PR #5와 동일한 `# type: ignore[operator]` 관례로 처리.
+  - `CHANGELOG.md`, `model/inference_worker.py`(모듈 docstring): 두 브랜치가 각자 추가한 안내문 병합(내용 중복 없음, 양쪽 다 유지).
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. `model/attack_classifier.py`·`model/criteria_engine.py` 로직은 병합 중 변경하지 않음(파일명 충돌과 문서 텍스트 충돌만 해소).
+* **검증:** 병합 후 `flake8` 0건, `mypy` 신규 에러 없음(기존 pydantic 버전 불일치 오탐 22건 제외), `pytest` 265 passed.
+* **다음 작업자 인수인계 메모:**
+  - **[공통]** `model/attack_classifier.py`(`SecondaryAttackClassifier`, `--legacy` 경로)와 `model/criteria_engine.py`(기본 경로)가 지금 둘 다 켜져 있습니다. 전자가 여전히 필요한지(이중 탐지 의도) 정리가 필요하면 논의해주세요.
+
+### [2026-10-28] docs(specs): 공격 판단 기준에 실제 논문 출처 추가
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Docs`
+* **배경:** `docs/specs/attack_criteria.md`·`model/criteria_engine.py`에 있던 "Zeek", "Jung 2004" 같은 약식 언급을 검증된 정식 참고문헌으로 교체.
+* **주요 변경 파일:**
+  - `docs/specs/attack_criteria.md` §6 (신규): 서지 정보 7건 추가 — SYN Flood CUSUM(Wang·Zhang·Shin, INFOCOM 2002), 포트 스캔 실패 비율/TRW(Jung et al., IEEE S&P 2004), Zeek 스캔 임계치 원 논문(Paxson, Computer Networks 1999), 내부 확산 차단(Weaver et al., USENIX Security 2004), 평균+3σ EWMA 기준선(Ye·Borror·Zhang, QREI 2002), Slow HTTP 분류(Cambiaso et al., IJTMCC 2013), Flood 유형 분류(Mirkovic·Reiher, ACM SIGCOMM CCR 2004).
+  - `docs/writing/thesis/thesis_draft.md`: 참고문헌 [1]~[3]에 이어 [4]~[10]으로 위 서지 추가.
+  - `model/criteria_engine.py`: 모듈 docstring에 참고문헌 요약 포인터 추가.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 로직·숫자 변경 없이 문서·주석만 수정.
+* **검증:** 각 논문의 제목·저자·학회(지)·연도·DOI를 실제 검색으로 확인. 관련 테스트(`tests/model/test_criteria_engine.py` 26개) 통과, flake8 0건.
+
 ### [2026-10-28] perf(ryu,model): 종류별 개수를 1초마다 읽어 탐지 시간 단축
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Performance` / `Test` / `Docs`
@@ -63,6 +88,41 @@
   - **[박시현]** 컨트롤러에 0 · 1번 테이블이 생겼습니다. 새 전달 규칙은 `add_flow`가 2번 테이블에 넣고, 세는 규칙은 쿠키(`0xC0DE…`)로 구분합니다.
   - **[유재민]** 판단 숫자는 `CriteriaConfig` 한 곳에 있고, 근거는 `docs/specs/attack_criteria.md` §2입니다. 평소값을 다시 학습하려면 `python -m model.inference_worker --learn 600`.
   - Slow HTTP · 내부 확산 · 서비스 상태 신호 · 특수 상황 재학습 승인은 바로 위 항목에서 추가했습니다.
+
+### [2026-10-28] chore: 저장소 전체 mypy/flake8 정리 및 GitHub 브랜치 정리
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Chore` / `Docs`
+* **배경:** "깃허브에 있는 코드를 전체적으로 깔끔하게 정리해달라"는 요청으로 저장소 전체(팀원 파일 포함) 범위의 린트/타입/브랜치 정리를 수행.
+* **주요 변경 파일:**
+  - `traffic/traffic_normal.py`: scapy `Packet.__truediv__`가 `Self` 타입을 속성 할당(`__truediv__ = __div__`)으로 노출해 mypy가 `IP(...) / TCP(...) / bytes(...)` 2단 체이닝을 못 풀어내는 것을 최소 재현 스크립트로 확인 후, 기존 `# type: ignore[no-redef]` 관례와 동일하게 `# type: ignore[operator]`로 처리(런타임/테스트 영향 없음).
+  - `ryu/app/controller.py`: `RerouteEngine` 3단 fallback import의 mypy no-redef 경고를 동일 관례로 처리.
+  - `README.md`: 디렉터리 구조 설명에 누락됐던 `traffic/traffic_scan.py` 추가.
+* **보고만 하고 수정하지 않은 것:** `ryu/app/controller.py`의 `TopologyNode`/`TopologyLink` 호출부 mypy call-arg 12건은 이 샌드박스의 pydantic==2.14.1(프로젝트 고정 2.6.1과 다름) 버전 불일치로 인한 오탐임을 최소 pydantic 모델로 재현해 확인. 실제 결함이 아니므로 손대지 않음 — 팀의 실제 핀 고정 환경(uv.lock)에서 CI 돌릴 때 재현되는지 확인 권장.
+* **GitHub 브랜치 정리 (코드 아님, 커밋 손실 없음):**
+  - main에 이미 merge된 9개 브랜치 삭제: `docs/reorganize-workspace`, `feat/week6-telemetry-pipeline`, `feature/multi-attack-type-defense`, `feature/yoo-jaemin-weeks-7-16`, `fix/harness-topo-lint-mypy`, `fix/topology-bypass-path-visibility`, `integration/week16-final`, `park16week`, `week4-integration`.
+  - `fix/protected-host-isolation-guard`, `fix/yoo-jaemin-counter-overflow-guard`(유재민, 2026-10-12, merge 안 됨): 실제 diff를 떠보니 두 브랜치가 고치려던 내용이 2026-10-12 `fix(all)` 일괄 정렬 때 이미 main에 반영되어 있어(로직 동일, 공백/주석 차이만 있음) 삭제.
+  - `claude/auto-blog-writer-1qwmon`: 이 프로젝트와 무관한 Naver 블로그 자동 작성 봇(Flask 대시보드)이 실수로 이 저장소에 커밋된 것으로 판단, 팀원 확인 후 삭제.
+  - 남긴 것: `main`, `claude/quirky-cerf-h51gg3`(진행 중인 작업으로 보여 유지).
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음.
+* **검증:** `flake8` 0건, `mypy` 신규 에러 없음(기존 pydantic 버전 불일치 오탐 12건 제외), `pytest` 207 passed.
+* **다음 작업자 인수인계 메모:**
+  - **[공통]** 브랜치 목록이 `main`/`claude/quirky-cerf-h51gg3`로 정리됐습니다. 이후 작업은 바로 main에서 새 브랜치를 따서 PR로 merge하는 흐름을 유지해주세요.
+
+### [2026-10-28] fix(model): PORT_SCAN·SLOW_DRIFT 판정 신호를 실제 작동 가능한 신호로 교체
+* **작업자:** 유재민 (Domain Dev & QA) with Claude Code
+* **작업 유형:** `Fix` / `Test`
+* **배경:** 2026-10-14 `feature/multi-attack-type-defense`에서 추가한 PORT_SCAN(`err_rate`=`rx_errors` 임계치)과 SLOW_DRIFT(`duration_sec` EWMA 추세)가 재검토 결과 실제 Mininet/OVS 트래픽에서는 작동할 수 없는 신호였음을 발견. `rx_errors`는 물리/링크 계층 수신 오류 카운터라 체크섬이 정상인 TCP RST(닫힌 포트 응답)에는 전혀 반응하지 않고, 이 프로젝트 공격 트래픽은 `checksum_utils.py`로 체크섬을 일부러 정상화해서 보내므로 코드베이스 안 어떤 트래픽도 `rx_errors`를 움직이지 못함. `duration_sec`은 포트 가동 시간(업타임)일 뿐 트래픽과 무관하게 항상 같은 속도로 흘러가 "공격 추세"를 전혀 반영하지 않음.
+* **주요 변경 파일:**
+  - `model/attack_classifier.py`: `SecondaryAttackClassifier`를 재작성 — 플러드 임계치(`MIN_ATTACK_PPS`=100 PPS) 미달이면서 BPP가 작은(`BPP_ATTACK_MAX` 이하) 트래픽이 `delta_pps`의 EWMA 기준선보다 **증가** 방향으로 벗어날 때만 의심으로 본다(둘 다 실제 OVS 포트 통계에서 관측 가능). 포트 통계만으로는 "포트 스캔"과 "Slow DDoS 전조"를 구조적으로 구분할 수 없으므로, 지속 시간(`SUSTAINED_TICKS_FOR_SLOW_DDOS`=10틱≈20초)으로 나눈다: 짧으면 PORT_SCAN, 오래 계속되면 SLOW_DRIFT로 승격.
+  - `tests/model/test_attack_classifier.py`, `tests/model/test_inference_worker.py`: 새 신호 기준으로 전면 재작성 (err_rate 기반 `ErrorCounters` 테스트 제거, 소형 패킷 서브플러드 버스트/승격 테스트로 교체).
+  - `traffic/traffic_scan.py` (신규), `tests/traffic/test_traffic_scan.py` (신규): 새 탐지 신호를 실제 Mininet 패킷(출발지 IP 스푸핑 없음, 플러드 임계치 미달 PPS로 목적지 포트 순환 SYN)으로 검증·시연할 생성기. `--duration`을 짧게/길게 주면 각각 포트 스캔/Slow DDoS 데모가 된다.
+  - `model/inference_worker.py`: 문서만 보강 — `pipeline/feature_extractor.py`에 이미 Redis 실시간 캡처 CLI(`--label 0/1`)가 있다는 안내 추가(중복 기능 만들지 않음).
+* **발견한 설계 결함 (자체 코드, 즉시 수정):** 위 배경 2건. 유닛 테스트에서만 통과하고 실제 환경에서는 영원히 발동하지 않는 신호였음 — 합성 피처 딕셔너리로만 테스트하면 이런 함정을 못 거른다는 교훈.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. `AttackCategory`/`ThreatType.PORT_SCAN`/`ThreatType.SLOW_DDOS` 등 외부 인터페이스는 그대로, 내부 판정 로직만 교체. `model/inference_worker.py`의 `SecondaryAttackClassifier` 생성 코드도 무변경(인터페이스 동일).
+* **검증:** 신규/변경 테스트 전부 통과, `tests/` 전체(api·benchmarks 포함) 회귀 통과, flake8/mypy 0건.
+* **다음 작업자 인수인계 메모:**
+  - **[공통]** `docs/writing/reports/verification/multi_attack_type_defense_v2_fix_report.md`에 상세 재설계 배경과 재검증 결과 정리.
+  - **[유재민]** 실데이터 F1 측정(2026-10-11 인수인계 메모)은 캡처 도구(`pipeline/feature_extractor.py --label`)가 이미 있으므로, GCP Mininet에서 정상/공격 구간을 캡처해 재학습·재측정하는 실행만 남음 (코드 작업 아님).
 
 ### [2026-10-14] fix(ui,control): 비상 수동 제어 입력 튐 · 공격 중 복원 무효 수정, BPP 그래프 가시성 개선
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code

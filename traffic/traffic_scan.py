@@ -41,7 +41,9 @@ def build_probe(kind: str, src: str, dst: str, port: int) -> Packet:
     if kind == "tcp":
         pkt = IP(src=src, dst=dst) / TCP(sport=sport, dport=port, flags="S")
     else:
-        pkt = IP(src=src, dst=dst) / UDP(sport=sport, dport=port) / b""
+        # scapy의 Packet.__truediv__는 Self 타입 변수를 속성 할당(__truediv__ = __div__)으로
+        # 선언해 mypy가 2단 체이닝에서 타입을 못 풀어낸다(런타임 동작과는 무관한 스텁 한계).
+        pkt = IP(src=src, dst=dst) / UDP(sport=sport, dport=port) / b""  # type: ignore[operator]
     return finalize_checksum(pkt)
 
 
