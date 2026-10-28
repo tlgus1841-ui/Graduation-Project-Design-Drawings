@@ -13,7 +13,7 @@
                   절반 이상이 실패(Jung 2004). 느린 스캔 = 긴 창(5분, Zeek)에 30개 이상이고 지금도 실패가
                   나오는 중(짧은 창에 1개 이상). 긴 창에는 정상 연결도 수백 개 섞이므로 비율은 보지 않는다.
                   UDP 스캔은 대상 서버가 ICMP 도달 불가를 처음 6개 뒤 초당 1개로 제한해서(리눅스 기본값)
-                  응답이 적으므로, 짧은 창에 도달 불가 3개 이상이면 따로 스캔으로 본다
+                  응답이 적으므로, 짧은 창에 도달 불가 4개 이상이면 따로 스캔으로 본다
 * 확정된 공격의 세기(값 / 판정선)가 M 이상이면 위험(DANGER, 격리 + 우회), 아니면 경고(WARNING, 속도 제한).
 * 평소값: 미리 학습해 저장한 값(criteria_baseline.json)으로 시작하고, 정상일 때만 2초마다 EWMA로
   갱신한다(최근 약 10분 기억). 갱신된 평균·표준편차는 사전 학습값 ~ 2배 사이에서만 움직인다.
@@ -56,13 +56,13 @@ class CriteriaConfig:
     # SYN Flood: 기준선을 넘은 차이의 누적(패킷). 약한 공격(초당 100개)은 한 주기(2초) 안에 넘는다
     cusum_h: float = 100.0
     # 포트 스캔: 빠른 스캔(짧은 창, scan_window주기)과 느린 스캔(긴 창, scan_long_window주기 = 5분)의
-    # 실패 응답 수. 정상 최대: 짧은 창 2개, 긴 창 13개, 도달 불가 짧은 창 1개
+    # 실패 응답 수. 정상 최대: 짧은 창 2개, 긴 창 13개, 도달 불가 짧은 창 2개
     scan_min: float = 15.0
     scan_ratio: float = 0.5
     scan_window: int = 2
     scan_long_min: float = 30.0
     scan_long_window: int = 150
-    scan_unreach_min: float = 3.0
+    scan_unreach_min: float = 4.0
     # 확정된 공격의 세기(값 / 판정선)가 M 이상이면 경고를 건너뛰고 위험.
     # 측정한 약한 공격은 2배, 강한 공격(초당 1000개)은 20배 → 그 사이의 5배
     strong_multiplier: float = 5.0
@@ -189,7 +189,7 @@ class CriteriaEngine:
 
         candidates: Dict[str, float] = {}
         # 포트 스캔: 받은 실패 응답 수. 빠른 스캔(Zeek 15개 + TRW 실패 비율), 느린 스캔(5분 30개),
-        # UDP 스캔(도달 불가 3개). 세기는 그중 가장 큰 배율
+        # UDP 스캔(도달 불가 4개). 세기는 그중 가장 큰 배율
         st.window.append((r["fail"] * dt, r.get("unreach_in", 0.0) * dt,
                           (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt))
         while len(st.window) > cfg.scan_long_window:

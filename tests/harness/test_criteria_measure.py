@@ -1,6 +1,8 @@
+import json
+
 import pytest
 
-from harness.verification.criteria_measure import phase_of, rate_samples, summarize
+from harness.verification.criteria_measure import analyze_e2e, phase_of, rate_samples, summarize
 
 
 def _counts(t, **packets):
@@ -48,6 +50,23 @@ def test_phase_of_gives_a_short_attack_its_own_first_reports():
     assert phase_of(34.0, phases) == "scan"  # late report: the most recently ended phase
     assert phase_of(37.0, phases) is None  # past the scan's lag, before the quiet's skip ends
     assert phase_of(40.0, phases) == "quiet"
+
+
+def test_analyze_e2e_sees_the_last_attacks_late_alert(tmp_path):
+    phases = [{"name": "normal", "start": 0.0, "end": 100.0, "skip": 10.0},
+              {"name": "quiet", "start": 100.0, "end": 130.0, "skip": 6.0},
+              {"name": "tcp_scan", "start": 130.0, "end": 132.0}]
+    (tmp_path / "phases.json").write_text(json.dumps({"phases": phases}))
+    events = [{"t": 134.3, "kind": "alert", "stage": "DANGER", "threat": "PORT_SCAN"},
+              {"t": 134.3, "kind": "command", "action": "ISOLATE"}]
+    (tmp_path / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events))
+    (tmp_path / "ping_legit.txt").write_text(
+        "".join(f"[{t:.3f}] 64 bytes from 10.0.0.4: icmp_seq={n} ttl=64 time=0.5 ms\n"
+                for n, t in enumerate(range(1, 139), start=1)) + "138 packets transmitted, 138 received\n")
+    report = analyze_e2e(tmp_path, tmp_path / "events.jsonl")
+    scan = report["tcp_scan"]
+    assert scan["first_alert_after_s"] == 4.3 and scan["first_stage"] == "DANGER"  # after the attack process ended
+    assert scan["commands"] == ["ISOLATE"] and report["normal"]["alerts"] == 0
 
 
 @pytest.mark.parametrize("value", [0.0])

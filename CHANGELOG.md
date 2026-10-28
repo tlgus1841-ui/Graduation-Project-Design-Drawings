@@ -13,6 +13,25 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-28] feat(ryu,model): 8주차 공격 · 정상 판단 기준 구현, 기준 숫자 실측
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feature` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`: 파이프라인을 3단 테이블로 변경 (0 = 종류별로 세는 규칙, 1 = 경고 단계 속도 제한, 2 = 기존 전달 · 격리 · 우회). 접속 호스트마다 SYN · FIN · RST · UDP · ICMP · 받은 RST · 받은 도달 불가를 세고 2초마다 `sdn:stats:flowcount`로 발행. 경고(WARNING) 경보는 그 포트의 그 공격 종류 패킷만 미터로 초당 50개 제한, 10초 동안 경보가 없으면 해제. 위험(DANGER)은 기존 격리 + 우회
+  - `harness/contracts/sdn_events.py`: `FlowCountMessage`, `RiskStage`, `AnomalyAlertMessage.stage`(기본값 DANGER라 기존 송신자 호환), `DefenseAction.RATE_LIMIT/UNLIMIT`, `WARNING_RATE_LIMIT_PPS = 50`, `WARNING_HOLD_SEC = 10`
+  - `model/criteria_engine.py` (신규): 기준표 판단 엔진. 기준선 = max(평균 + 3σ, 최소값), SYN Flood = SYN − (FIN+RST) 누적(CUSUM), UDP · ICMP Flood = 평소의 10배 + 초당 50개, 포트 스캔 = 받은 실패 응답(4초 15개 · 5분 30개 · 도달 불가 4개), 2회 연속 확정, 판정선의 5배 이상이면 위험. 평소값은 사전 학습 파일로 시작해 EWMA(약 10분)로 갱신, 사전 학습값 ~ 2배로 제한
+  - `model/criteria_baseline.json` (신규): 정상 10분 실측으로 학습한 포트 · 지표별 평소값
+  - `model/inference_worker.py`: 기준표 모드가 기본 (`--legacy`로 기존 AI 점수 판단). 경보에 단계 · 공격 종류 · 이유를 담고, AI 점수는 metadata에 참고로만 남김. `--learn 초`로 평소값 학습
+  - `traffic/normal_user.py`, `traffic/traffic_flood.py`, `traffic/traffic_scan.py` (신규): 정상 사용자 시나리오 5종 + 닫힌 포트 실수, UDP · ICMP Flood, TCP · UDP 포트 스캔
+  - `harness/verification/criteria_measure.py` (신규): 정상 10분 + 공격 9종 측정, 평소값 파일 생성, 방어를 켠 검증 리포트
+  - `docs/specs/attack_criteria.md` (신규): 세는 규칙, 실측 평소값, 숫자를 정한 방법(정상 최대의 2배 여유), 단계별 대응, 검증 결과
+  - `tests/ryu/test_count_and_warning.py`, `tests/model/test_criteria_engine.py`, `tests/harness/test_criteria_measure.py`, `tests/model/test_inference_worker.py`: 회귀 테스트
+* **영향 범위 및 주의사항 (Breaking Changes):** 컨트롤러의 전달 · 격리 · 우회 규칙이 2번 테이블로 옮겨짐 (`add_flow` 기본 `table_id=2`). 기존 경보 송신자(`stage` 없음)는 그대로 위험 단계로 처리됨. 추론 워커 기본 동작이 기준표 판단으로 바뀜 (기존 방식은 `--legacy`)
+* **다음 작업자 인수인계 메모:**
+  - **[박시현]** 컨트롤러에 0 · 1번 테이블이 생겼습니다. 새 전달 규칙은 `add_flow`가 2번 테이블에 넣고, 세는 규칙은 쿠키(`0xC0DE…`)로 구분합니다.
+  - **[유재민]** 판단 숫자는 `CriteriaConfig` 한 곳에 있고, 근거는 `docs/specs/attack_criteria.md` §2입니다. 평소값을 다시 학습하려면 `python -m model.inference_worker --learn 600`.
+  - Slow HTTP · 내부 확산 · 서비스 상태 신호 · 특수 상황 재학습 승인은 아직 없습니다 (명세 §5).
+
 ### [2026-10-14] fix(ui,control): 비상 수동 제어 입력 튐 · 공격 중 복원 무효 수정, BPP 그래프 가시성 개선
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Fix` / `Test` / `Docs`

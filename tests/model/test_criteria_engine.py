@@ -103,6 +103,10 @@ def test_udp_scan_few_unreachables_still_count():
     out = run(engine, c, NORMAL, {"udp": 150, "unreach_in": 3}, NORMAL, NORMAL)
     assert stages(out)[2][1] == ThreatType.PORT_SCAN.value  # 6 unreachables inside the short window
 
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, {**NORMAL, "unreach_in": 1.5}, NORMAL, NORMAL)  # 3 in 4 s: under the threshold of 4
+    assert all(s is None or s[1] is None for s in stages(out))
+
 
 def test_occasional_closed_port_mistake_is_not_a_scan():
     engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()

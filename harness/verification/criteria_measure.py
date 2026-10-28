@@ -34,6 +34,8 @@ PORT_STATS = "sdn:stats:port"
 PORTS = {(1, 1): "S1:1 H_legit", (1, 2): "S1:2 H_attacker", (4, 1): "S4:1 H_server"}
 KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")
 DERIVED = ("gap", "fail", "pps")  # gap = syn-(fin+rst), fail = rst_in+unreach_in, pps = 포트 전체 수신
+# 쉬는 구간의 앞부분(초)은 직전 공격의 늦은 보고와 복구 시간이라 쉬는 구간 통계에서 뺀다
+QUIET_SKIP = 6.0
 
 ATTACKS: List[Tuple[str, str, int]] = [
     ("syn_strong", "traffic.traffic_attack --dst 10.0.0.4 --min-pps 1000 --max-pps 1000 --duration 20", 20),
@@ -179,9 +181,9 @@ def analyze_e2e(out_dir: Path, events_path: Path) -> dict:
     report: Dict[str, dict] = {"whole_run_legit_loss": window_loss(times, ping["received_seqs"], 0, 1e12)}
     for i, ph in enumerate(phases):
         start = ph["start"] + ph.get("skip", 0.0)
-        # 공격 구간은 끝난 뒤의 조용한 구간 앞부분(복구 시간)까지 본다
-        end = ph["end"] + (phases[i + 1]["skip"] if i + 1 < len(phases) and ph["name"] not in ("normal", "quiet")
-                           else 0.0)
+        # 공격 구간은 끝난 뒤의 조용한 구간 앞부분(복구 시간)까지 본다. 마지막 공격은 그만큼 늘려서 본다
+        tail = phases[i + 1].get("skip", 0.0) if i + 1 < len(phases) else QUIET_SKIP
+        end = ph["end"] + (tail if ph["name"] not in ("normal", "quiet") else 0.0)
         alerts = [e for e in events if e["kind"] == "alert" and start <= e["t"] <= end]
         commands = [e for e in events if e["kind"] == "command" and start <= e["t"] <= end]
         watch = [e for e in events if e["kind"] == "decision" and e["stage"] == "WATCH" and start <= e["t"] <= end]
@@ -250,12 +252,12 @@ def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optio
         for name, cmd, _ in attacks:
             q0 = time.time()
             time.sleep(gap)
-            phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": 6.0})
+            phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": QUIET_SKIP})
             a0 = time.time()
             log = attacker.cmd(f"cd {REPO_ROOT} && {VENV_PY} -m {cmd}")
             phases.append({"name": name, "start": a0, "end": time.time(), "log": log.strip()[-200:]})
             print(f"[criteria_measure] {name}: {log.strip()[-120:]}", flush=True)
-        time.sleep(4)
+        time.sleep(QUIET_SKIP)  # 마지막 공격의 늦은 보고까지 받는다
     finally:
         (out_dir / "phases.json").write_text(json.dumps({"phases": phases}, ensure_ascii=False, indent=1))
         for h in net.hosts:
