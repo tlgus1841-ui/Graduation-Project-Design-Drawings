@@ -13,6 +13,25 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-28] feat(ryu,model,api,ui): 서비스 악화 조건 · Slow HTTP · 내부 확산 · 특수 상황 재학습 승인
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Feature` / `Test` / `Docs`
+* **주요 변경 파일:**
+  - `ryu/app/controller.py`: **서비스 상태 확인** — 정상 사용자 자리(S1)에서 보호 서버로 0.2초마다 ICMP echo(가상 출발지 10.0.0.250, 컨트롤러가 ARP 대답)를 넣고, 2초마다 손실 · 왕복 시간을 `sdn:health:service`로 발행. **내부 확산** — Proxy ARP에서 접속 호스트가 물어본 없는 내부 주소를 세어 `arp_fail`로 함께 발행. 경고 단계 속도 제한에 Slow HTTP · 내부 확산(SYN) 추가
+  - `pipeline/server_conn_agent.py` (신규): 서버의 열린 HTTP 연결을 `ss`로 2초마다 읽어 접속 PC별 느린 요청 수를 `sdn:stats:serverconn`으로 발행 (20초 넘게 요청이 안 끝나고 응답 전, 초당 500B 미만. Apache mod_reqtimeout과 같은 기준)
+  - `model/criteria_engine.py`: 위험 = 공격 확정 + (판정선 5배 이상 **또는 서비스 악화 2회 연속**: 손실 25% · 평균 왕복 10ms, 정상 10분 최대의 2배). Slow HTTP(느린 요청 10개), 내부 확산(5분 25개, Zeek), 스캔 실패 응답은 보낸 연결 시도의 2배까지만 셈, 승인된 재학습(양만 · 위험 크기 제외 · 기간 뒤 복귀)
+  - `model/inference_worker.py`: 서비스 상태 · 서버 연결 · RELEARN 명령 구독
+  - `harness/contracts/sdn_events.py`: `ServiceHealthMessage`, `ServerConnMessage`, `ACCESS_HOST_PORTS`, `ThreatType.INTERNAL_SPREAD`, `CountKind.ARP_FAIL`, `DefenseAction.RELEARN`, `ControlCommandMessage.duration_sec`(선택)
+  - `api/main.py`, `api/manual_control.py`: `POST /api/control/relearn` (기간 1~240분, 사유, 관리자 토큰)
+  - `ui/src/components/RelearnControl.jsx` (신규), `ui/src/App.jsx`, `ui/src/lib/api.js`, `ui/src/lib/towerState.js`: 관제탑 "특수 상황 재학습" 승인 버튼 · 창
+  - `traffic/traffic_slowhttp.py`, `traffic/traffic_spread.py` (신규): Slowloris 방식 Slow HTTP, 내부 확산(445 포트)
+  - `harness/verification/criteria_measure.py`: 서비스 상태 · 서버 연결 기록, 시나리오 추가(중간 ICMP, 서버 장애 + 약한 UDP, Slow HTTP 30 · 150개, 내부 확산), 마지막 공격 뒤에도 쉬는 구간
+  - `docs/specs/attack_criteria.md`: 새 기준과 숫자, 검증 결과, 한계
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음 (새 채널 · 필드는 추가만). 컨트롤러가 S1에 초당 5개의 확인 ping을 넣는다
+* **다음 작업자 인수인계 메모:**
+  - **[박시현]** 컨트롤러에 `_probe_loop`(서비스 상태 확인)와 `arp_fail_targets`(내부 확산)가 생겼습니다. 가상 주소 10.0.0.250은 실제 호스트에 쓰면 안 됩니다.
+  - **[유재민]** Slow HTTP를 쓰려면 서버에서 `python -m pipeline.server_conn_agent`를 같이 띄워야 합니다 (테스트베드는 `criteria_measure`가 자동으로 띄움).
+
 ### [2026-10-28] feat(ryu,model): 8주차 공격 · 정상 판단 기준 구현, 기준 숫자 실측
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
 * **작업 유형:** `Feature` / `Test` / `Docs`
@@ -30,7 +49,7 @@
 * **다음 작업자 인수인계 메모:**
   - **[박시현]** 컨트롤러에 0 · 1번 테이블이 생겼습니다. 새 전달 규칙은 `add_flow`가 2번 테이블에 넣고, 세는 규칙은 쿠키(`0xC0DE…`)로 구분합니다.
   - **[유재민]** 판단 숫자는 `CriteriaConfig` 한 곳에 있고, 근거는 `docs/specs/attack_criteria.md` §2입니다. 평소값을 다시 학습하려면 `python -m model.inference_worker --learn 600`.
-  - Slow HTTP · 내부 확산 · 서비스 상태 신호 · 특수 상황 재학습 승인은 아직 없습니다 (명세 §5).
+  - Slow HTTP · 내부 확산 · 서비스 상태 신호 · 특수 상황 재학습 승인은 바로 위 항목에서 추가했습니다.
 
 ### [2026-10-14] fix(ui,control): 비상 수동 제어 입력 튐 · 공격 중 복원 무효 수정, BPP 그래프 가시성 개선
 * **작업자:** 김관우 (PM & Tech Writer) with Claude Code
