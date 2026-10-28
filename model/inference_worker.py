@@ -12,6 +12,11 @@ AnomalyModel(Isolation Forest) 점수와 DetectionGuard(BPP ≤ 80 그리고 점
 
 실행 (Ryu·Redis 실행 중):
     uv run python -m model.inference_worker --model model/isolation_forest.joblib --log events.jsonl
+
+실데이터 재학습/실데이터 F1 측정: pipeline/feature_extractor.py가 이미 Redis sdn:stats:port를
+구독해 --label 0/1로 레이블링된 CSV를 기록하는 캡처 CLI를 제공한다
+(uv run python pipeline/feature_extractor.py --label 0 --out dataset/real_normal.csv 등).
+이 워커는 그 CSV를 --train-csv로 받아 학습하는 소비자 쪽이므로 별도 캡처 기능을 두지 않는다.
 """
 
 from __future__ import annotations

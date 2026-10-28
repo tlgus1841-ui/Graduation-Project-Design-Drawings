@@ -68,44 +68,43 @@ def test_single_spike_and_low_rate_small_packets_do_not_alert(model):
         assert worker.process(c.tick(trickle)) == []
 
 
-class ErrorCounters(Counters):
-    """Counters that can also advance a per-port rx_errors counter (for port-scan tests)."""
+def test_small_packet_burst_below_flood_threshold_is_confirmed_as_port_scan(model):
+    """DDoS 외 공격 유형: 플러드 임계치(100 PPS)에는 못 미치지만, 평온한 기준선 대비
+    튀는 소형 패킷(포트 순환 SYN 등) 버스트는 PORT_SCAN으로 확정되어야 한다."""
+    worker, c = InferenceWorker(model), Counters()
+    quiet = {1: (20, 98), 2: (5, 60), 3: (20, 98)}  # 포트 2: 조용한 기준선 (플러드 아님)
+    scan = {1: (20, 98), 2: (80, 60), 3: (20, 98)}  # 포트 2: 여전히 플러드 임계치 미달이지만 급등
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.errors = {1: 0, 2: 0, 3: 0}
-
-    def tick(self, rates, error_rates=None):  # noqa: D401 - small test helper
-        self.t += 2.0
-        for port, (pps, size) in rates.items():
-            self.pkts[port] += int(pps * 2)
-            self.bytes[port] += int(pps * 2 * size)
-        for port, err_pps in (error_rates or {}).items():
-            self.errors[port] += int(err_pps * 2)
-        stats = [
-            PortStatItem(dpid=1, port_no=p, rx_packets=self.pkts[p], tx_packets=0, rx_bytes=self.bytes[p],
-                         tx_bytes=0, rx_errors=self.errors[p], duration_sec=60)
-            for p in self.pkts
-        ]
-        return PortStatsMessage(timestamp=self.t, dpid=1, stats=stats)
-
-
-def test_port_scan_on_watched_port_is_confirmed_as_port_scan(model):
-    """DDoS 외 공격 유형: 패킷량은 평범한데 에러율만 뚜렷하게 높은 포트 스캔류 트래픽."""
-    worker, c = InferenceWorker(model), ErrorCounters()
-    scan = {1: (20, 98), 2: (30, 90), 3: (20, 98)}  # H_attacker 포트: PPS는 평범
-    scan_errors = {2: 20}  # 그런데 30개 중 20개가 에러(닫힌 포트 등) -> err_rate 매우 높음
-
-    worker.process(c.tick(scan, scan_errors))  # baseline
-    worker.process(c.tick(scan, scan_errors))  # 1st suspicious sample
-    alerts = worker.process(c.tick(scan, scan_errors))  # 2nd -> confirmed
+    for _ in range(6):
+        worker.process(c.tick(quiet))  # EWMA 기준선 확보 (warmup)
+    worker.process(c.tick(scan))  # 1st suspicious sample
+    alerts = worker.process(c.tick(scan))  # 2nd -> confirmed
 
     assert len(alerts) == 1
     assert alerts[0].in_port == 2
     assert alerts[0].threat_type == "PORT_SCAN"
 
 
-def test_normal_error_free_traffic_never_triggers_port_scan(model):
-    worker, c = InferenceWorker(model), ErrorCounters()
-    for _ in range(5):
+def test_sustained_small_packet_burst_escalates_to_slow_ddos(model):
+    """같은 소형 패킷 버스트가 오래(SUSTAINED_TICKS_FOR_SLOW_DDOS 이상) 계속되면
+    탐색성 버스트(포트 스캔)가 아니라 저속·장기 지속 공격(Slow DDoS)으로 승격한다."""
+    worker, c = InferenceWorker(model), Counters()
+    quiet = {1: (20, 98), 2: (5, 60), 3: (20, 98)}
+    burst = {1: (20, 98), 2: (80, 60), 3: (20, 98)}
+
+    for _ in range(6):
+        worker.process(c.tick(quiet))
+
+    threat_types = []
+    for _ in range(15):
+        alerts = worker.process(c.tick(burst))
+        threat_types.extend(a.threat_type for a in alerts)
+
+    assert "PORT_SCAN" in threat_types  # 처음엔 짧은 버스트로 분류됨
+    assert threat_types[-1] == "SLOW_DDOS"  # 계속되니 Slow DDoS로 승격
+
+
+def test_normal_steady_traffic_never_triggers_secondary_classifier(model):
+    worker, c = InferenceWorker(model), Counters()
+    for _ in range(20):
         assert worker.process(c.tick(NORMAL)) == []
