@@ -275,3 +275,30 @@ def test_relearn_does_not_learn_from_a_danger_level_attack():
     out = run(engine, c, *[{**NORMAL, "udp": 2000}] * 5)
     assert out[-1][0].stage == RiskStage.DANGER
     assert engine.baseline(PORT, "udp").mean < 1.0
+
+
+class Counts1(Counts):
+    """Same as Counts but the controller reports every second."""
+
+    def tick(self, rates):
+        self.t += 1.0
+        for k in KINDS:
+            self.n[k] += rates.get(k, 0)
+        return FlowCountMessage(timestamp=self.t, dpid=1, counts=[
+            FlowCountItem(port_no=2, kind=k, packets=int(v)) for k, v in self.n.items()])
+
+
+def test_one_second_reports_confirm_in_two_seconds_with_the_same_windows():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts1()
+    out = run(engine, c, NORMAL, {**NORMAL, "udp": 1000}, {**NORMAL, "udp": 1000})
+    assert stages(out)[1:] == [(RiskStage.WATCH, None), (RiskStage.DANGER, ThreatType.UDP_FLOOD.value)]
+
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts1()
+    # 4 failures a second: 16 in the 4-second short window only once 4 reports are in it
+    out = run(engine, c, NORMAL, *[{"syn": 4, "rst_in": 4}] * 5)
+    assert [s[1] for s in stages(out)[1:]] == [None, None, None, None, ThreatType.PORT_SCAN.value]
+
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts1()
+    run(engine, c, NORMAL, *[{**NORMAL, "udp": 8}] * 12)  # learning resumes after 10 s: reports 10, 11, 12
+    a = 2 / 601  # 10 minutes of one-second reports
+    assert engine.baseline(PORT, "udp").mean == pytest.approx(8 - 7.5 * (1 - a) ** 3)

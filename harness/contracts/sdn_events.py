@@ -26,8 +26,12 @@ REDIS_CHANNEL_PORT_STATS = "sdn:stats:port"
 REDIS_CHANNEL_ANOMALY_ALERT = "sdn:anomaly:alert"
 REDIS_CHANNEL_CONTROL_COMMAND = "sdn:control:command"
 REDIS_CHANNEL_TOPOLOGY_SYNC = "sdn:topology:sync"
-# Ryu -> AI Worker: 접속 포트별·패킷 종류별 누적 개수 (공격 종류별 판단 기준용, 2초 주기)
+# Ryu -> AI Worker: 접속 포트별·패킷 종류별 누적 개수 (공격 종류별 판단 기준용, 1초 주기)
 REDIS_CHANNEL_FLOW_COUNTS = "sdn:stats:flowcount"
+# 컨트롤러가 스위치에 묻는 주기(초). 종류별 개수는 탐지가 빠르도록 1초, 포트 통계·서비스 상태는 2초
+# (2회 연속 확인 = 2초. 2초 주기일 때는 공격이 보고 직후에 시작하면 확정까지 약 4초가 걸렸다)
+FLOW_COUNT_INTERVAL_SEC = 1.0
+PORT_STATS_INTERVAL_SEC = 2.0
 # Ryu -> AI Worker: 보호 서버 응답 확인(손실·지연) 결과, 2초 주기 (위험 단계의 서비스 악화 조건)
 REDIS_CHANNEL_SERVICE_HEALTH = "sdn:health:service"
 
@@ -131,7 +135,7 @@ class FlowCountItem(BaseModel):
 
 
 class FlowCountMessage(BaseModel):
-    """Per-kind packet counts published by Ryu every 2 seconds (Channel: sdn:stats:flowcount)."""
+    """Per-kind packet counts published by Ryu every FLOW_COUNT_INTERVAL_SEC (Channel: sdn:stats:flowcount)."""
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp (seconds)")
     dpid: int = Field(..., description="Switch Datapath ID reporting the counts")
     counts: List[FlowCountItem] = Field(default_factory=list)

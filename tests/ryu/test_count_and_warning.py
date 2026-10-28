@@ -148,3 +148,25 @@ def test_missing_internal_hosts_asked_by_arp_are_counted_per_access_port():
     body = controller.redis_client.publish.call_args.args[1]
     counts = {(c["port_no"], c["kind"]): c["packets"] for c in json.loads(body)["counts"]}
     assert counts[(2, "syn")] == 40 and counts[(2, "arp_fail")] == 2 and counts[(1, "arp_fail")] == 0
+
+
+def test_monitor_loop_counts_every_second_and_port_stats_every_two():
+    controller = SelfDefendingSDNController()
+    dp = MagicMock()
+    dp.id = 1
+    controller.datapaths = {1: dp}
+    controller._request_stats = MagicMock()
+    controller._request_count_stats = MagicMock()
+    controller._publish_service_health = MagicMock()
+    hub = _module["hub"]
+    original = hub.sleep
+    hub.sleep = MagicMock(side_effect=[None] * 4 + [StopIteration])
+    try:
+        controller._monitor_loop()
+    except StopIteration:
+        pass
+    finally:
+        hub.sleep = original
+    assert hub.sleep is original
+    assert controller._request_count_stats.call_count == 4  # 4 one-second ticks
+    assert controller._request_stats.call_count == 2 and controller._publish_service_health.call_count == 2

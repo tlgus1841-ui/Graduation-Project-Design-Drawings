@@ -31,6 +31,8 @@ from harness.contracts.sdn_events import (
     MANUAL_RESTORE_HOLD_SEC,
     REDIS_CHANNEL_ANOMALY_ALERT,
     REDIS_CHANNEL_CONTROL_COMMAND,
+    FLOW_COUNT_INTERVAL_SEC,
+    PORT_STATS_INTERVAL_SEC,
     REDIS_CHANNEL_FLOW_COUNTS,
     REDIS_CHANNEL_SERVICE_HEALTH,
     REDIS_CHANNEL_TOPOLOGY_SYNC,
@@ -276,19 +278,25 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 )
 
     def _monitor_loop(self):
-        """2초 주기로 활성 스위치 전체에 포트 통계 요청 발송"""
+        """종류별 개수는 1초마다, 포트 통계·서비스 상태는 2초마다 요청·발행"""
+        port_every = max(1, round(PORT_STATS_INTERVAL_SEC / FLOW_COUNT_INTERVAL_SEC))
+        tick = 0
         while True:
-            hub.sleep(2.0)
+            hub.sleep(FLOW_COUNT_INTERVAL_SEC)
+            tick += 1
+            port_round = tick % port_every == 0
             for dp in list(self.datapaths.values()):
                 try:
-                    self._request_stats(dp)
+                    if port_round:
+                        self._request_stats(dp)
                     if dp.id in self.count_dpids:
                         self._request_count_stats(dp)
                 except Exception as e:
                     self.logger.warning(
                         f"[Telemetry] Stats request failed for S{dp.id}: {e}"
                     )
-            self._publish_service_health()
+            if port_round:
+                self._publish_service_health()
 
     def _probe_loop(self):
         """서비스 상태 확인 ping을 0.2초마다 보낸다 (S1이 연결돼 있을 때만)"""

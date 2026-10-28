@@ -66,23 +66,24 @@ class CriteriaConfig:
     attack_floors: Dict[str, float] = field(default_factory=lambda: {"udp": 50.0, "icmp": 50.0, "gap": 50.0})
     # SYN Flood: 기준선을 넘은 차이의 누적(패킷). 약한 공격(초당 100개)은 한 주기(2초) 안에 넘는다
     cusum_h: float = 100.0
-    # 포트 스캔: 빠른 스캔(짧은 창, scan_window주기)과 느린 스캔(긴 창, scan_long_window주기 = 5분)의
-    # 실패 응답 수. 정상 최대: 짧은 창 2개, 긴 창 13개, 도달 불가 짧은 창 2개
+    # 포트 스캔: 빠른 스캔(짧은 창 4초)과 느린 스캔(긴 창 5분)의 실패 응답 수.
+    # 정상 최대: 짧은 창 2개, 긴 창 13개, 도달 불가 짧은 창 2개
     scan_min: float = 15.0
     scan_ratio: float = 0.5
-    scan_window: int = 2
+    scan_window_sec: float = 4.0
     scan_long_min: float = 30.0
-    scan_long_window: int = 150
+    scan_long_window_sec: float = 300.0
     scan_unreach_min: float = 4.0
     # 확정된 공격의 세기(값 / 판정선)가 M 이상이면 경고를 건너뛰고 위험.
     # 측정한 약한 공격은 2배, 강한 공격(초당 1000개)은 20배 → 그 사이의 5배
     strong_multiplier: float = 5.0
+    # 공격 종류 확정 = 판정선을 넘은 보고가 이만큼 연속 (보고 주기는 컨트롤러가 정한다: FLOW_COUNT_INTERVAL_SEC)
     confirm_intervals: int = 2
-    # 주의는 2주기(4초) 연속 정상이면 해제, 학습은 5주기(10초) 연속 정상부터 재개
-    watch_clear_intervals: int = 2
-    learn_resume_intervals: int = 5
-    # EWMA: 2초 주기로 최근 약 10분(300주기)을 기억 → α = 2 / (300 + 1)
-    ewma_alpha: float = 2.0 / 301.0
+    # 주의는 4초 연속 정상이면 해제, 학습은 10초 연속 정상부터 재개
+    watch_clear_sec: float = 4.0
+    learn_resume_sec: float = 10.0
+    # EWMA: 최근 약 10분을 기억 (보고 주기 dt마다 α = 2 / (600 / dt + 1), 2초 주기면 2 / 301)
+    ewma_memory_sec: float = 600.0
     # 갱신된 평소값의 상한 = 사전 학습값 × cap_multiplier (하한 = 사전 학습값)
     cap_multiplier: float = 2.0
     # 서비스 악화: 서비스 상태 확인 ping의 손실(%) 또는 평균 왕복 시간(ms)이 이 값 이상인 보고가 health_confirm번 연속.
@@ -92,9 +93,9 @@ class CriteriaConfig:
     health_rtt_ms: float = 10.0
     health_confirm: int = 2
     health_stale_sec: float = 6.0
-    # 특수 상황 재학습(관리자 승인): 다시 배우는 지표와 속도. 2초 주기로 최근 약 1분(30주기) → α = 2 / 31
+    # 특수 상황 재학습(관리자 승인): 다시 배우는 지표와 속도 (최근 약 1분 기억)
     relearn_indicators: Tuple[str, ...] = ("syn", "udp", "icmp")
-    relearn_alpha: float = 2.0 / 31.0
+    relearn_memory_sec: float = 60.0
     # 내부 확산: 긴 창(5분)에 물어본 없는 내부 주소 수 (Zeek 25개)
     spread_min: float = 25.0
     # Slow HTTP: 한 PC의 느린 요청 연결 수. 정상 측정에서는 0개
@@ -152,11 +153,16 @@ class _PortState:
     baselines: Dict[str, Baseline] = field(default_factory=dict)
     cusum: float = 0.0
     streaks: Dict[str, int] = field(default_factory=dict)
-    # (실패 응답, 도달 불가, 연결 시도, 없는 내부 주소) — 보고 주기마다 개수
-    window: Deque[Tuple[float, float, float, float]] = field(default_factory=deque)
+    # (보고 시각, 실패 응답, 도달 불가, 연결 시도, 없는 내부 주소) — 보고 주기마다 개수
+    window: Deque[Tuple[float, float, float, float, float]] = field(default_factory=deque)
     stage: RiskStage = RiskStage.NORMAL
-    normal_streak: int = 0
+    normal_for: float = 0.0  # 연속으로 정상이었던 시간(초)
     relearn_until: float = 0.0  # 관리자가 승인한 재학습이 끝나는 시각 (0 = 재학습 아님)
+
+
+def _alpha(memory_sec: float, dt: float) -> float:
+    """EWMA 계수: 보고 주기 dt로 최근 memory_sec초를 기억한다 (α = 2 / (N + 1), N = 기억할 보고 수)."""
+    return 2.0 / (memory_sec / dt + 1.0)
 
 
 def indicator_rates(counts: Dict[str, int], prev: Dict[str, int], dt: float) -> Optional[Dict[str, float]]:
@@ -282,16 +288,17 @@ class CriteriaEngine:
         # 실패 응답은 이 PC가 보낸 연결 시도에 대한 답이어야 스캔이다: 한 주기에 보낸 시도의 2배까지만 센다.
         # (서버가 이 PC의 오래된 연결을 한꺼번에 끊으며 보낸 RST 묶음 같은 것은 스캔이 아니다)
         probes = (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt
-        st.window.append((min(r["fail"] * dt, 2 * probes), min(r.get("unreach_in", 0.0) * dt, 2 * probes),
+        st.window.append((now, min(r["fail"] * dt, 2 * probes), min(r.get("unreach_in", 0.0) * dt, 2 * probes),
                           probes, r.get("arp_fail", 0.0) * dt))
-        while len(st.window) > cfg.scan_long_window:
+        # 창은 시간으로 자른다 (보고 시각이 조금씩 흔들려도 같은 개수가 들어가게 반 주기 여유)
+        while st.window and st.window[0][0] <= now - cfg.scan_long_window_sec + dt / 2:
             st.window.popleft()
-        recent = list(st.window)[-cfg.scan_window:]
-        fails = sum(w[0] for w in recent)
-        fails_long = sum(w[0] for w in st.window)
-        unreach = sum(w[1] for w in recent)
+        recent = [w for w in st.window if w[0] > now - cfg.scan_window_sec + dt / 2]
+        fails = sum(w[1] for w in recent)
+        fails_long = sum(w[1] for w in st.window)
+        unreach = sum(w[2] for w in recent)
         scan = []
-        if fails >= cfg.scan_min and fails >= cfg.scan_ratio * sum(w[2] for w in recent):
+        if fails >= cfg.scan_min and fails >= cfg.scan_ratio * sum(w[3] for w in recent):
             scan.append(fails / cfg.scan_min)
         if fails_long >= cfg.scan_long_min and fails > 0:
             scan.append(fails_long / cfg.scan_long_min)
@@ -300,8 +307,8 @@ class CriteriaEngine:
         if scan:
             candidates[ThreatType.PORT_SCAN.value] = max(scan)
         # 내부 확산: 없는 내부 주소를 5분에 25개 이상 찾아다녔고, 최근 4초에도 새 주소가 있음
-        spread = sum(w[3] for w in st.window)
-        if spread >= cfg.spread_min and sum(w[3] for w in recent) > 0:
+        spread = sum(w[4] for w in st.window)
+        if spread >= cfg.spread_min and sum(w[4] for w in recent) > 0:
             candidates[ThreatType.INTERNAL_SPREAD.value] = spread / cfg.spread_min
         # SYN Flood: 기준선을 넘는 동안의 초과분 누적. 한 번이라도 기준선 아래로 내려오면 0부터 다시
         if r["gap"] > lines["gap"]:
@@ -325,7 +332,7 @@ class CriteriaEngine:
         if confirmed:
             threat_type, strength = max(confirmed.items(), key=lambda kv: kv[1])
             st.stage = RiskStage.DANGER if strength >= cfg.strong_multiplier else RiskStage.WARNING
-            st.normal_streak = 0
+            st.normal_for = 0.0
             reasons.append(f"{threat_type} x{strength:.1f}")
             # 약한 공격이어도 정상 사용자가 실제로 피해를 보고 있으면 위험 (서비스 악화 조건)
             degraded = self.service_degraded(now) if st.stage == RiskStage.WARNING else None
@@ -334,15 +341,16 @@ class CriteriaEngine:
                 reasons.append(degraded)
         elif reasons or candidates:
             st.stage = RiskStage.WATCH
-            st.normal_streak = 0
+            st.normal_for = 0.0
         else:
-            st.normal_streak += 1
-            if st.normal_streak >= cfg.watch_clear_intervals:
+            st.normal_for += dt
+            if st.normal_for >= cfg.watch_clear_sec - dt / 2:
                 st.stage = RiskStage.NORMAL
-            if st.normal_streak >= cfg.learn_resume_intervals:
+            if st.normal_for >= cfg.learn_resume_sec - dt / 2:
+                alpha = _alpha(cfg.ewma_memory_sec, dt)
                 for ind in WATCHED_INDICATORS:
                     if not (relearning and ind in cfg.relearn_indicators):
-                        self.baseline(key, ind).update(r.get(ind, 0.0), cfg.ewma_alpha, cfg.cap_multiplier)
+                        self.baseline(key, ind).update(r.get(ind, 0.0), alpha, cfg.cap_multiplier)
         if relearning:
             reasons.append("relearning (approved)")
             # 승인된 기간: 양은 경고 중이어도 따라 배운다. 위험 크기(판정선의 M배 이상)는 승인 중에도 배우지 않는다
@@ -350,7 +358,7 @@ class CriteriaEngine:
                 b = self.baseline(key, ind)
                 line = max(cfg.flood_multiplier * b.mean, cfg.attack_floors.get(ind, cfg.floors.get(ind, 0.0)))
                 if r.get(ind, 0.0) < cfg.strong_multiplier * line:
-                    b.follow(r.get(ind, 0.0), cfg.relearn_alpha)
+                    b.follow(r.get(ind, 0.0), _alpha(cfg.relearn_memory_sec, dt))
         return Decision(dpid=key[0], port=key[1], stage=st.stage, threat_type=threat_type, strength=strength,
                         rates={k: round(v, 2) for k, v in r.items()}, lines=lines, reasons=reasons)
 

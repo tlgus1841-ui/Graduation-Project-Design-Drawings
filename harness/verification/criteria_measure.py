@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import subprocess
 import sys
 import time
@@ -295,9 +296,12 @@ def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optio
         time.sleep(normal_seconds)
         # The first 10 s are the users' start-up, not their steady state.
         phases.append({"name": "normal", "start": t0, "end": time.time(), "skip": 10.0})
+        # 공격 시작 시각을 보고 주기와 엇갈리게 0~2초 무작위로 늦춘다. 쉬는 구간이 딱 30초면 공격이 매번
+        # 보고 직후에 시작해 탐지 시간이 늘 가장 늦은 경우로만 재진다
+        jitter = random.Random(7)
         for name, cmd, _ in attacks:
             q0 = time.time()
-            time.sleep(gap)
+            time.sleep(gap + jitter.uniform(0.0, 2.0))
             phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": QUIET_SKIP})
             fault = SERVER_FAULTS.get(name)
             if fault:
