@@ -8,6 +8,9 @@ Redis Pub/Sub Channels:
 - sdn:anomaly:alert   : AI Worker -> Ryu, FastAPI
 - sdn:control:command : AI Worker / Web UI -> Ryu
 - sdn:topology:sync   : Ryu -> FastAPI, Web UI
+- sdn:stats:flowcount : Ryu -> AI Worker (패킷 종류별 개수)
+- sdn:health:service  : Ryu -> AI Worker (보호 서버 응답 확인)
+- sdn:stats:serverconn: 서버 연결 수집기 -> AI Worker (Slow HTTP)
 """
 
 import time
@@ -25,6 +28,23 @@ REDIS_CHANNEL_CONTROL_COMMAND = "sdn:control:command"
 REDIS_CHANNEL_TOPOLOGY_SYNC = "sdn:topology:sync"
 # Ryu -> AI Worker: 접속 포트별·패킷 종류별 누적 개수 (공격 종류별 판단 기준용, 2초 주기)
 REDIS_CHANNEL_FLOW_COUNTS = "sdn:stats:flowcount"
+# Ryu -> AI Worker: 보호 서버 응답 확인(손실·지연) 결과, 2초 주기 (위험 단계의 서비스 악화 조건)
+REDIS_CHANNEL_SERVICE_HEALTH = "sdn:health:service"
+
+# 서비스 상태 확인: 컨트롤러가 정상 사용자 자리(S1)에서 보호 서버로 보내는 ICMP echo의 가상 출발지.
+# 실제 호스트가 없는 주소라 컨트롤러가 ARP에 대신 답하고, 응답은 S1으로 돌아와 컨트롤러가 받는다.
+SERVICE_PROBE_IP = "10.0.0.250"
+SERVICE_PROBE_MAC = "00:00:00:00:00:fa"
+SERVICE_PROBE_TARGET_IP = "10.0.0.4"
+SERVICE_PROBE_DPID = 1
+SERVICE_PROBE_INTERVAL_SEC = 0.2
+# 이 시간 안에 응답이 없으면 손실로 센다
+SERVICE_PROBE_TIMEOUT_SEC = 1.0
+
+# 서버 연결 수집기(pipeline/server_conn_agent.py) -> AI Worker: 접속한 PC마다 열린 HTTP 연결·느린 요청 수 (Slow HTTP)
+REDIS_CHANNEL_SERVER_CONNS = "sdn:stats:serverconn"
+# 접속 호스트 IP → (dpid, 포트). 컨트롤러의 arp_table과 같아야 한다 (tests/ryu/test_service_probe.py가 확인)
+ACCESS_HOST_PORTS = {"10.0.0.1": (1, 1), "10.0.0.2": (1, 2), "10.0.0.4": (4, 1)}
 
 # 수동 RESTORE(command_id "manual-…") 직후 같은 포트의 자동 재격리를 보류하는 시간(초).
 # 운영자가 AI 오탐을 의심해 풀어 준 포트를, 2초 뒤 다음 경보가 곧바로 다시 막지 않게 한다.
@@ -47,6 +67,7 @@ class DefenseAction(str, Enum):
     REROUTE = "REROUTE"
     RATE_LIMIT = "RATE_LIMIT"
     UNLIMIT = "UNLIMIT"
+    RELEARN = "RELEARN"  # 특수 상황 재학습 승인 (관리자 → AI Worker). 컨트롤러는 아무것도 하지 않는다
 
 
 class RiskStage(str, Enum):
@@ -66,6 +87,8 @@ class CountKind(str, Enum):
     ICMP = "icmp"
     RST_IN = "rst_in"          # 이 호스트가 받은 RST (닫힌 포트의 거절)
     UNREACH_IN = "unreach_in"  # 이 호스트가 받은 ICMP 도달 불가(type 3)
+    # 스위치 규칙이 아니라 컨트롤러가 센다(Proxy ARP): 이 호스트가 ARP로 물어본 '없는 내부 주소'의 누적 개수(서로 다른 주소)
+    ARP_FAIL = "arp_fail"
 
 
 class ThreatType(str, Enum):
@@ -74,6 +97,7 @@ class ThreatType(str, Enum):
     ICMP_FLOOD = "ICMP_FLOOD"
     SLOW_DDOS = "SLOW_DDOS"
     PORT_SCAN = "PORT_SCAN"
+    INTERNAL_SPREAD = "INTERNAL_SPREAD"  # 내부 확산 (랜섬웨어·웜이 내부 PC를 찾아다님)
     UNKNOWN = "UNKNOWN"
 
 
@@ -111,6 +135,35 @@ class FlowCountMessage(BaseModel):
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp (seconds)")
     dpid: int = Field(..., description="Switch Datapath ID reporting the counts")
     counts: List[FlowCountItem] = Field(default_factory=list)
+
+
+class ServiceHealthMessage(BaseModel):
+    """Probe results for the protected server, published by Ryu every 2 seconds (Channel: sdn:health:service).
+
+    A probe counts once its timeout has passed, so each message covers the probes sent roughly 1-3 s earlier.
+    """
+    timestamp: float = Field(default_factory=time.time, description="Unix timestamp (seconds)")
+    target_ip: str = Field(..., description="Protected server being probed")
+    sent: int = Field(..., description="Probes settled in this report")
+    received: int = Field(..., description="Probes answered within the timeout")
+    loss_percent: float = Field(..., description="100 * (sent - received) / sent, 0 when nothing was sent")
+    rtt_avg_ms: Optional[float] = Field(None, description="Mean round-trip time of the answered probes")
+    rtt_max_ms: Optional[float] = Field(None, description="Largest round-trip time of the answered probes")
+
+
+class ServerConnItem(BaseModel):
+    """One client's HTTP connections on the protected server."""
+    client_ip: str
+    open: int = Field(..., description="Established connections from this client")
+    slow: int = Field(..., description="Of those, slow requests: open >= 20 s, no response sent yet, < 500 B/s")
+
+
+class ServerConnMessage(BaseModel):
+    """Server-side connection summary published every 2 seconds (Channel: sdn:stats:serverconn)."""
+    timestamp: float = Field(default_factory=time.time, description="Unix timestamp (seconds)")
+    server_ip: str
+    port: int
+    clients: List[ServerConnItem] = Field(default_factory=list)
 
 
 # =====================================================================
@@ -158,11 +211,12 @@ class ControlCommandMessage(BaseModel):
     """Autonomous mitigation or manual intervention command published to Ryu."""
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp")
     command_id: str = Field(..., description="Unique UUID or tracking identifier for this command")
-    action: str = Field(..., description="ISOLATE | RESTORE | REROUTE")
+    action: str = Field(..., description="ISOLATE | RESTORE | REROUTE | RELEARN")
     target_dpid: int = Field(..., description="Target switch DPID")
     target_port: int = Field(..., description="Target switch port number")
     reason: str = Field(..., description="Human or AI rationale for mitigation")
     priority: int = Field(100, description="OpenFlow flow rule priority to install/modify")
+    duration_sec: Optional[float] = Field(None, description="RELEARN only: approved relearning period (seconds)")
 
 
 # =====================================================================

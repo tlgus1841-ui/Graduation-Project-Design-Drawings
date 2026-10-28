@@ -40,11 +40,16 @@ from harness.contracts import (  # noqa: E402
     REDIS_CHANNEL_CONTROL_COMMAND,
     REDIS_CHANNEL_FLOW_COUNTS,
     REDIS_CHANNEL_PORT_STATS,
+    REDIS_CHANNEL_SERVER_CONNS,
+    REDIS_CHANNEL_SERVICE_HEALTH,
     AnomalyAlertMessage,
     ControlCommandMessage,
+    DefenseAction,
     FlowCountMessage,
     PortStatsMessage,
     RiskStage,
+    ServerConnMessage,
+    ServiceHealthMessage,
 )
 from harness.safety.whitelist_guard import DEFAULT_ACCESS_PORTS  # noqa: E402
 from model.attack_classifier import (  # noqa: E402
@@ -135,6 +140,24 @@ class InferenceWorker:
                     metadata={"model": "isolation_forest", "stats_ts": str(f["timestamp"])}))
         return alerts
 
+    def process_health(self, message: ServiceHealthMessage) -> None:
+        """판단 기준 모드: 컨트롤러의 서비스 상태 확인 결과 (위험 단계의 서비스 악화 조건)."""
+        if self.criteria is not None:
+            self.criteria.update_health(message)
+
+    def process_server_conns(self, message: ServerConnMessage) -> None:
+        """판단 기준 모드: 서버 연결 수집기의 느린 요청 수 (Slow HTTP)."""
+        if self.criteria is not None:
+            self.criteria.update_server_conns(message)
+
+    def process_command(self, cmd: ControlCommandMessage, now: Optional[float] = None) -> List[PortKey]:
+        """관리자의 특수 상황 재학습 승인(RELEARN). 포트 0이면 지켜보는 모든 포트. 재학습할 포트 목록을 돌려준다."""
+        if self.criteria is None or cmd.action != DefenseAction.RELEARN.value or not cmd.duration_sec:
+            return []
+        until = (time.time() if now is None else now) + cmd.duration_sec
+        key = None if cmd.target_port == 0 else (cmd.target_dpid, cmd.target_port)
+        return self.criteria.approve_relearn(until, key)
+
     def process_counts(self, message: FlowCountMessage) -> List[AnomalyAlertMessage]:
         """판단 기준 모드: 종류별 패킷 수 → 단계 판단 → 경고·위험 포트의 경보."""
         if self.criteria is None:
@@ -175,7 +198,8 @@ def run(worker: InferenceWorker, redis_url: str, log_path: Optional[Path]) -> No
 
     r = redis.Redis(connection_pool=redis.ConnectionPool.from_url(redis_url))
     pubsub = r.pubsub()
-    pubsub.subscribe(REDIS_CHANNEL_PORT_STATS, REDIS_CHANNEL_CONTROL_COMMAND, REDIS_CHANNEL_FLOW_COUNTS)
+    pubsub.subscribe(REDIS_CHANNEL_PORT_STATS, REDIS_CHANNEL_CONTROL_COMMAND, REDIS_CHANNEL_FLOW_COUNTS,
+                     REDIS_CHANNEL_SERVICE_HEALTH, REDIS_CHANNEL_SERVER_CONNS)
     log = log_path.open("w", encoding="utf-8") if log_path else None
 
     def record(kind: str, **fields: object) -> None:
@@ -199,6 +223,21 @@ def run(worker: InferenceWorker, redis_url: str, log_path: Optional[Path]) -> No
             cmd = ControlCommandMessage.model_validate_json(item["data"])
             record("command", action=cmd.action, target=f"S{cmd.target_dpid}:{cmd.target_port}",
                    command_id=cmd.command_id)
+            relearn = worker.process_command(cmd)
+            if relearn:
+                record("relearn", ports=[f"S{d}:{p}" for d, p in relearn], seconds=cmd.duration_sec)
+            continue
+        if channel == REDIS_CHANNEL_SERVICE_HEALTH:
+            health = ServiceHealthMessage.model_validate_json(item["data"])
+            worker.process_health(health)
+            record("health", sent=health.sent, loss=health.loss_percent, rtt=health.rtt_avg_ms)
+            continue
+        if channel == REDIS_CHANNEL_SERVER_CONNS:
+            conns = ServerConnMessage.model_validate_json(item["data"])
+            worker.process_server_conns(conns)
+            busy = {c.client_ip: [c.open, c.slow] for c in conns.clients if c.slow}
+            if busy:
+                record("serverconn", slow=busy)
             continue
         if channel == REDIS_CHANNEL_FLOW_COUNTS:
             alerts = worker.process_counts(FlowCountMessage.model_validate_json(item["data"]))

@@ -148,7 +148,9 @@ export function applyEnvelope(state, envelope) {
           id: data.command_id,
           kind: String(data.reason ?? "").startsWith("[MANUAL]") ? "manual" : "command",
           ts: data.timestamp,
-          title: `${data.action} · S${data.target_dpid}:${data.target_port}`,
+          title: data.action === "RELEARN" && !data.target_port
+            ? "RELEARN · 모든 접속 포트"
+            : `${data.action} · S${data.target_dpid}:${data.target_port}`,
           detail: data.reason,
         }),
       };

@@ -8,18 +8,22 @@
     - SYN Flood : SYN − (FIN+RST) 차이가 기준선을 넘는 동안의 누적(CUSUM)이 H 이상
     - UDP Flood : UDP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
     - ICMP Flood: ICMP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
+    - Slow HTTP : 서버 연결 수집기가 센 이 호스트의 '느린 요청' 연결(20초 넘게 요청이 안 끝남, 초당 500B 미만)이
+                  10개 이상
     - 포트 스캔 : 이 호스트가 받은 실패 응답(RST + ICMP 도달 불가)으로 판단한다.
                   빠른 스캔 = 짧은 창(2주기, 약 4초)에 15개 이상(Zeek)이고 보낸 연결 시도(SYN + UDP)의
                   절반 이상이 실패(Jung 2004). 느린 스캔 = 긴 창(5분, Zeek)에 30개 이상이고 지금도 실패가
                   나오는 중(짧은 창에 1개 이상). 긴 창에는 정상 연결도 수백 개 섞이므로 비율은 보지 않는다.
                   UDP 스캔은 대상 서버가 ICMP 도달 불가를 처음 6개 뒤 초당 1개로 제한해서(리눅스 기본값)
                   응답이 적으므로, 짧은 창에 도달 불가 4개 이상이면 따로 스캔으로 본다
+    - 내부 확산 : 이 호스트가 ARP로 물어본 '없는 내부 주소'(컨트롤러가 셈)가 5분에 25개 이상이고 지금도 늘어나는 중
+                  (Zeek: 5분 안에 서로 다른 호스트 25개 연결 실패)
 * 확정된 공격의 세기(값 / 판정선)가 M 이상이면 위험(DANGER, 격리 + 우회), 아니면 경고(WARNING, 속도 제한).
+  세기가 M 미만이어도 서비스가 나빠졌으면(컨트롤러의 서비스 상태 확인 ping 손실·지연이 2회 연속 기준 이상) 위험.
 * 평소값: 미리 학습해 저장한 값(criteria_baseline.json)으로 시작하고, 정상일 때만 2초마다 EWMA로
   갱신한다(최근 약 10분 기억). 갱신된 평균·표준편차는 사전 학습값 ~ 2배 사이에서만 움직인다.
-
-Slow HTTP와 내부 확산은 포트 카운터로는 볼 수 없어(연결 단위 정보 필요) 이 엔진에 없다.
-서비스 상태 신호(정상 사용자 손실·지연)도 아직 입력이 없어 위험 단계 조건에서 빠져 있다.
+* 특수 상황 재학습: 관리자가 승인한 기간 동안은 양(SYN·UDP·ICMP 초당 수)만 상하한 없이 빠르게(최근 약 1분)
+  다시 배우고, 기간이 끝나면 사전 학습값으로 돌아간다. 짝이 안 맞는 연결·실패 응답 같은 공격 신호는 다시 배우지 않는다.
 """
 
 from __future__ import annotations
@@ -31,7 +35,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Deque, Dict, Iterable, List, Optional, Tuple
 
-from harness.contracts import FlowCountMessage, RiskStage, ThreatType
+from harness.contracts import (
+    ACCESS_HOST_PORTS,
+    FlowCountMessage,
+    RiskStage,
+    ServerConnMessage,
+    ServiceHealthMessage,
+    ThreatType,
+)
 
 PortKey = Tuple[int, int]
 # 주의(WATCH) 판단에 쓰는 지표. gap = syn − (fin + rst), fail = rst_in + unreach_in (모두 초당)
@@ -74,6 +85,21 @@ class CriteriaConfig:
     ewma_alpha: float = 2.0 / 301.0
     # 갱신된 평소값의 상한 = 사전 학습값 × cap_multiplier (하한 = 사전 학습값)
     cap_multiplier: float = 2.0
+    # 서비스 악화: 서비스 상태 확인 ping의 손실(%) 또는 평균 왕복 시간(ms)이 이 값 이상인 보고가 health_confirm번 연속.
+    # 정상 10분 최대: 손실 11.1%(ping 1개, 연속 없음), 평균 왕복 4.4ms → 2배 여유로 25%, 10ms.
+    # 보고가 health_stale_sec보다 오래됐으면(컨트롤러 확인 중단) 쓰지 않는다
+    health_loss_percent: float = 25.0
+    health_rtt_ms: float = 10.0
+    health_confirm: int = 2
+    health_stale_sec: float = 6.0
+    # 특수 상황 재학습(관리자 승인): 다시 배우는 지표와 속도. 2초 주기로 최근 약 1분(30주기) → α = 2 / 31
+    relearn_indicators: Tuple[str, ...] = ("syn", "udp", "icmp")
+    relearn_alpha: float = 2.0 / 31.0
+    # 내부 확산: 긴 창(5분)에 물어본 없는 내부 주소 수 (Zeek 25개)
+    spread_min: float = 25.0
+    # Slow HTTP: 한 PC의 느린 요청 연결 수. 정상 측정에서는 0개
+    slow_http_min: float = 10.0
+    server_conn_stale_sec: float = 6.0
 
 
 @dataclass
@@ -96,6 +122,16 @@ class Baseline:
         std = min(max(self.std, self.base_std), cap * self.base_std)
         self.var = std * std
 
+    def follow(self, x: float, alpha: float) -> None:
+        """승인된 재학습: 상하한 없이 따라간다."""
+        delta = x - self.mean
+        self.mean += alpha * delta
+        self.var = (1 - alpha) * (self.var + alpha * delta * delta)
+
+    def reset(self) -> None:
+        """사전 학습값으로 되돌린다."""
+        self.mean, self.var = self.base_mean, self.base_std * self.base_std
+
 
 @dataclass
 class Decision:
@@ -116,9 +152,11 @@ class _PortState:
     baselines: Dict[str, Baseline] = field(default_factory=dict)
     cusum: float = 0.0
     streaks: Dict[str, int] = field(default_factory=dict)
-    window: Deque[Tuple[float, float, float]] = field(default_factory=deque)  # (실패 응답, 도달 불가, 연결 시도)
+    # (실패 응답, 도달 불가, 연결 시도, 없는 내부 주소) — 보고 주기마다 개수
+    window: Deque[Tuple[float, float, float, float]] = field(default_factory=deque)
     stage: RiskStage = RiskStage.NORMAL
     normal_streak: int = 0
+    relearn_until: float = 0.0  # 관리자가 승인한 재학습이 끝나는 시각 (0 = 재학습 아님)
 
 
 def indicator_rates(counts: Dict[str, int], prev: Dict[str, int], dt: float) -> Optional[Dict[str, float]]:
@@ -136,10 +174,14 @@ class CriteriaEngine:
 
     def __init__(self, config: Optional[CriteriaConfig] = None,
                  baselines: Optional[Dict[PortKey, Dict[str, Tuple[float, float]]]] = None,
-                 ports: Optional[Iterable[PortKey]] = None) -> None:
+                 ports: Optional[Iterable[PortKey]] = None,
+                 host_ports: Optional[Dict[str, PortKey]] = None) -> None:
         self.config = config or CriteriaConfig()
         self.ports = set(ports) if ports is not None else None
         self._state: Dict[PortKey, _PortState] = {}
+        self._health: Deque[ServiceHealthMessage] = deque(maxlen=self.config.health_confirm)
+        self._port_ips = {key: ip for ip, key in (host_ports or ACCESS_HOST_PORTS).items()}
+        self._slow: Dict[str, Tuple[int, float]] = {}  # 호스트 IP → (느린 요청 수, 보고 시각)
         for key, inds in (baselines or {}).items():
             st = self._state.setdefault(key, _PortState())
             for ind, (mean, std) in inds.items():
@@ -160,6 +202,41 @@ class CriteriaEngine:
         return self._state.setdefault(key, _PortState()).baselines.setdefault(ind, Baseline())
 
     # ------------------------------------------------------------------
+    def update_health(self, message: ServiceHealthMessage) -> None:
+        """컨트롤러의 서비스 상태 확인 결과 (2초마다)."""
+        self._health.append(message)
+
+    def approve_relearn(self, until: float, key: Optional[PortKey] = None) -> List[PortKey]:
+        """관리자가 승인한 특수 상황 재학습. key가 없으면 지켜보는 모든 포트. 대상 포트 목록을 돌려준다."""
+        keys = [key] if key is not None else sorted(set(self._state) | (self.ports or set()))
+        for k in keys:
+            self._state.setdefault(k, _PortState()).relearn_until = until
+        return keys
+
+    def update_server_conns(self, message: ServerConnMessage) -> None:
+        """서버 연결 수집기의 보고 (2초마다): 접속한 PC마다 느린 요청 수."""
+        self._slow = {c.client_ip: (c.slow, message.timestamp) for c in message.clients}
+
+    def _slow_requests(self, key: PortKey, now: float) -> int:
+        slow, ts = self._slow.get(self._port_ips.get(key, ""), (0, 0.0))
+        return slow if now - ts <= self.config.server_conn_stale_sec else 0
+
+    def _health_degraded(self, m: ServiceHealthMessage) -> bool:
+        cfg = self.config
+        return m.sent > 0 and (m.loss_percent >= cfg.health_loss_percent
+                               or (m.rtt_avg_ms is not None and m.rtt_avg_ms >= cfg.health_rtt_ms))
+
+    def service_degraded(self, now: float) -> Optional[str]:
+        """최근 health_confirm번의 확인이 모두 나빴으면 그 이유, 아니면 None."""
+        recent = list(self._health)
+        if (len(recent) < self.config.health_confirm or now - recent[-1].timestamp > self.config.health_stale_sec
+                or not all(self._health_degraded(m) for m in recent)):
+            return None
+        last = recent[-1]
+        rtt = f"{last.rtt_avg_ms:.1f}ms" if last.rtt_avg_ms is not None else "no reply"
+        return f"service degraded: loss {last.loss_percent:.0f}%, rtt {rtt}"
+
+    # ------------------------------------------------------------------
     def update(self, message: FlowCountMessage) -> List[Decision]:
         by_port: Dict[int, Dict[str, int]] = {}
         for c in message.counts:
@@ -178,20 +255,35 @@ class CriteriaEngine:
             rates = indicator_rates(counts, prev, dt)
             if rates is None:
                 continue
-            decisions.append(self._evaluate(key, st, rates, dt))
+            decisions.append(self._evaluate(key, st, rates, dt, message.timestamp))
         return decisions
 
-    def _evaluate(self, key: PortKey, st: _PortState, r: Dict[str, float], dt: float) -> Decision:
+    def _evaluate(self, key: PortKey, st: _PortState, r: Dict[str, float], dt: float, now: float) -> Decision:
         cfg = self.config
+        relearning = now < st.relearn_until
+        if st.relearn_until and not relearning:
+            # 승인 기간이 끝남: 다시 배운 양을 사전 학습값으로 되돌린다
+            st.relearn_until = 0.0
+            for ind in cfg.relearn_indicators:
+                self.baseline(key, ind).reset()
         lines = {ind: self.line(key, ind) for ind in WATCHED_INDICATORS}
         reasons = [f"{ind} {r.get(ind, 0.0):.0f}/s > {lines[ind]:.0f}" for ind in WATCHED_INDICATORS
                    if r.get(ind, 0.0) > lines[ind]]
 
         candidates: Dict[str, float] = {}
+        # Slow HTTP: 서버가 응답도 못 하고 붙잡고 있는 이 PC의 느린 요청 연결
+        slow = self._slow_requests(key, now)
+        if slow:
+            reasons.append(f"slow requests {slow}")
+        if slow >= cfg.slow_http_min:
+            candidates[ThreatType.SLOW_DDOS.value] = slow / cfg.slow_http_min
         # 포트 스캔: 받은 실패 응답 수. 빠른 스캔(Zeek 15개 + TRW 실패 비율), 느린 스캔(5분 30개),
         # UDP 스캔(도달 불가 4개). 세기는 그중 가장 큰 배율
-        st.window.append((r["fail"] * dt, r.get("unreach_in", 0.0) * dt,
-                          (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt))
+        # 실패 응답은 이 PC가 보낸 연결 시도에 대한 답이어야 스캔이다: 한 주기에 보낸 시도의 2배까지만 센다.
+        # (서버가 이 PC의 오래된 연결을 한꺼번에 끊으며 보낸 RST 묶음 같은 것은 스캔이 아니다)
+        probes = (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt
+        st.window.append((min(r["fail"] * dt, 2 * probes), min(r.get("unreach_in", 0.0) * dt, 2 * probes),
+                          probes, r.get("arp_fail", 0.0) * dt))
         while len(st.window) > cfg.scan_long_window:
             st.window.popleft()
         recent = list(st.window)[-cfg.scan_window:]
@@ -207,6 +299,10 @@ class CriteriaEngine:
             scan.append(unreach / cfg.scan_unreach_min)
         if scan:
             candidates[ThreatType.PORT_SCAN.value] = max(scan)
+        # 내부 확산: 없는 내부 주소를 5분에 25개 이상 찾아다녔고, 최근 4초에도 새 주소가 있음
+        spread = sum(w[3] for w in st.window)
+        if spread >= cfg.spread_min and sum(w[3] for w in recent) > 0:
+            candidates[ThreatType.INTERNAL_SPREAD.value] = spread / cfg.spread_min
         # SYN Flood: 기준선을 넘는 동안의 초과분 누적. 한 번이라도 기준선 아래로 내려오면 0부터 다시
         if r["gap"] > lines["gap"]:
             st.cusum += (r["gap"] - lines["gap"]) * dt
@@ -231,6 +327,11 @@ class CriteriaEngine:
             st.stage = RiskStage.DANGER if strength >= cfg.strong_multiplier else RiskStage.WARNING
             st.normal_streak = 0
             reasons.append(f"{threat_type} x{strength:.1f}")
+            # 약한 공격이어도 정상 사용자가 실제로 피해를 보고 있으면 위험 (서비스 악화 조건)
+            degraded = self.service_degraded(now) if st.stage == RiskStage.WARNING else None
+            if degraded:
+                st.stage = RiskStage.DANGER
+                reasons.append(degraded)
         elif reasons or candidates:
             st.stage = RiskStage.WATCH
             st.normal_streak = 0
@@ -240,7 +341,16 @@ class CriteriaEngine:
                 st.stage = RiskStage.NORMAL
             if st.normal_streak >= cfg.learn_resume_intervals:
                 for ind in WATCHED_INDICATORS:
-                    self.baseline(key, ind).update(r.get(ind, 0.0), cfg.ewma_alpha, cfg.cap_multiplier)
+                    if not (relearning and ind in cfg.relearn_indicators):
+                        self.baseline(key, ind).update(r.get(ind, 0.0), cfg.ewma_alpha, cfg.cap_multiplier)
+        if relearning:
+            reasons.append("relearning (approved)")
+            # 승인된 기간: 양은 경고 중이어도 따라 배운다. 위험 크기(판정선의 M배 이상)는 승인 중에도 배우지 않는다
+            for ind in cfg.relearn_indicators:
+                b = self.baseline(key, ind)
+                line = max(cfg.flood_multiplier * b.mean, cfg.attack_floors.get(ind, cfg.floors.get(ind, 0.0)))
+                if r.get(ind, 0.0) < cfg.strong_multiplier * line:
+                    b.follow(r.get(ind, 0.0), cfg.relearn_alpha)
         return Decision(dpid=key[0], port=key[1], stage=st.stage, threat_type=threat_type, strength=strength,
                         rates={k: round(v, 2) for k, v in r.items()}, lines=lines, reasons=reasons)
 

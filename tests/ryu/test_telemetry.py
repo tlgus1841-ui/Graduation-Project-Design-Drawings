@@ -88,6 +88,7 @@ def _setup_and_load_controller_for_telemetry():
     sys.modules["ryu.lib.packet.ethernet"] = MagicMock()
     sys.modules["ryu.lib.packet.arp"] = mock_arp
     sys.modules["ryu.lib.packet.ipv4"] = MagicMock()
+    sys.modules["ryu.lib.packet.icmp"] = MagicMock()
 
     root_dir = Path(__file__).resolve().parent.parent.parent
     controller_path = root_dir / "ryu" / "app" / "controller.py"

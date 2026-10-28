@@ -1,5 +1,6 @@
 """Counting rules (table 0) and WARNING-stage rate limiting in the Ryu controller."""
 
+import json
 from unittest.mock import MagicMock
 
 from harness.contracts.sdn_events import (
@@ -25,6 +26,8 @@ def test_police_matches_limit_only_the_attack_kind():
     [syn] = police_matches("SYN_FLOOD_SPOOFING")
     assert syn["tcp_flags"] == (0x002, 0x012)  # SYN without ACK: the host's own web traffic keeps flowing
     assert police_matches("PORT_SCAN") == [syn, udp]  # TCP and UDP scans
+    assert police_matches("SLOW_DDOS") == [syn]  # Slow HTTP: no more new connections
+    assert police_matches("INTERNAL_SPREAD") == [syn]
     assert police_matches("UNKNOWN") == [{}]  # whole port
 
 
@@ -121,3 +124,27 @@ def test_alert_without_stage_still_isolates():
     legacy = AnomalyAlertMessage(dpid=1, in_port=2, score=-0.3, pps=1500.0, bps=1.0, bpp=54.0).model_dump_json()
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, legacy)
     controller.isolate_port.assert_called_once()
+
+
+def test_missing_internal_hosts_asked_by_arp_are_counted_per_access_port():
+    controller = SelfDefendingSDNController()
+    controller.send_arp_reply = MagicMock()
+    controller.redis_client = MagicMock()
+    datapath, eth = MagicMock(), MagicMock()
+    datapath.id = 1
+    for target in ("10.0.0.7", "10.0.0.8", "10.0.0.7", "10.0.0.4", "10.0.0.2"):
+        arp_pkt = MagicMock()
+        arp_pkt.opcode, arp_pkt.dst_ip, arp_pkt.src_ip = 1, target, "10.0.0.2"
+        controller.handle_arp(datapath, in_port=2, eth=eth, arp_pkt=arp_pkt)
+    # Existing hosts are answered, the asker itself is ignored, repeats count once
+    assert controller.arp_fail_targets[(1, 2)] == {"10.0.0.7", "10.0.0.8"}
+
+    stat = MagicMock()
+    stat.cookie, stat.packet_count = count_cookie(1, 2, "syn"), 40
+    ev = MagicMock()
+    ev.msg.datapath.id = 1
+    ev.msg.body = [stat]
+    controller.flow_stats_reply_handler(ev)
+    body = controller.redis_client.publish.call_args.args[1]
+    counts = {(c["port_no"], c["kind"]): c["packets"] for c in json.loads(body)["counts"]}
+    assert counts[(2, "syn")] == 40 and counts[(2, "arp_fail")] == 2 and counts[(1, "arp_fail")] == 0

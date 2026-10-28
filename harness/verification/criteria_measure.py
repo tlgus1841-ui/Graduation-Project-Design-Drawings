@@ -30,12 +30,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VENV_PY = REPO_ROOT / ".venv" / "bin" / "python"
 FLOW_COUNTS = "sdn:stats:flowcount"
 PORT_STATS = "sdn:stats:port"
+SERVICE_HEALTH = "sdn:health:service"
+SERVER_CONNS = "sdn:stats:serverconn"
+SERVICE = "service S1→H_server"  # 서비스 상태 확인 ping (컨트롤러)
 # (dpid, port) → 이름. 측정 대상은 호스트가 붙은 접속 포트
 PORTS = {(1, 1): "S1:1 H_legit", (1, 2): "S1:2 H_attacker", (4, 1): "S4:1 H_server"}
+HOST_IPS = {(1, 1): "10.0.0.1", (1, 2): "10.0.0.2", (4, 1): "10.0.0.4"}
 KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")
 DERIVED = ("gap", "fail", "pps")  # gap = syn-(fin+rst), fail = rst_in+unreach_in, pps = 포트 전체 수신
 # 쉬는 구간의 앞부분(초)은 직전 공격의 늦은 보고와 복구 시간이라 쉬는 구간 통계에서 뺀다
 QUIET_SKIP = 6.0
+# 공격하는 동안 서버에 거는 장애: 서버가 내보내는 패킷의 40%를 무작위로 버린다 (iptables statistic).
+# 서버가 힘들어져 정상 사용자가 피해를 보는 상황을 만든다 (이 실험 환경의 커널에는 tc netem이 없다)
+SERVER_FAULTS = {"udp_weak_degraded": "OUTPUT -m statistic --mode random --probability 0.4 -j DROP"}
 
 ATTACKS: List[Tuple[str, str, int]] = [
     ("syn_strong", "traffic.traffic_attack --dst 10.0.0.4 --min-pps 1000 --max-pps 1000 --duration 20", 20),
@@ -44,6 +51,15 @@ ATTACKS: List[Tuple[str, str, int]] = [
     ("syn_weak", "traffic.traffic_attack --dst 10.0.0.4 --min-pps 100 --max-pps 100 --duration 20", 20),
     ("udp_weak", "traffic.traffic_flood --kind udp --pps 100 --duration 20", 20),
     ("icmp_weak", "traffic.traffic_flood --kind icmp --pps 100 --duration 20", 20),
+    # 서비스 악화 조건 확인: 판정선의 4배(위험 기준 5배 미만) 공격, 서버를 일부러 나쁘게 만든 약한 공격
+    ("icmp_mid", "traffic.traffic_flood --kind icmp --pps 200 --duration 20", 20),
+    ("udp_weak_degraded", "traffic.traffic_flood --kind udp --pps 100 --duration 20", 20),
+    # 내부 확산: 없는 내부 주소 56개에 445 포트 연결 시도 (초당 10개)
+    ("internal_spread", "traffic.traffic_spread --subnet 10.0.0 --hosts 5-60 --port 445 --rate 10", 9),
+    # Slow HTTP (Slowloris 방식): 느린 요청은 20초가 지나야 느리다고 볼 수 있어 60초 동안 한다.
+    # 끝난 뒤 서버가 남은 연결을 시간 초과로 끊으며 RST를 한꺼번에 보내므로 다른 공격보다 뒤에 둔다
+    ("slow_http_weak", "traffic.traffic_slowhttp --server 10.0.0.4 --sockets 30 --interval 10 --duration 60", 60),
+    ("slow_http", "traffic.traffic_slowhttp --server 10.0.0.4 --sockets 150 --interval 10 --duration 60", 60),
     # 스캔은 받은 실패 응답을 5분 동안 세므로, 실패가 적은 스캔부터 해서 앞 스캔의 실패가 섞이지 않게 한다
     ("udp_scan", "traffic.traffic_scan --kind udp --ports 1-300 --rate 300", 1),
     ("tcp_scan_slow", "traffic.traffic_scan --kind tcp --ports 1-40 --rate 2", 20),
@@ -129,6 +145,20 @@ def analyze(out_dir: Path) -> dict:
         phase = phase_of(s["t"], phases)
         if name and phase:
             groups[phase][name][s["ind"]].append(s["v"])
+    for rec in records:
+        phase = phase_of(rec["data"]["timestamp"], phases) if rec["ch"] in (SERVICE_HEALTH, SERVER_CONNS) else None
+        if phase and rec["ch"] == SERVICE_HEALTH:
+            for ind in ("loss_percent", "rtt_avg_ms", "rtt_max_ms"):
+                if rec["data"].get(ind) is not None:
+                    groups[phase][SERVICE][ind].append(rec["data"][ind])
+        elif phase:
+            # 서버 연결 수집기: 접속한 PC마다 열린 연결과 느린 요청 수
+            by_ip = {c["client_ip"]: c for c in rec["data"]["clients"]}
+            for (dpid, port), name in PORTS.items():
+                ip = HOST_IPS.get((dpid, port))
+                c = by_ip.get(ip, {"open": 0, "slow": 0})
+                groups[phase][name]["http_open"].append(c["open"])
+                groups[phase][name]["http_slow"].append(c["slow"])
     return {phase: {port: {ind: summarize(vals) for ind, vals in sorted(inds.items())}
                     for port, inds in sorted(ports.items())}
             for phase, ports in groups.items()}
@@ -141,7 +171,7 @@ def tap(path: Path) -> None:
     """Redis 채널 기록기 (.venv python으로 실행)."""
     import redis
     ps = redis.Redis().pubsub()
-    ps.subscribe(FLOW_COUNTS, PORT_STATS)
+    ps.subscribe(FLOW_COUNTS, PORT_STATS, SERVICE_HEALTH, SERVER_CONNS)
     with path.open("w") as f:
         while True:
             m = ps.get_message(timeout=1.0)
@@ -195,6 +225,14 @@ def analyze_e2e(out_dir: Path, events_path: Path) -> dict:
             entry["first_stage"] = alerts[0].get("stage")
             entry["threats"] = sorted({a.get("threat") for a in alerts})
             entry["stages"] = sorted({a.get("stage") for a in alerts})
+        health = [e for e in events if e["kind"] == "health" and start <= e["t"] <= end]
+        if health:
+            # 컨트롤러의 서비스 상태 확인 ping: 가장 나빴던 보고와, 서비스 악화로 위험이 된 보고 수
+            entry["service_loss_max"] = max(e["loss"] for e in health)
+            entry["service_rtt_max_ms"] = max((e["rtt"] for e in health if e["rtt"] is not None), default=None)
+            entry["danger_by_service"] = sum(
+                1 for e in events if e["kind"] == "decision" and start <= e["t"] <= end
+                and any(r.startswith("service degraded") for r in e.get("reasons", [])))
         name = ph["name"] if ph["name"] not in report else f"{ph['name']}_{i}"
         report[name] = entry
     return report
@@ -220,6 +258,7 @@ def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optio
     tapper = subprocess.Popen([str(VENV_PY), "-m", "harness.verification.criteria_measure", "--tap",
                                str(out_dir / "tap.jsonl")], cwd=REPO_ROOT)
     phases: List[dict] = []
+    agent = None
     try:
         for sw in net.switches:
             sw.cmd(f"ovs-vsctl set bridge {sw.name} protocols=OpenFlow13")
@@ -231,12 +270,19 @@ def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optio
         legit, attacker, server = net.get("h_legit", "h_attacker", "h_server")
         server.cmd("mkdir -p /tmp/www && head -c 2048 /dev/urandom > /tmp/www/index.html"
                    " && head -c 20000000 /dev/urandom > /tmp/www/big.bin")
-        server.cmd("cd /tmp/www && python3 -m http.server 80 > /dev/null 2>&1 &")
+        # 웹 서버: 30초 동안 아무것도 안 오는 연결은 닫는다 (Apache의 요청 대기 시간 20~40초와 같은 역할)
+        server.cmd("cd /tmp/www && python3 -c \"from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler"
+                   " as H; H.timeout = 30; ThreadingHTTPServer(('', 80), H).serve_forever()\" > /dev/null 2>&1 &")
+        # DNS 응답기: 보내기 실패(장애 주입 중 iptables가 버림)에도 죽지 않게 한다
         server.cmd("python3 -c \"import socket\ns=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)\n"
-                   "s.bind(('0.0.0.0',53))\nwhile True:\n d,a=s.recvfrom(512); s.sendto(d+b'0'*40,a)\""
+                   "s.bind(('0.0.0.0',53))\nwhile True:\n d,a=s.recvfrom(512)\n try:\n  s.sendto(d+b'0'*40,a)\n"
+                   " except OSError:\n  pass\""
                    " > /dev/null 2>&1 &")
+        # 서버 연결 수집기 (Slow HTTP): 서버의 네트워크 공간에서 ss를 읽는다
+        agent = subprocess.Popen([str(VENV_PY), "-m", "pipeline.server_conn_agent", "--netns-pid", str(server.pid)],
+                                 cwd=REPO_ROOT, stdout=subprocess.DEVNULL)
         time.sleep(1)
-        total = normal_seconds + sum(d + gap + 8 for _, _, d in attacks) + 30
+        total = normal_seconds + sum(d + gap + 8 for _, _, d in attacks) + gap + 30
         user = f"python3 {REPO_ROOT}/traffic/normal_user.py --server 10.0.0.4 --duration {total} --surge-at {surge_at}"
         if defense:
             # 방어 검증: 정상 사용자의 ping을 시각과 함께 남겨 구간별 손실을 잰다 (e2e_scenario와 같은 방식)
@@ -253,16 +299,27 @@ def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optio
             q0 = time.time()
             time.sleep(gap)
             phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": QUIET_SKIP})
+            fault = SERVER_FAULTS.get(name)
+            if fault:
+                server.cmd(f"iptables -I {fault}")
             a0 = time.time()
             log = attacker.cmd(f"cd {REPO_ROOT} && {VENV_PY} -m {cmd}")
             phases.append({"name": name, "start": a0, "end": time.time(), "log": log.strip()[-200:]})
+            if fault:
+                server.cmd(f"iptables -D {fault}")
+                phases[-1]["server_fault"] = fault
             print(f"[criteria_measure] {name}: {log.strip()[-120:]}", flush=True)
-        time.sleep(QUIET_SKIP)  # 마지막 공격의 늦은 보고까지 받는다
+        # 마지막 공격 뒤에도 쉬는 구간을 둬서 늦은 보고와 뒤처리(복구, 서버가 남은 연결을 끊는 것)까지 본다
+        q0 = time.time()
+        time.sleep(gap)
+        phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": QUIET_SKIP})
     finally:
         (out_dir / "phases.json").write_text(json.dumps({"phases": phases}, ensure_ascii=False, indent=1))
         for h in net.hosts:
             h.cmd("pkill -f normal_user.py; pkill -f http.server; pkill -f 'socket.SOCK_DGRAM'; pkill -INT ping")
         tapper.terminate()
+        if agent:
+            agent.terminate()
         net.stop()
 
 

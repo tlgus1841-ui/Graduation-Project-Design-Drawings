@@ -138,3 +138,30 @@ def test_criteria_mode_alerts_with_stage_and_threat_type(model):
 def test_legacy_mode_ignores_counts(model):
     worker = InferenceWorker(model)
     assert worker.process_counts(_counts(1000.0, 0)) == []
+
+
+def test_criteria_mode_uses_service_health_for_danger(model):
+    from harness.contracts import ServiceHealthMessage
+    worker = InferenceWorker(model, criteria=CriteriaEngine(ports=[(1, 2)]))
+    worker.process_counts(_counts(1000.0, 0))
+    worker.process_counts(_counts(1002.0, 300))  # 150 UDP/s: 3x the line, WARNING on its own
+    for t in (1003.0, 1005.0):
+        worker.process_health(ServiceHealthMessage(timestamp=t, target_ip="10.0.0.4", sent=10, received=5,
+                                                   loss_percent=50.0, rtt_avg_ms=3.0))
+    [alert] = worker.process_counts(_counts(1006.0, 600))
+    assert (alert.threat_type, alert.stage) == ("UDP_FLOOD", RiskStage.DANGER.value)
+    assert "service degraded" in alert.metadata["reasons"]
+    InferenceWorker(model).process_health(ServiceHealthMessage(target_ip="10.0.0.4", sent=1, received=0,
+                                                               loss_percent=100.0))  # legacy: ignored
+
+
+def test_relearn_command_reaches_the_criteria_engine(model):
+    from harness.contracts import ControlCommandMessage
+    worker = InferenceWorker(model, criteria=CriteriaEngine(ports=[(1, 2)]))
+    cmd = ControlCommandMessage(command_id="manual-relearn-1", action="RELEARN", target_dpid=0, target_port=0,
+                                reason="[MANUAL] admin: 수강신청", duration_sec=600.0)
+    assert worker.process_command(cmd, now=1000.0) == [(1, 2)]
+    isolate = ControlCommandMessage(command_id="manual-isolate-1", action="ISOLATE", target_dpid=1,
+                                    target_port=2, reason="x")
+    assert worker.process_command(isolate) == []
+    assert InferenceWorker(model).process_command(cmd) == []  # legacy mode has no baselines to relearn

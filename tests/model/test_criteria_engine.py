@@ -1,6 +1,7 @@
 import pytest
 
-from harness.contracts import FlowCountItem, FlowCountMessage, RiskStage, ThreatType
+from harness.contracts import (FlowCountItem, FlowCountMessage, RiskStage, ServerConnItem, ServerConnMessage,
+                               ServiceHealthMessage, ThreatType)
 from model.criteria_engine import (
     Baseline,
     BaselineLearner,
@@ -10,7 +11,7 @@ from model.criteria_engine import (
     save_baselines,
 )
 
-KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")
+KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in", "arp_fail")
 PORT = (1, 2)
 CFG = CriteriaConfig()  # the measured numbers: floors, N = 10, attack floor 50/s, M = 5
 # A user making about one web request per second plus a little DNS and ping
@@ -149,3 +150,128 @@ def test_learner_save_and_load_round_trip(tmp_path):
     save_baselines(str(path), base, seconds=4)
     assert load_baselines(str(path)) == base
     assert load_baselines(str(tmp_path / "missing.json")) is None
+
+
+def _health(t, loss, rtt=2.5):
+    return ServiceHealthMessage(timestamp=t, target_ip="10.0.0.4", sent=10, received=round(10 - loss / 10),
+                                loss_percent=loss, rtt_avg_ms=None if loss == 100 else rtt)
+
+
+def test_weak_attack_with_service_degraded_twice_is_danger():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    weak = {**NORMAL, "udp": 150}  # 3x the attack line: WARNING on its own
+    out = run(engine, c, NORMAL, weak, weak)
+    assert stages(out)[-1] == (RiskStage.WARNING, ThreatType.UDP_FLOOD.value)
+
+    engine.update_health(_health(c.t + 1, loss=40))  # one bad report is not enough
+    out = run(engine, c, weak)
+    assert out[0][0].stage == RiskStage.WARNING
+    engine.update_health(_health(c.t + 1, loss=30))
+    out = run(engine, c, weak)
+    assert out[0][0].stage == RiskStage.DANGER and out[0][0].threat_type == ThreatType.UDP_FLOOD.value
+    assert any(r.startswith("service degraded: loss 30%") for r in out[0][0].reasons)
+
+    engine.update_health(_health(c.t + 1, loss=0))  # service recovered: back to WARNING
+    assert run(engine, c, weak)[0][0].stage == RiskStage.WARNING
+
+
+def test_slow_replies_also_count_as_degraded():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    weak = {**NORMAL, "udp": 150}
+    run(engine, c, NORMAL, weak)
+    for _ in range(2):
+        engine.update_health(_health(c.t + 1, loss=0, rtt=CFG.health_rtt_ms + 1))
+    assert run(engine, c, weak)[0][0].stage == RiskStage.DANGER
+
+
+def test_degraded_service_alone_never_blames_a_port():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    for _ in range(3):
+        engine.update_health(_health(c.t + 1, loss=100))
+    out = run(engine, c, NORMAL, NORMAL, NORMAL)
+    assert all(d[0].stage == RiskStage.NORMAL for d in out[1:])
+
+
+def test_stale_health_is_ignored():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    weak = {**NORMAL, "udp": 150}
+    for _ in range(2):
+        engine.update_health(_health(c.t, loss=100))
+    out = run(engine, c, *[weak] * 5)  # 10 s later the controller has stopped reporting
+    assert out[-1][0].stage == RiskStage.WARNING
+
+
+def _conns(t, slow):
+    return ServerConnMessage(timestamp=t, server_ip="10.0.0.4", port=80,
+                             clients=[ServerConnItem(client_ip="10.0.0.2", open=max(slow, 1), slow=slow)])
+
+
+def test_slow_http_from_server_side_connection_counts():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    run(engine, c, NORMAL)
+    engine.update_server_conns(_conns(c.t + 1, slow=3))  # a few slow connections: only WATCH
+    assert run(engine, c, NORMAL)[0][0].stage == RiskStage.WATCH
+    out = []
+    for _ in range(2):
+        engine.update_server_conns(_conns(c.t + 1, slow=30))  # 3x the line: WARNING after two reports
+        out += run(engine, c, NORMAL)
+    assert stages(out) == [(RiskStage.WATCH, None), (RiskStage.WARNING, ThreatType.SLOW_DDOS.value)]
+    for _ in range(2):
+        engine.update_server_conns(_conns(c.t + 1, slow=150))  # Slowloris default: 15x
+        last = run(engine, c, NORMAL)
+    assert stages(last) == [(RiskStage.DANGER, ThreatType.SLOW_DDOS.value)]
+
+
+def test_slow_http_report_goes_stale():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    engine.update_server_conns(_conns(c.t, slow=150))
+    out = run(engine, c, *[NORMAL] * 6)  # the collector stopped reporting
+    assert out[-1][0].threat_type is None
+
+
+def test_internal_spread_from_failed_arp_targets():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, *[{**NORMAL, "arp_fail": 5}] * 4)  # 10 new missing hosts per report
+    assert [s[1] for s in stages(out)[1:]] == [None, None, None, ThreatType.INTERNAL_SPREAD.value]  # 30 ≥ 25
+    out = run(engine, c, NORMAL, NORMAL)  # stopped looking for new hosts
+    assert stages(out)[-1][1] is None
+
+
+def test_a_few_missing_hosts_is_not_spread():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, *[{**NORMAL, "arp_fail": 0.5}] * 20)  # 20 in 40 s: under 25
+    assert all(s is None or s[1] is None for s in stages(out))
+
+
+def test_rst_burst_without_own_probes_is_not_a_scan():
+    """The server resetting 150 of this host's old connections at once is not a port scan."""
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, {**NORMAL, "rst_in": 75}, NORMAL, {**NORMAL, "rst_in": 0.5}, NORMAL)
+    assert all(s is None or s[1] is None for s in stages(out))
+
+
+def test_approved_relearn_follows_a_real_rise_then_reverts():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    busy = {**NORMAL, "udp": 150}  # a genuine UDP-heavy event (e.g. a game launch): looks like a weak flood
+    out = run(engine, c, NORMAL, busy, busy)
+    assert stages(out)[-1] == (RiskStage.WARNING, ThreatType.UDP_FLOOD.value)
+
+    assert engine.approve_relearn(until=c.t + 120) == [PORT]  # admin approves 2 minutes
+    out = run(engine, c, *[busy] * 30)
+    assert out[-1][0].threat_type is None and "relearning (approved)" in out[-1][0].reasons
+    assert engine.baseline(PORT, "udp").mean > 100  # learned beyond the usual 2x cap
+    assert engine.baseline(PORT, "gap").mean == pytest.approx(0.0, abs=0.1)  # attack signals are not relearned
+
+    run(engine, c, *[busy] * 31)  # the approved period ends: back to the pre-learned value
+    assert engine.baseline(PORT, "udp").mean == pytest.approx(0.5)
+    out = run(engine, c, busy, busy)
+    assert stages(out)[-1] == (RiskStage.WARNING, ThreatType.UDP_FLOOD.value)
+
+
+def test_relearn_does_not_learn_from_a_danger_level_attack():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    run(engine, c, NORMAL)
+    engine.approve_relearn(until=c.t + 600)
+    out = run(engine, c, *[{**NORMAL, "udp": 2000}] * 5)
+    assert out[-1][0].stage == RiskStage.DANGER
+    assert engine.baseline(PORT, "udp").mean < 1.0

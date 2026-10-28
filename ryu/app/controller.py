@@ -23,7 +23,7 @@ from ryu.controller.handler import (
     set_ev_cls,
 )
 from ryu.lib import hub
-from ryu.lib.packet import arp, ether_types, ethernet, ipv4, packet
+from ryu.lib.packet import arp, ether_types, ethernet, icmp, ipv4, packet
 from ryu.ofproto import ofproto_v1_3
 
 
@@ -32,7 +32,14 @@ from harness.contracts.sdn_events import (
     REDIS_CHANNEL_ANOMALY_ALERT,
     REDIS_CHANNEL_CONTROL_COMMAND,
     REDIS_CHANNEL_FLOW_COUNTS,
+    REDIS_CHANNEL_SERVICE_HEALTH,
     REDIS_CHANNEL_TOPOLOGY_SYNC,
+    SERVICE_PROBE_DPID,
+    SERVICE_PROBE_INTERVAL_SEC,
+    SERVICE_PROBE_IP,
+    SERVICE_PROBE_MAC,
+    SERVICE_PROBE_TARGET_IP,
+    SERVICE_PROBE_TIMEOUT_SEC,
     WARNING_HOLD_SEC,
     WARNING_RATE_LIMIT_PPS,
     AnomalyAlertMessage,
@@ -42,6 +49,7 @@ from harness.contracts.sdn_events import (
     FlowCountItem,
     FlowCountMessage,
     RiskStage,
+    ServiceHealthMessage,
     ThreatType,
     TopologyLink,
     TopologyNode,
@@ -74,6 +82,46 @@ COUNT_COOKIE_MASK = 0xFFFF << 48
 COUNT_KINDS = [k.value for k in CountKind]
 
 TCP_FIN, TCP_SYN, TCP_RST, TCP_ACK = 0x001, 0x002, 0x004, 0x010
+# 서비스 상태 확인 ping의 ICMP id (다른 ping과 구분)
+PROBE_ICMP_ID = 0x5D7E
+ICMP_ECHO_REPLY, ICMP_ECHO_REQUEST = 0, 8
+
+
+class ProbeTracker:
+    """서비스 상태 확인 ping의 보낸 시각과 왕복 시간을 기록해 2초마다 손실·지연으로 요약한다.
+
+    응답 대기 시간(timeout)이 지난 ping만 요약에 넣으므로, 한 번의 요약은 대략 1~3초 전에 보낸 ping을 다룬다.
+    """
+
+    def __init__(self, timeout=SERVICE_PROBE_TIMEOUT_SEC):
+        self.timeout = timeout
+        self.seq = 0
+        self.sent = {}  # seq → 보낸 시각
+        self.rtt_ms = {}  # seq → 왕복 시간(ms), 대기 시간 안에 온 응답만
+
+    def next_seq(self, now):
+        self.seq = self.seq % 0xFFFF + 1
+        self.sent[self.seq] = now
+        return self.seq
+
+    def reply(self, seq, now):
+        sent_at = self.sent.get(seq)
+        if sent_at is not None and seq not in self.rtt_ms and now - sent_at <= self.timeout:
+            self.rtt_ms[seq] = (now - sent_at) * 1000.0
+
+    def summary(self, now, target_ip=SERVICE_PROBE_TARGET_IP):
+        settled = [seq for seq, sent_at in self.sent.items() if now - sent_at >= self.timeout]
+        if not settled:
+            return None
+        rtts = [self.rtt_ms[seq] for seq in settled if seq in self.rtt_ms]
+        for seq in settled:
+            self.sent.pop(seq)
+            self.rtt_ms.pop(seq, None)
+        return ServiceHealthMessage(
+            timestamp=now, target_ip=target_ip, sent=len(settled), received=len(rtts),
+            loss_percent=round(100.0 * (len(settled) - len(rtts)) / len(settled), 1),
+            rtt_avg_ms=round(sum(rtts) / len(rtts), 2) if rtts else None,
+            rtt_max_ms=round(max(rtts), 2) if rtts else None)
 
 
 def count_cookie(dpid: int, port: int, kind: str) -> int:
@@ -97,8 +145,12 @@ def police_matches(threat_type: str) -> list:
     syn = {"eth_type": 0x0800, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}
     return {ThreatType.UDP_FLOOD.value: [udp], ThreatType.ICMP_FLOOD.value: [icmp],
             ThreatType.SYN_FLOOD_SPOOFING.value: [syn],
+            # Slow HTTP: 새 연결(SYN)만 제한해 연결을 더 늘리지 못하게 한다
+            ThreatType.SLOW_DDOS.value: [syn],
             # 포트 스캔은 TCP(SYN)와 UDP 둘 다 쓰므로 둘 다 제한
-            ThreatType.PORT_SCAN.value: [syn, udp]}.get(threat_type, [{}])
+            ThreatType.PORT_SCAN.value: [syn, udp],
+            # 내부 확산: 다른 PC로의 새 연결(SYN, 445 · 3389 등)을 제한
+            ThreatType.INTERNAL_SPREAD.value: [syn]}.get(threat_type, [{}])
 
 
 def count_rule_specs(arp_table):
@@ -170,9 +222,18 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         self.rate_limits = {}
         # 세는 규칙이 있는 스위치 (접속 호스트가 붙은 스위치만 카운트를 요청한다)
         self.count_dpids = {host["dpid"] for host in self.arp_table.values()}
+        # 내부 확산: 접속 포트마다 ARP로 물어본 '없는 내부 주소' (서로 다른 주소, 누적)
+        self.arp_fail_targets = {(host["dpid"], host["port"]): set() for host in self.arp_table.values()}
+
+        # 서비스 상태 확인: 정상 사용자 자리(S1)에서 보호 서버로 보내는 ping의 손실·지연
+        self.probe = ProbeTracker()
+        # 응답을 S1까지 돌려보낼 때 쓸 경로 = S1에 붙은 호스트로 가는 경로
+        self.probe_route_ip = next(ip for ip, host in sorted(self.arp_table.items())
+                                   if host["dpid"] == SERVICE_PROBE_DPID)
 
         # 2초 주기 비차단 포트 통계 폴링 그린스레드 가동
         self.monitor_thread = hub.spawn(self._monitor_loop)
+        self.probe_thread = hub.spawn(self._probe_loop)
         # Redis 제어/경보 비동기 구독 수신 그린스레드 가동
         self.command_subscriber_thread = hub.spawn(self._command_listener_loop)
 
@@ -227,6 +288,71 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     self.logger.warning(
                         f"[Telemetry] Stats request failed for S{dp.id}: {e}"
                     )
+            self._publish_service_health()
+
+    def _probe_loop(self):
+        """서비스 상태 확인 ping을 0.2초마다 보낸다 (S1이 연결돼 있을 때만)"""
+        while True:
+            hub.sleep(SERVICE_PROBE_INTERVAL_SEC)
+            datapath = self.datapaths.get(SERVICE_PROBE_DPID)
+            if datapath is None:
+                continue
+            try:
+                self._send_probe(datapath)
+            except Exception as e:
+                self.logger.warning(f"[Health] Probe send failed: {e}")
+
+    def _send_probe(self, datapath):
+        """가상 출발지(SERVICE_PROBE_IP)의 ICMP echo를 S1의 테이블에 넣는다.
+
+        OFPP_TABLE로 내보내서 사용자 패킷과 같은 전달 규칙(격리·우회 포함)을 탄다. in_port가 컨트롤러라
+        0번 테이블의 세는 규칙(호스트 포트 기준)에는 걸리지 않는다.
+        """
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        seq = self.probe.next_seq(time.time())
+        pkt = packet.Packet()
+        pkt.add_protocol(ethernet.ethernet(ethertype=ether_types.ETH_TYPE_IP, src=SERVICE_PROBE_MAC,
+                                           dst=self.arp_table[SERVICE_PROBE_TARGET_IP]["mac"]))
+        pkt.add_protocol(ipv4.ipv4(src=SERVICE_PROBE_IP, dst=SERVICE_PROBE_TARGET_IP, proto=1))
+        pkt.add_protocol(icmp.icmp(type_=ICMP_ECHO_REQUEST, code=0, csum=0,
+                                   data=icmp.echo(id_=PROBE_ICMP_ID, seq=seq, data=b"sdn-health-probe")))
+        pkt.serialize()
+        datapath.send_msg(parser.OFPPacketOut(
+            datapath=datapath, buffer_id=ofproto.OFP_NO_BUFFER, in_port=ofproto.OFPP_CONTROLLER,
+            actions=[parser.OFPActionOutput(ofproto.OFPP_TABLE)], data=pkt.data))
+
+    def _handle_probe_reply(self, datapath, in_port, pkt, data):
+        """서비스 상태 확인 ping의 응답: S1에 도착하면 기록하고, 다른 스위치에서는 S1 쪽으로 보낸다."""
+        if datapath.id == SERVICE_PROBE_DPID:
+            icmp_pkt = pkt.get_protocol(icmp.icmp)
+            if (icmp_pkt is not None and icmp_pkt.type == ICMP_ECHO_REPLY
+                    and getattr(icmp_pkt.data, "id", None) == PROBE_ICMP_ID):
+                self.probe.reply(icmp_pkt.data.seq, time.time())
+            return
+        out_port = self.routing_table.get(datapath.id, {}).get(self.probe_route_ip)
+        if out_port is None or out_port == in_port:
+            return
+        parser = datapath.ofproto_parser
+        actions = [parser.OFPActionOutput(out_port)]
+        self.add_flow(datapath, priority=10, match=parser.OFPMatch(eth_type=0x0800, ipv4_dst=SERVICE_PROBE_IP),
+                      actions=actions, idle_timeout=60)
+        datapath.send_msg(parser.OFPPacketOut(datapath=datapath, buffer_id=datapath.ofproto.OFP_NO_BUFFER,
+                                              in_port=in_port, actions=actions, data=data))
+
+    def _publish_service_health(self, now=None):
+        """응답 대기 시간이 지난 ping의 손실·지연을 sdn:health:service로 발행"""
+        msg = self.probe.summary(time.time() if now is None else now)
+        if msg is None:
+            return
+        try:
+            if not self.redis_client:
+                self._init_redis()
+            if self.redis_client:
+                self.redis_client.publish(REDIS_CHANNEL_SERVICE_HEALTH, msg.model_dump_json())
+        except Exception as e:
+            self.logger.warning(f"[Health] Failed to publish service health: {e}")
+            self.redis_client = None
 
     def _request_stats(self, datapath):
         """OFPPortStatsRequest 메시지 발송"""
@@ -257,6 +383,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             counts.append(FlowCountItem(port_no=port, kind=kind, packets=stat.packet_count))
         if not counts:
             return
+        dpid = ev.msg.datapath.id
+        counts += [FlowCountItem(port_no=port, kind=CountKind.ARP_FAIL.value, packets=len(targets))
+                   for (d, port), targets in sorted(self.arp_fail_targets.items()) if d == dpid]
         msg = FlowCountMessage(timestamp=time.time(), dpid=ev.msg.datapath.id, counts=counts)
         try:
             if not self.redis_client:
@@ -825,11 +954,18 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         # [방어 3] IPv4 패킷 유니캐스트 최단 경로 포워딩
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         if ip_pkt:
+            if ip_pkt.dst == SERVICE_PROBE_IP:
+                self._handle_probe_reply(datapath, in_port, pkt, msg.data)
+                return
             self.handle_ipv4(datapath, in_port, eth, ip_pkt, msg.data)
 
     def handle_arp(self, datapath, in_port, eth, arp_pkt):
         if arp_pkt.opcode == arp.ARP_REQUEST:
             target_ip = arp_pkt.dst_ip
+            if target_ip == SERVICE_PROBE_IP:
+                # 서비스 상태 확인 ping의 가상 출발지: 서버가 응답을 보낼 수 있게 대신 답한다
+                self.send_arp_reply(datapath, SERVICE_PROBE_MAC, target_ip, eth.src, arp_pkt.src_ip, in_port)
+                return
             if target_ip in self.arp_table:
                 reply_mac = self.arp_table[target_ip]["mac"]
                 self.send_arp_reply(
@@ -841,6 +977,10 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     f"{target_ip} (MAC: {reply_mac})"
                 )
             else:
+                # 없는 주소: 답하지 않는다. 접속 호스트가 물어봤으면 내부 확산 판단용으로 기록
+                targets = self.arp_fail_targets.get((datapath.id, in_port))
+                if targets is not None and target_ip != arp_pkt.src_ip:
+                    targets.add(target_ip)
                 self.logger.debug(
                     f"[Proxy ARP] S{datapath.id}: Unknown {target_ip} dropped"
                 )
