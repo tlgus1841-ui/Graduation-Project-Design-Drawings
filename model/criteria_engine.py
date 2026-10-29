@@ -8,8 +8,8 @@
     - SYN Flood : SYN − (FIN+RST) 차이가 기준선을 넘는 동안의 누적(CUSUM)이 H 이상
     - UDP Flood : UDP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
     - ICMP Flood: ICMP 초당 수 ≥ max(N × 평소 평균, 공격 최소 규모)
-    - Slow HTTP : 서버 연결 수집기가 센 이 호스트의 '느린 요청' 연결(20초 넘게 요청이 안 끝남, 초당 500B 미만)이
-                  10개 이상
+    - Slow HTTP : 서버 연결 수집기가 센 이 호스트의 '느린 요청' 연결(20초 넘게 요청이 안 끝남, 초당 500B 미만)이나
+                  '안 끝난 요청' 연결(요청을 시작하고 5초 넘게 안 끝남, 초당 500B 미만) 중 큰 쪽이 10개 이상
     - 포트 스캔 : 이 호스트가 받은 실패 응답(RST + ICMP 도달 불가)으로 판단한다.
                   빠른 스캔 = 짧은 창(2주기, 약 4초)에 15개 이상(Zeek)이고 보낸 연결 시도(SYN + UDP)의
                   절반 이상이 실패(Jung 2004). 느린 스캔 = 긴 창(5분, Zeek)에 30개 이상이고 지금도 실패가
@@ -104,7 +104,7 @@ class CriteriaConfig:
     relearn_memory_sec: float = 60.0
     # 내부 확산: 긴 창(5분)에 물어본 없는 내부 주소 수 (Zeek 25개)
     spread_min: float = 25.0
-    # Slow HTTP: 한 PC의 느린 요청 연결 수. 정상 측정에서는 0개
+    # Slow HTTP: 한 PC의 느린 요청(20초) · 안 끝난 요청(5초) 연결 수 중 큰 쪽. 정상 측정에서는 둘 다 0개
     slow_http_min: float = 10.0
     server_conn_stale_sec: float = 6.0
 
@@ -193,7 +193,7 @@ class CriteriaEngine:
         self._state: Dict[PortKey, _PortState] = {}
         self._health: Deque[ServiceHealthMessage] = deque(maxlen=self.config.health_confirm)
         self._port_ips = {key: ip for ip, key in (host_ports or ACCESS_HOST_PORTS).items()}
-        self._slow: Dict[str, Tuple[int, float]] = {}  # 호스트 IP → (느린 요청 수, 보고 시각)
+        self._slow: Dict[str, Tuple[int, int, float]] = {}  # 호스트 IP → (느린 요청 수, 안 끝난 요청 수, 보고 시각)
         for key, inds in (baselines or {}).items():
             st = self._state.setdefault(key, _PortState())
             for ind, (mean, std) in inds.items():
@@ -226,12 +226,12 @@ class CriteriaEngine:
         return keys
 
     def update_server_conns(self, message: ServerConnMessage) -> None:
-        """서버 연결 수집기의 보고 (2초마다): 접속한 PC마다 느린 요청 수."""
-        self._slow = {c.client_ip: (c.slow, message.timestamp) for c in message.clients}
+        """서버 연결 수집기의 보고 (1초마다): 접속한 PC마다 느린 요청 · 안 끝난 요청 수."""
+        self._slow = {c.client_ip: (c.slow, c.pending, message.timestamp) for c in message.clients}
 
-    def _slow_requests(self, key: PortKey, now: float) -> int:
-        slow, ts = self._slow.get(self._port_ips.get(key, ""), (0, 0.0))
-        return slow if now - ts <= self.config.server_conn_stale_sec else 0
+    def _slow_requests(self, key: PortKey, now: float) -> Tuple[int, int]:
+        slow, pending, ts = self._slow.get(self._port_ips.get(key, ""), (0, 0, 0.0))
+        return (slow, pending) if now - ts <= self.config.server_conn_stale_sec else (0, 0)
 
     def _health_degraded(self, m: ServiceHealthMessage) -> bool:
         cfg = self.config
@@ -283,12 +283,13 @@ class CriteriaEngine:
                    if r.get(ind, 0.0) > lines[ind]]
 
         candidates: Dict[str, float] = {}
-        # Slow HTTP: 서버가 응답도 못 하고 붙잡고 있는 이 PC의 느린 요청 연결
-        slow = self._slow_requests(key, now)
-        if slow:
-            reasons.append(f"slow requests {slow}")
-        if slow >= cfg.slow_http_min:
-            candidates[ThreatType.SLOW_DDOS.value] = slow / cfg.slow_http_min
+        # Slow HTTP: 서버가 응답도 못 하고 붙잡고 있는 이 PC의 연결. 안 끝난 요청(5초)으로 일찍 보고,
+        # 요청 없이 열어만 둔 연결은 느린 요청(20초)으로 본다
+        slow, pending = self._slow_requests(key, now)
+        if slow or pending:
+            reasons.append(f"slow requests {slow}, unfinished {pending}")
+        if max(slow, pending) >= cfg.slow_http_min:
+            candidates[ThreatType.SLOW_DDOS.value] = max(slow, pending) / cfg.slow_http_min
         # 포트 스캔: 받은 실패 응답 수. 빠른 스캔(Zeek 15개 + TRW 실패 비율), 느린 스캔(5분 30개),
         # UDP 스캔(도달 불가 4개). 세기는 그중 가장 큰 배율
         # 실패 응답은 이 PC가 보낸 연결 시도에 대한 답이어야 스캔이다: 한 주기에 보낸 시도의 2배까지만 센다.

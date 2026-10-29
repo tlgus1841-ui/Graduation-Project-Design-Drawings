@@ -10,12 +10,12 @@ AI 에이전트는 작업 수행 시 **`rules/` 디렉터리의 모듈별 규칙
 1. **[01_environment.md](rules/01_environment.md)**: `uv` 패키지 관리자 엄격 사용, Python 3.10 vs Ryu Python 3.8 Docker 격리 규칙
 2. **[02_architecture.md](rules/02_architecture.md)**: Ryu 이벤트 루프 비차단(Non-blocking), In_port 단일 격리, 선제적 Dijkstra 우회 라우팅, FSM 플래핑 방지
 3. **[03_contracts_ipc.md](rules/03_contracts_ipc.md)**: Pydantic v2 계약 스키마(SSOT), Redis 4채널 Pub/Sub 규격
-4. **[04_quality_testing.md](rules/04_quality_testing.md)**: `pytest` 265개 전수 통과 원칙, `flake8` 120자 룰 위반 0건 유지
+4. **[04_quality_testing.md](rules/04_quality_testing.md)**: `pytest` 267개 전수 통과 원칙, `flake8` 120자 룰 위반 0건 유지
 
 ---
 
 ## ⚡ Quick Core Directives (핵심 절대 수칙)
 * ❌ `pip install` 절대 금지 ➔ ⭕ 반드시 `uv add` 및 `uv run` 사용
 * ❌ Ryu 컨트롤러 내부에서 AI 모델 직접 추론 금지 ➔ ⭕ 독립 AI Worker 프로세스로 분리
-* ❌ 코드 수정 후 테스트 생략 금지 ➔ ⭕ `uv run pytest`로 265개 테스트 통과 검증 필수
+* ❌ 코드 수정 후 테스트 생략 금지 ➔ ⭕ `uv run pytest`로 267개 테스트 통과 검증 필수
 * ⭕ 모든 변경은 명확하고 직관적인 Git 커밋 메시지(Conventional Commits)로 기록

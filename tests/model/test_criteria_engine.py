@@ -201,9 +201,9 @@ def test_stale_health_is_ignored():
     assert out[-1][0].stage == RiskStage.WARNING
 
 
-def _conns(t, slow):
-    return ServerConnMessage(timestamp=t, server_ip="10.0.0.4", port=80,
-                             clients=[ServerConnItem(client_ip="10.0.0.2", open=max(slow, 1), slow=slow)])
+def _conns(t, slow, pending=0):
+    return ServerConnMessage(timestamp=t, server_ip="10.0.0.4", port=80, clients=[
+        ServerConnItem(client_ip="10.0.0.2", open=max(slow, pending, 1), slow=slow, pending=pending)])
 
 
 def test_slow_http_from_server_side_connection_counts():
@@ -220,6 +220,17 @@ def test_slow_http_from_server_side_connection_counts():
         engine.update_server_conns(_conns(c.t + 1, slow=150))  # Slowloris default: 15x
         last = run(engine, c, NORMAL)
     assert stages(last) == [(RiskStage.DANGER, ThreatType.SLOW_DDOS.value)]
+
+
+def test_unfinished_requests_catch_slow_http_before_20_seconds():
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    run(engine, c, NORMAL)
+    out = []
+    for _ in range(2):
+        engine.update_server_conns(_conns(c.t + 1, slow=0, pending=150))  # 5 s in: none slow yet
+        out += run(engine, c, NORMAL)
+    assert stages(out) == [(RiskStage.WATCH, None), (RiskStage.DANGER, ThreatType.SLOW_DDOS.value)]
+    assert "unfinished 150" in out[-1][0].reasons[-2]
 
 
 def test_slow_http_report_goes_stale():

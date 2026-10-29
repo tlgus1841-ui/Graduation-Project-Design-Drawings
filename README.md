@@ -157,7 +157,7 @@ Self_Defending_SDN_Tower/
 ├── model/                                 # Isolation Forest 탐지 모델 및 Criteria 분류 엔진
 ├── traffic/                               # Scapy 정상/공격 트래픽 생성기 (flood, scan, slowhttp, spread)
 ├── scripts/                               # E2E 시나리오 데모 러너 및 제어 스크립트
-└── tests/                                 # 265개 단위/통합/벤치마크 테스트 스위트
+└── tests/                                 # 267개 단위/통합/벤치마크 테스트 스위트
 ```
 
 ---
@@ -192,7 +192,7 @@ cd Graduation-Project-Design-Drawings
 # 2. Python 가상환경 및 의존성 동기화
 uv sync
 
-# 3. 전체 테스트 스위트 실행 (265개 전수 통과 확인)
+# 3. 전체 테스트 스위트 실행 (267개 전수 통과 확인)
 uv run pytest -v
 ```
 
