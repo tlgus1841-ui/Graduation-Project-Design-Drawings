@@ -13,6 +13,23 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] feat(rules): AI 에이전트 전용 rules/ 모듈 구축 및 .cursorrules 슬림화
+* **작업자:** 박시현 (Tech Lead) with Antigravity
+* **작업 유형:** `Feat` / `Chore`
+* **배경:** AI 에이전트(Claude Code, Antigravity, Cursor 등) 중심 개발 체제에 맞춰, 단일 파일(`.cursorrules`)에 혼재되어 있던 복잡한 개발 지침을 5대 주제별 모듈형 룰 디렉터리(`rules/`)로 분리 구축. `docs/planning/environment_rules.md`를 흡수하여 `docs/`의 순수 산출물 순도를 제고함.
+* **주요 변경 파일 및 폴더:**
+  - `rules/` (신규 룰 디렉터리 생성):
+    - `01_environment.md`: `uv` 패키지 관리자 엄격 사용 및 Ryu Python 3.8 Docker 격리 규칙
+    - `02_architecture.md`: Ryu 이벤트 루프 비차단(Non-blocking), In_port 단일 격리, 선제적 Dijkstra 우회 라우팅, FSM 플래핑 방지
+    - `03_contracts_ipc.md`: Pydantic v2 계약 스키마(SSOT), Redis 4채널 Pub/Sub 규격
+    - `04_quality_testing.md`: `pytest` 265개 전수 통과 원칙, `flake8` 120자 룰 위반 0건 유지
+    - `05_changelog.md`: 작업 완료 직후 `CHANGELOG.md` 최상단 필수 기록 프로토콜
+  - `.cursorrules`: `rules/` 인덱싱 및 핵심 절대 수칙 4개만 남기고 초슬림화. (3인 R&R 선언 룰 제거)
+  - `docs/planning/environment_rules.md`: `rules/01_environment.md`로 흡수 후 완전 삭제.
+  - `README.md`: 프로젝트 디렉터리 구조에 `rules/` 디렉터리 설명 추가.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 런타임 코드 수정 없이 AI 에이전트 개발 지침만 모듈화.
+* **검증:** `pytest` 265 passed (100% Pass).
+
 ### [2026-10-29] refactor(docs): 문서 구조 6대 핵심 디렉토리 통합 개편 및 레거시/스터디 문서 정리
 * **작업자:** 박시현 (Tech Lead) with Antigravity
 * **작업 유형:** `Refactor` / `Docs` / `Chore`
