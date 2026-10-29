@@ -9,9 +9,9 @@
 ```
 +-----------------------------------------------------------------------------------+
 |                        [Layer 4: 웹 관제탑 (Frontend)]                            |
-|  - React 18.2 (Vite) + Tailwind CSS + Lucide Icons                                |
+|  - React 18.3 (Vite) + Tailwind CSS + Lucide Icons                                |
 |  - vis-network 9.1: 실시간 네트워크 토폴로지 (노드 상태, 링크 트래픽, 우회 활성화)   |
-|  - ApexCharts 3.46: 실시간 BPP/PPS 시계열 차트 & 이상치 스코어                      |
+|  - ApexCharts 3.54: 실시간 BPP/PPS 시계열 차트 & 이상치 스코어                      |
 |  - Event Timeline: 실시간 보안 알림 & 비상 수동 격리/복원 제어 패널               |
 +-----------------------------------------------------------------------------------+
                                         ▲ WebSocket (실시간 브로드캐스팅)
@@ -126,4 +126,4 @@
 | **IPC Bus** | **Redis** | **7.2-alpine** | Docker 컨테이너 | 고속 Pub/Sub 메시지 브로커 (포트 6379) |
 | **AI Engine** | **Scikit-learn / Criteria** | **1.3.2 / Py 3.10** | Host venv | 6종 공격 이상 탐지 및 실시간 분류 |
 | **Web Backend** | **FastAPI** | **0.109.2** | Host venv | 비동기 WebSocket Hub & REST API |
-| **Web Frontend** | **React / Tailwind** | **18.2 / 3.4** | Vite 번들러 | 실시간 관제탑 대시보드 UI |
+| **Web Frontend** | **React / Tailwind** | **18.3 / 3.4** | Vite 번들러 | 실시간 관제탑 대시보드 UI |
