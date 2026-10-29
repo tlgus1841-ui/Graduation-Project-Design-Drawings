@@ -11,7 +11,6 @@ AI 에이전트는 작업 수행 시 **`rules/` 디렉터리의 모듈별 규칙
 2. **[02_architecture.md](rules/02_architecture.md)**: Ryu 이벤트 루프 비차단(Non-blocking), In_port 단일 격리, 선제적 Dijkstra 우회 라우팅, FSM 플래핑 방지
 3. **[03_contracts_ipc.md](rules/03_contracts_ipc.md)**: Pydantic v2 계약 스키마(SSOT), Redis 4채널 Pub/Sub 규격
 4. **[04_quality_testing.md](rules/04_quality_testing.md)**: `pytest` 265개 전수 통과 원칙, `flake8` 120자 룰 위반 0건 유지
-5. **[05_changelog.md](rules/05_changelog.md)**: 작업 완료 직후 `CHANGELOG.md` 최상단 필수 기록 프로토콜
 
 ---
 
@@ -19,4 +18,4 @@ AI 에이전트는 작업 수행 시 **`rules/` 디렉터리의 모듈별 규칙
 * ❌ `pip install` 절대 금지 ➔ ⭕ 반드시 `uv add` 및 `uv run` 사용
 * ❌ Ryu 컨트롤러 내부에서 AI 모델 직접 추론 금지 ➔ ⭕ 독립 AI Worker 프로세스로 분리
 * ❌ 코드 수정 후 테스트 생략 금지 ➔ ⭕ `uv run pytest`로 265개 테스트 통과 검증 필수
-* ❌ 작업 완료 후 기록 누락 금지 ➔ ⭕ 작업 직후 `CHANGELOG.md` 최상단에 표준 양식 기록
+* ⭕ 모든 변경은 명확하고 직관적인 Git 커밋 메시지(Conventional Commits)로 기록

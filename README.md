@@ -132,12 +132,11 @@
 
 ```text
 Self_Defending_SDN_Tower/
-├── CHANGELOG.md                           # 팀원 & AI 에이전트 작업 변경 이력 공식 기록 (SSOT)
 ├── docker-compose.yml                     # Redis 7.2 및 Ryu 4.34 컨테이너 오케스트레이션
 ├── pyproject.toml                         # Python 3.10 (uv) 의존성 및 린트/테스트 설정
 ├── .cursorrules                           # AI 에이전트 개발 수칙 인덱스 및 핵심 수칙
 │
-├── rules/                                 # 🤖 AI 에이전트 개발 규칙 (환경, 아키텍처, 계약, 품질, CHANGELOG)
+├── rules/                                 # 🤖 AI 에이전트 개발 규칙 (환경, 아키텍처, 계약, 품질)
 │
 ├── docs/                                  # 6대 핵심 기술 및 프로젝트 문서
 │   ├── thesis/                            # 🎓 학사 졸업논문 원고 (thesis_draft.md)
@@ -172,7 +171,6 @@ Self_Defending_SDN_Tower/
 * 📊 **발표 슬라이드 아웃라인 & 시연 런북:** [`docs/presentation/ppt_slide_deck_outline.md`](docs/presentation/ppt_slide_deck_outline.md)
 * 📋 **종합 로드맵 (ROADMAP):** [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md)
 * 🚀 **순수 OVS 단독 구동 전환 계획서:** [`docs/planning/native_ovs_transition_plan.md`](docs/planning/native_ovs_transition_plan.md)
-* 📝 **프로젝트 변경 이력 (CHANGELOG):** [`CHANGELOG.md`](CHANGELOG.md)
 
 ---
 
