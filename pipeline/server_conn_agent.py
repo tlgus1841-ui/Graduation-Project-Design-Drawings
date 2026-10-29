@@ -120,7 +120,10 @@ def main() -> None:
     a = p.parse_args()
 
     import redis
-    r = redis.Redis.from_url(a.redis_url)
+    # redis-py 5.0.1의 Redis.from_url() 타입 스텁이 mypy에서 반환 타입을 None으로
+    # 잘못 추론한다(런타임은 정상). 이 저장소의 다른 곳(model/inference_worker.py 등)과
+    # 동일하게 ConnectionPool.from_url()을 거치는 방식으로 피한다.
+    r = redis.Redis(connection_pool=redis.ConnectionPool.from_url(a.redis_url))
     tracker = ConnTracker()
     cmd = ss_command(a.port, a.netns_pid)
     print(f"[server_conn_agent] watching {a.server_ip}:{a.port} every {a.interval}s", flush=True)
