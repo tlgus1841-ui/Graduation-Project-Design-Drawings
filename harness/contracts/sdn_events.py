@@ -160,10 +160,12 @@ class ServerConnItem(BaseModel):
     client_ip: str
     open: int = Field(..., description="Established connections from this client")
     slow: int = Field(..., description="Of those, slow requests: open >= 20 s, no response sent yet, < 500 B/s")
+    pending: int = Field(0, description="Of those, unfinished requests: request started, open >= 5 s, "
+                                        "no response sent yet, < 500 B/s")
 
 
 class ServerConnMessage(BaseModel):
-    """Server-side connection summary published every 2 seconds (Channel: sdn:stats:serverconn)."""
+    """Server-side connection summary published every second (Channel: sdn:stats:serverconn)."""
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp (seconds)")
     server_ip: str
     port: int
