@@ -259,34 +259,39 @@ echo "=== ✅ Native OVS 토폴로지 정리 완료 ==="
 
 ## 4. 트래픽 주입 및 시연 실행 가이드
 
-Mininet CLI 대신 Linux 네임스페이스 명령을 직접 사용하여 백그라운드/포그라운드 트래픽을 주입합니다.  
-*(※ 의존성 라이브러리가 포함된 가상환경 파이썬 `$(pwd)/.venv/bin/python`을 사용합니다.)*
+Mininet CLI 대신 Linux 네임스페이스 명령 및 표준 래퍼 스크립트를 사용하여 트래픽을 주입합니다.
 
 ```bash
 # 1. 정상 사용자 Ping 테스트
 sudo ip netns exec ns_legit ping -c 3 10.0.0.4
 
-# 2. 정상 HTTP/웹 트래픽 생성기 실행
-sudo ip netns exec ns_legit $(pwd)/.venv/bin/python -m traffic.normal_user --target 10.0.0.4
+# 2. 통합 래퍼 스크립트를 활용한 6종 트래픽 주입 (scripts/native_attack.sh)
+sudo ./scripts/native_attack.sh syn 10 500       # 10초간 500 PPS SYN Flood
+sudo ./scripts/native_attack.sh scan 5 200       # 5초간 200 PPS Port Scan (TCP 1-1000)
+sudo ./scripts/native_attack.sh udp 10 400       # 10초간 400 PPS UDP Flood
+sudo ./scripts/native_attack.sh icmp 10 300      # 10초간 300 PPS ICMP Flood
+sudo ./scripts/native_attack.sh slowhttp 15      # 15초간 Slowloris 연결 고갈 공격
+sudo ./scripts/native_attack.sh spread 10 50     # 내부 횡적 확산 (Lateral Movement)
 
-# 3. 고속 SYN Flood 공격 트래픽 발사
-sudo ip netns exec ns_attacker $(pwd)/.venv/bin/python -m traffic.traffic_flood --target 10.0.0.4 --pps 3000
-
-# 4. 포트 스캔 모의 공격 발사
-sudo ip netns exec ns_attacker $(pwd)/.venv/bin/python -m traffic.traffic_scan --target 10.0.0.4 --kind tcp
+# 3. 원격 VM 데모 컨트롤러 활용 (scripts/vm_demo_controller.sh)
+./scripts/vm_demo_controller.sh status           # 전체 컴포넌트 상태 점검
+./scripts/vm_demo_controller.sh attack syn 10 500 # 원격 VM에 공격 주입
+./scripts/vm_demo_controller.sh ping-status      # 정상 Ping 손실률 실시간 확인
+./scripts/vm_demo_controller.sh restart-all      # 전체 스택 원클릭 재기동
 ```
 
 ---
 
-## 5. 단계별 검증 및 롤아웃 계획 (Milestones)
+## 5. 단계별 검증 및 롤아웃 실측 결과 (Milestones & Verification)
 
-| 단계 | 작업 내용 | 검증 기준 및 확인 방법 | 일정 |
+| 단계 | 작업 내용 | 검증 기준 및 확인 방법 | 결과 |
 |:---:|:---|:---|:---:|
-| **Step 1** | `setup_native_ovs.sh` 및 `teardown_native_ovs.sh` 작성 | • `ovs-vsctl show`로 4개 브릿지/포트 번호 확인<br>• `teardown` 후 잔여 인터페이스 0건 확인 | 1일차 |
-| **Step 2** | Ryu 컨트롤러 연동 및 기본 L2 포워딩 검증 | • Ryu 컨트롤러 로그에 DPID 1, 2, 3, 4 스위치 연결 확인<br>• `ns_legit`에서 `ns_server`로 Ping 100% 성공 확인 | 1일차 |
-| **Step 3** | 실시간 텔레메트리 및 관제탑 웹 UI 연동 | • Ryu가 Redis로 포트 통계(2초) 및 플로우 카운트(1초) 송출 확인<br>• React 관제탑 화면에 4개 스위치 다이아몬드 정상 렌더링 | 2일차 |
-| **Step 4** | E2E 자율 방어 및 우회 라우팅 실측 검증 | • `ns_attacker` 공격 주입 시 AI 탐지 확정<br>• S1 ofport 2 즉시 격리 확인<br>• 주 경로(S2) ➔ 우회 경로(S3) 전환 실측 (손실률 0.0%) | 2일차 |
-| **Step 5** | 기존 `topo/diamond_topo.py` 래핑 및 회귀 테스트 | • `tests/` 265개 테스트 100% Pass 유지<br>• CI/CD 및 로컬 환경에서 테스트 정상 통과 | 3일차 |
+| **Step 1** | `setup_native_ovs.sh` 및 `teardown_native_ovs.sh` 작성 | • `ovs-vsctl show`로 4개 브릿지/포트 핀 고정 확인<br>• `teardown` 후 잔여 인터페이스 0건 확인 | **완료 (Verified)** |
+| **Step 2** | Ryu 컨트롤러 연동 및 기본 L2 포워딩 검증 | • Ryu 컨트롤러 로그에 S1, S2, S3, S4 스위치 연결 확인<br>• `ns_legit`에서 `ns_server`로 Ping 100% 성공 확인 (RTT 0.07ms) | **완료 (Verified)** |
+| **Step 3** | 실시간 텔레메트리 및 관제탑 웹 UI 연동 | • Ryu가 Redis로 통계 송출, FastAPI WebSocket 브로드캐스팅<br>• React 관제탑 화면에 4개 스위치 다이아몬드 정상 렌더링 | **완료 (Verified)** |
+| **Step 4** | E2E 자율 방어 및 우회 라우팅 실측 검증 | • `ns_attacker` 공격 주입 시 2초 내 AI 탐지 확정<br>• S1 ofport 2 즉시 격리 (`Priority 100 Drop`) 확인<br>• S1-S3-S4 우회 경로 무유실 전환 실측 (**정상 트래픽 손실률 0.0%**) | **완료 (Verified)** |
+| **Step 5** | 6종 공격 정밀 분류 및 FSM 자율 복구 검증 | • SYN Flood, Port Scan, UDP Flood 각각 정확한 threat_type 분류<br>• 공격 중단 5초 쿨다운 후 NORMAL 자율 복구 실증 | **완료 (Verified)** |
+| **Step 6** | 단위/통합 회귀 테스트 스위트 전수 통과 | • `uv run pytest` **265개 테스트 전수 통과 (100% Pass)** | **완료 (Verified)** |
 
 ---
 

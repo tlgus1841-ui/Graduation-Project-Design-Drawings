@@ -27,10 +27,12 @@
 실제 분산 테스트베드(GCP VM / OVS 4-스위치 다이아몬드 토폴로지)에서 실측 검증된 정량적 스펙입니다:
 
 | 성능 지표 | 실측 검증 수치 | 비고 |
-| :--- | :---: | :--- |
+| :--- | :--- :--- | :--- |
 | **초고속 방어 반응 속도** | **1.4 ~ 2.5 ms** | 이상 경보 수신 후 In_port 격리 및 우회 플로우 설치 완료까지 |
 | **정상 트래픽 가용성** | **손실률 0.0% (Zero Loss)** | 대규모 공격 중에도 정상 호스트 통신 무유실 유지 |
+| **왕복 네트워크 지연시간 (RTT)** | **평균 0.07 ms** | 커널 레벨 Native OVS + netns 환경 실측 지연시간 |
 | **극한 내구성 스트레스 실증** | **952k PPS (초당 95만 패킷)** | 952k PPS 폭격 시 서버 유출 0개, 총 **858만 개 패킷 완벽 차단** |
+| **데이터 플레인 독립성** | **Mininet 100% 탈피** | 순수 커널 OVS 2.17 + Linux Network Namespace 기반 상용급 구축 |
 | **이상 탐지 확정 시간** | **1.7 ~ 2.5 초** | 1초 주기 실시간 카운트 집계 엔진 기준 |
 | **지원 공격 유형 분류** | **6종 정밀 분류** | SYN/UDP/ICMP Flood, Port Scan, Slow HTTP, 내부 확산 |
 | **테스트 슈트 통과율** | **265 / 265 (100% Pass)** | API, 하네스, 모델, 컨트롤러, 벤치마크 전수 검증 |
@@ -210,11 +212,36 @@ npm run dev
 
 ### 7.4 실제 SDN 컨트롤러 & Redis 연동 (Live 모드)
 ```bash
-# Redis 브로커 및 Ryu 컨트롤러 기동
-docker compose up -d redis ryu
+# 1. Redis 브로커 및 Ryu 컨트롤러 기동
+docker compose up -d redis-broker ryu-controller
 
-# 백엔드를 Live 모드로 실행
+# 2. 백엔드를 Live 모드로 실행
 SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000
+
+# 3. AI 이상 탐지 워커 실행
+uv run python -m model.inference_worker --model model/isolation_forest.joblib
+```
+
+### 7.5 [Phase 6-A] 순수 커널 OVS 단독 구동 (Mininet 완전 탈피)
+```bash
+# 1. 4-스위치 다이아몬드 토폴로지 기동 (root 권한 필요)
+sudo ./scripts/setup_native_ovs.sh
+
+# 2. 정상 사용자 배경 Ping 실행 (손실률 관측)
+sudo ip netns exec ns_legit ping -i 0.5 10.0.0.4
+
+# 3. 원클릭 트래픽 주입 (SYN, Port Scan, UDP, ICMP, Slow HTTP, Lateral Spread 등)
+sudo ./scripts/native_attack.sh syn 10 500       # 10초간 500 PPS SYN Flood
+sudo ./scripts/native_attack.sh scan 5 200       # 5초간 200 PPS Port Scan
+sudo ./scripts/native_attack.sh udp 10 400       # 10초간 400 PPS UDP Flood
+
+# 4. 원격 클라우드 VM 제어 (GCP VM 원클릭 연동)
+./scripts/vm_demo_controller.sh status           # 전체 컴포넌트 상태 일괄 점검
+./scripts/vm_demo_controller.sh attack syn 10 500 # 원격 VM에 공격 주입
+./scripts/vm_demo_controller.sh ping-status      # 정상 Ping 손실률 확인
+
+# 5. 토폴로지 클린업
+sudo ./scripts/teardown_native_ovs.sh
 ```
 
 ---

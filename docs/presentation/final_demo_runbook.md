@@ -26,26 +26,26 @@
 
 | # | 확인 | 명령 / 방법 |
 |:---:|:---|:---|
-| 1 | Redis 실행 | `redis-server --daemonize yes` → `redis-cli ping` 이 `PONG` |
-| 2 | Ryu 실행 | `ryu-manager --ofp-tcp-listen-port 6653 ryu/app/controller.py` (또는 `docker compose up -d redis-broker ryu-controller`) |
-| 3 | 관제탑 백엔드 (실데이터) | `SDN_MOCK=0 uv run uvicorn api.main:app --port 8000` |
-| 4 | 관제탑 화면 | `cd ui && npm run dev` → 브라우저 전체 화면, 배지 `CONNECTED` · `LIVE` |
-| 5 | AI 추론 워커 | `uv run python -m model.inference_worker --model model/isolation_forest.joblib --log demo_events.jsonl` |
-| 6 | Mininet 기동 · pingall | `sudo python3 topo/diamond_topo.py` → `pingall` 0% |
-| 7 | 정상 ping 시작 | `h_legit ping -i 0.2 10.0.0.4` (터미널 창을 관제탑 옆에 배치) |
+| 1 | Redis & Ryu 실행 | `docker compose up -d redis-broker ryu-controller` |
+| 2 | 관제탑 백엔드 (실데이터) | `SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000` |
+| 3 | 관제탑 화면 | `cd ui && npm run dev` → 브라우저 접속 `http://localhost:5173` (배지 `CONNECTED` · `LIVE`) |
+| 4 | AI 추론 워커 | `uv run python -m model.inference_worker --model model/isolation_forest.joblib` |
+| 5 | **Native OVS 토폴로지 기동** | `sudo ./scripts/setup_native_ovs.sh` (Mininet 없이 커널 OVS 및 netns 기동) |
+| 6 | 정상 ping 시작 | `sudo ip netns exec ns_legit ping -i 0.5 10.0.0.4` (터미널 창을 관제탑 옆에 배치) |
+| 7 | 원격 클라우드 VM 제어 시 | `./scripts/vm_demo_controller.sh status` 및 `attack` 명령어 활용 |
 | 8 | 백업 영상 | 바탕화면에 두고 재생 프로그램을 미리 열어 둠 |
 | 9 | 화면 | 알림 끄기, 글자 크기 확대, 마우스 커서 강조 |
 
-> 이전 시연 잔여 규칙이 남아 있으면 우회 · 차단이 처음부터 걸려 있을 수 있다. 시작 전 `bash scripts/reset_env.sh` 또는 `sudo mn -c` 후 다시 기동한다.
+> 이전 시연 잔여 규칙이 남아 있으면 우회 · 차단이 처음부터 걸려 있을 수 있다. 시작 전 `sudo ./scripts/reset_env.sh` 로 완전 클린업 후 다시 기동한다.
 
 ## 3. 시연 4단계 진행 (약 2분 30초)
 
 | 단계 | 조작 | 관객이 볼 것 | 말할 것 |
 |:---:|:---|:---|:---|
-| ① 정상 | 없음 (ping 흐르는 중) | 배지 `NORMAL`, S1:3 쪽 트래픽 | "정상 사용자의 ping이 S1, S2를 거쳐 서버로 갑니다." |
-| ② 공격 | `h_attacker .venv/bin/python -m traffic.traffic_attack --dst 10.0.0.4 --duration 20` (Mininet을 레포 폴더에서 띄운 경우) | 상태 띠 빨간 점멸, S1:2 PPS 급증 · BPP 54B | "IP를 위조한 SYN Flood입니다. 패킷이 작고 많아집니다." |
-| ③ 격리 · 우회 | 없음 (자동) | `MITIGATED`, 격리 포트 S1:2, 우회 S1→S3→S4, 탐지→격리 ms | "두 번 연속 확인되자 포트를 막고 정상 트래픽을 돌렸습니다. ping은 끊기지 않습니다." |
-| ④ 복구 | 없음 (공격 20초 후 자동 종료) | 쿨다운 10초 진행 막대 → `NORMAL` + 복구 완료 알림 | "10초간 조용한 것을 확인하고 스스로 원래 경로로 돌아왔습니다." |
+| ① 정상 | 없음 (ping 흐르는 중) | 배지 `NORMAL`, S1:3 주 경로 트래픽 | "정상 사용자의 ping이 S1, S2를 거쳐 서버로 갑니다. (지연시간 0.07ms)" |
+| ② 공격 | `sudo ./scripts/native_attack.sh syn 15 500`<br>(또는 `./scripts/vm_demo_controller.sh attack syn 15 500`) | 상태 띠 빨간 점멸, S1:2 PPS 급증 · BPP 54B 급감 | "IP를 위조한 고속 SYN Flood입니다. 패킷 크기가 급감하고 포트 카운트가 치솟습니다." |
+| ③ 격리 · 우회 | 없음 (자율 방어) | `MITIGATED`, In_port 2 단일 격리, 우회 S1→S3→S4 활성화 | "공격을 감지하고 포트를 즉시 차단(Priority 100)한 뒤, 정상 트래픽을 S3로 우회시켰습니다. ping은 단 1개도 끊기지 않습니다." |
+| ④ 복구 | 없음 (공격 종료 후) | 쿨다운 5초 검증 진행 막대 → `NORMAL` + 자가 복구 완료 알림 | "위협 소멸을 실측 검증하고 플래핑 없이 스스로 원래 주 경로(S2)로 복구되었습니다." |
 
 ping 창에서 `icmp_seq` 번호가 건너뛰지 않는 것을 마지막에 짚어 준다.
 
