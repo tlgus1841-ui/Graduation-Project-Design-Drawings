@@ -90,8 +90,11 @@ AI 코딩 에이전트(Antigravity, Cursor 등)가 코드를 생성할 때 아�
 ### 3.2 Verification Harness (초고속 검증 러너)
 1. **Mock IPC Bus (`tests/harness/test_mock_ipc.py`):**
    - Mininet이나 Redis 서버 없이도 메모리 상에서 메시지 발행/구독과 직렬화/역직렬화를 0.1초 내로 단위 검증.
-2. **Headless Topology Simulator (`tests/harness/test_headless_topology.py`):**
-   - 가상 환경에서 5-스위치 다이아몬드 토폴로지를 에뮬레이션하여 OpenFlow `OFPFC_ADD` 다중 홉 우회 규칙이 올바르게 생성되는지 검증.
+2. **Headless Topology Simulator:**
+   - 가상 환경에서 다이아몬드 토폴로지를 에뮬레이션하여 OpenFlow `OFPFC_ADD` 다중 홉 우회 규칙이 올바르게 생성되는지 검증.
+   - *(실제 구현 방향 전환: 계획 당시 구상한 경량 헤드리스 목(mock) 시뮬레이터 대신, 10주차부터
+     실제 Mininet/OVS 환경에서 우회 규칙 설치와 무유실 여부를 직접 측정하는 쪽으로 갔다 —
+     `harness/verification/reroute_loss_check.py` / `tests/harness/test_reroute_loss_check.py`.)*
 
 ---
 
@@ -186,8 +189,8 @@ Self_Defending_SDN_Tower/
 
 | 평가 항목 | 목표 성능 지표 | 검증 담당 | 검증 도구 및 하네스 |
 |:---|:---:|:---:|:---|
-| **E2E 방어 반응시간** | **$\le 100\text{ms}$** (탐지 후 플로우 주입 완료) | 박시현 / 유재민 | `harness/eval/latency_profiler.py` |
-| **이상 탐지 정확도** | **F1-Score $\ge 0.95$**, **FPR $\le 1.0\%$** | 유재민 | `harness/eval/model_evaluator.py` |
+| **E2E 방어 반응시간** | **$\le 100\text{ms}$** (탐지 후 플로우 주입 완료) | 박시현 / 유재민 | `model/latency_profiler.py` |
+| **이상 탐지 정확도** | **F1-Score $\ge 0.95$**, **FPR $\le 1.0\%$** | 유재민 | `tests/model/test_model_evaluator.py` |
 | **정상 트래픽 가용성** | 공격 중 우회 경로 전환 시 **패킷 유실률 $\le 2.0\%$** | 박시현 / 유재민 | `traffic_normal.py` 수신율 카운터 |
 | **핵심 인프라 보호** | 화이트리스트 포트 오차단 발생률 **0건 (0%)** | 박시현 | `harness/safety/whitelist_guard.py` |
 | **개발 생산성** | Mock IPC 통과율 **100%**, 회귀 버그 발생률 0 | 팀 전원 | `tests/harness/test_mock_ipc.py` |
