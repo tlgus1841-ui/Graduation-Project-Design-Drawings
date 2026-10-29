@@ -64,7 +64,20 @@
 
 ## 3. 🚀 향후 상용화 로드맵 (Commercialization Roadmap)
 
-연구/프로토타입 수준을 넘어 엔터프라이즈 및 클라우드 환경 배포를 위한 차세대 마일스톤입니다.
+연구/프로토타입 수준을 넘어 엔터프라이즈 및 클라우드 환경 배포를 위한 상용화 필수 요건 및 차세대 마일스톤입니다.
+
+### 3.1 상용 엔터프라이즈 환경 4대 필수 요건 (Production Requirements)
+
+| 요건 | 학술/PoC 한계점 | 상용 엔터프라이즈 요구치 (Production Spec) | 당사 구현/대응 전략 |
+| :--- | :--- | :--- | :--- |
+| **1. 컨트롤러 생존성<br>(HA & Anti-DoS)** | 단일 컨트롤러 다운 시 전체 네트워크 마비, 대량 Packet-In 시 CPU 고갈 | • 스위치 하드웨어 레이트 리밋(Rate Limiting)<br>• 3대 이상 컨트롤러 클러스터링(Raft 합의 기반 즉각 Failover) | • Warning 단계 스위치 미터링 룰 적용<br>• Raft 기반 분산 컨트롤러 클러스터링 전환 |
+| **2. 오탐 방지 및<br>정상 사용자 보호** | 단순 임계치 초과 차단으로 타임세일/정상 급증 시 고객 차단 사고 | • 다단계 정화(SYN Cookie, CAPTCHA, 스크러빙 센터 우회)<br>• 결제/인증/DNS 등 핵심 비즈니스 트래픽 절대 화이트리스트 | • Flash Crowd 오탐 방지(EwmaDetector + BPP)<br>• 영구 화이트리스트 가드(`whitelist_guard.py`)<br>• 정상 트래픽 무유실 우회(0.0% Loss) 실증 |
+| **3. 심층 방어<br>(L7 가시성 & SFC)** | L2~L4 헤더만 검사하여 80/443 정상 포트로 위장한 웹 공격(SQLi 등) 미탐 | • **SFC (Service Function Chaining)** 도입<br>• 의심 플로우만 가상 WAF/IPS(Suricata)로 동적 라우팅하여 L7 정밀 검사 | • SDN 기반 선택적 트래픽 스티어링(Dynamic Rerouting)<br>• WAF/IPS 컨테이너 연동 체인 구축 |
+| **4. 로깅 및 컴플라이언스<br>(Compliance & SIEM)** | 단순 로컬 파일/콘솔 로깅에 의존, 침해 사고 증적 위변조 취약 | • SIEM 연동 (Kafka ➔ Splunk / ElasticSearch 실시간 전송)<br>• ISMS-P, ISO27001 규제 준수를 위한 WORM 무결성 감사 보관 | • Redis 실시간 이벤트 버스 및 WebSocket 피드<br>• 엔터프라이즈 SIEM 수집 파이프라인 확장 |
+
+---
+
+### 3.2 단계별 상용화 실행 마일스톤 (Phases)
 
 ```
 [Phase 6-A] 순수 OVS 단독 구동 전환 (In Progress)
@@ -87,6 +100,11 @@
   ├── IPv6 초거대 주소 공간($2^{64}$개) 무작위 변조 공격 시 In_port 단일 룰 방어 실증
   ├── IPv6 기본 헤더(40B) 반영 AI BPP(Bytes Per Packet) 임계값 동적 보정
   └── 관제탑 UI IPv6 토폴로지 및 트래픽 시각화 확장
+
+[Phase 6-E] 엔터프라이즈 심층 방어(SFC) 및 컴플라이언스 체계 구축
+  ├── Service Function Chaining (SFC): 의심 플로우 대상 WAF/IPS(Suricata) 동적 연동
+  ├── Kafka / ElasticSearch 기반 엔터프라이즈 SIEM 로깅 파이프라인 구축
+  └── Raft 기반 다중 컨트롤러 HA 클러스터링 구성 (무중단 페일오버 실증)
 ```
 
 ---
