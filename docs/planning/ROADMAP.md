@@ -74,6 +74,7 @@
 | **2. 오탐 방지 및<br>정상 사용자 보호** | 단순 임계치 초과 차단으로 타임세일/정상 급증 시 고객 차단 사고 | • 다단계 정화(SYN Cookie, CAPTCHA, 스크러빙 센터 우회)<br>• 결제/인증/DNS 등 핵심 비즈니스 트래픽 절대 화이트리스트 | • Flash Crowd 오탐 방지(EwmaDetector + BPP)<br>• 영구 화이트리스트 가드(`whitelist_guard.py`)<br>• 정상 트래픽 무유실 우회(0.0% Loss) 실증 |
 | **3. 심층 방어<br>(L7 가시성 & SFC)** | L2~L4 헤더만 검사하여 80/443 정상 포트로 위장한 웹 공격(SQLi 등) 미탐 | • **SFC (Service Function Chaining)** 도입<br>• 의심 플로우만 가상 WAF/IPS(Suricata)로 동적 라우팅하여 L7 정밀 검사 | • SDN 기반 선택적 트래픽 스티어링(Dynamic Rerouting)<br>• WAF/IPS 컨테이너 연동 체인 구축 |
 | **4. 로깅 및 컴플라이언스<br>(Compliance & SIEM)** | 단순 로컬 파일/콘솔 로깅에 의존, 침해 사고 증적 위변조 취약 | • SIEM 연동 (Kafka ➔ Splunk / ElasticSearch 실시간 전송)<br>• ISMS-P, ISO27001 규제 준수를 위한 WORM 무결성 감사 보관 | • Redis 실시간 이벤트 버스 및 WebSocket 피드<br>• 엔터프라이즈 SIEM 수집 파이프라인 확장 |
+| **5. 소프트웨어 정의 망 분리<br>(Zero-Trust Segmentation)** | 단일 서브넷(10.0.0.x) 플랫 구조로 침해 시 내부 확산(Lateral Movement) 취약 | • 용도별 논리 격벽(업무망/인터넷망/서버망/격리망)<br>• Default-Deny 기반 제로 트러스트 마이크로 세그멘테이션 | • OVS 커널 VLAN 태깅 기반 무손실(0.07ms RTT 유지) 망 분리<br>• 침해 단말 Quarantine Zone(VLAN 99) 동적 강등 격리<br>• 금융/공공 ISMS-P 망간 분리 규정 충족 |
 
 ---
 
@@ -104,7 +105,10 @@
   ├── IPv6 기본 헤더(40B) 반영 AI BPP(Bytes Per Packet) 임계값 동적 보정
   └── 관제탑 UI IPv6 토폴로지 및 트래픽 시각화 확장
 
-[Phase 6-E] 엔터프라이즈 심층 방어(SFC) 및 컴플라이언스 체계 구축
+[Phase 6-E] 제로 트러스트 망 분리(Micro-segmentation) 및 엔터프라이즈 심층 방어
+  ├── L2 VLAN 기반 3-Tier 용도별 논리 망 분리 (VLAN 10: 외부망, VLAN 20: 업무망, VLAN 30: 서버망)
+  ├── Zero-Trust 마이크로 세그멘테이션: Default-Deny(Table-Miss Drop) 및 포트별 최소 권한 통제
+  ├── 침해 단말 동적 격리망 강등: 공격 감지 즉시 Quarantine Zone(VLAN 99) 강제 스티어링 (허니팟/포렌식 유도)
   ├── Service Function Chaining (SFC): 의심 플로우 대상 WAF/IPS(Suricata) 동적 연동
   ├── Kafka / ElasticSearch 기반 엔터프라이즈 SIEM 로깅 파이프라인 구축
   └── Raft 기반 다중 컨트롤러 HA 클러스터링 구성 (무중단 페일오버 실증)
