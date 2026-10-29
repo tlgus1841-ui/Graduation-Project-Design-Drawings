@@ -36,19 +36,19 @@ case "${TYPE,,}" in
     ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_attack --dst 10.0.0.4 --duration "${DURATION}" --rate "${RATE}"
     ;;
   scan)
-    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_scan --dst 10.0.0.4 --duration "${DURATION}"
+    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_scan --kind tcp --dst 10.0.0.4 --ports 1-1000 --rate "${RATE}"
     ;;
-  flood|udp)
-    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_flood --dst 10.0.0.4 --type udp --duration "${DURATION}" --pps "${RATE}"
+  udp)
+    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_flood --kind udp --dst 10.0.0.4 --duration "${DURATION}" --pps "${RATE}"
     ;;
   icmp)
-    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_flood --dst 10.0.0.4 --type icmp --duration "${DURATION}" --pps "${RATE}"
+    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_flood --kind icmp --dst 10.0.0.4 --duration "${DURATION}" --pps "${RATE}"
     ;;
   slowhttp)
-    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_slowhttp --dst 10.0.0.4 --duration "${DURATION}"
+    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_slowhttp --server 10.0.0.4 --sockets 150 --interval 2 --duration "${DURATION}"
     ;;
   spread)
-    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_spread --duration "${DURATION}"
+    ip netns exec ns_attacker env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_spread --subnet 10.0.0 --hosts 5-60 --port 445 --rate "${RATE}"
     ;;
   normal)
     ip netns exec ns_legit env PYTHONPATH="${ROOT_DIR}" "${PYTHON_BIN}" -m traffic.traffic_normal --dst 10.0.0.4 --duration "${DURATION}"
