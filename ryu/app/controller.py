@@ -9,6 +9,7 @@ Phase 2 (Week 5 & Week 6) Milestone
 import json
 import os
 import time
+from typing import Dict, List
 
 import eventlet
 eventlet.monkey_patch()
@@ -140,11 +141,11 @@ def decode_count_cookie(cookie: int):
     return (cookie >> 24) & 0xFFFFFF, (cookie >> 8) & 0xFFFF, COUNT_KINDS[index]
 
 
-def police_matches(threat_type: str) -> list:
+def police_matches(threat_type: str) -> List[Dict[str, object]]:
     """경고 단계에서 속도를 제한할 패킷 종류 (in_port 외의 매칭 조건). 모르는 종류면 포트 전체."""
-    udp = {"eth_type": 0x0800, "ip_proto": 17}
-    icmp = {"eth_type": 0x0800, "ip_proto": 1}
-    syn = {"eth_type": 0x0800, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}
+    udp: Dict[str, object] = {"eth_type": 0x0800, "ip_proto": 17}
+    icmp: Dict[str, object] = {"eth_type": 0x0800, "ip_proto": 1}
+    syn: Dict[str, object] = {"eth_type": 0x0800, "ip_proto": 6, "tcp_flags": (TCP_SYN, TCP_SYN | TCP_ACK)}
     return {ThreatType.UDP_FLOOD.value: [udp], ThreatType.ICMP_FLOOD.value: [icmp],
             ThreatType.SYN_FLOOD_SPOOFING.value: [syn],
             # Slow HTTP: 새 연결(SYN)만 제한해 연결을 더 늘리지 못하게 한다
