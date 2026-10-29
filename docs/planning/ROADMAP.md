@@ -85,8 +85,11 @@
   ├── Linux Network Namespace(ip netns) 기반 4-스위치 다이아몬드 토폴로지 구축
   └── setup_native_ovs.sh / teardown_native_ovs.sh 스크립트 표준화
 
-[Phase 6-B] 클라우드 / 컨테이너 오케스트레이션 고도화
-  ├── Docker Compose 단일 패키징 (OVS + Ryu + Redis + FastAPI + UI 올인원 컨테이너화)
+[Phase 6-B] 클라우드 / 컨테이너 오케스트레이션 및 상용 운영 안정성 고도화
+  ├── Docker Compose 단일 패키징 (OVS / Ryu / Redis / FastAPI / AI Worker / UI 올인원 컨테이너화)
+  │     - tmux 수동 세션 의존성 완전 제거 및 컨테이너 자동 재시작(restart: always) 보장
+  ├── 웹 프론트엔드 프로덕션 빌드 서빙 (Vite Dev Server 탈피 ➔ Nginx / FastAPI 정적 마운트 최적화)
+  ├── 프로브 & 텔레메트리 로그 순환(Log Rotation) 및 백그라운드 데몬 생명주기 안정화
   ├── Kubernetes OVS-CNI 연동 환경 검증
   └── Prometheus / Grafana 메트릭 익스포터 연동
 
