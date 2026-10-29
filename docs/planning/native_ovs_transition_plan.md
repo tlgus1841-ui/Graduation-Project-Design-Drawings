@@ -100,6 +100,14 @@ for cmd in ovs-vsctl ethtool ip; do
   fi
 done
 
+# [Pre-flight Check 3] Open vSwitch 데몬 활성화 상태 점검
+if command -v systemctl &>/dev/null; then
+  if ! systemctl is-active --quiet openvswitch-switch; then
+    echo ">>> Open vSwitch 서비스 시작 중..."
+    systemctl start openvswitch-switch || true
+  fi
+fi
+
 CTRL_IP="${CTRL_IP:-127.0.0.1}"
 CTRL_PORT="${CTRL_PORT:-6653}"  # OpenFlow 1.3 IANA 표준 포트 (Ryu 컨테이너 리슨 포트와 일치)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -221,6 +229,14 @@ echo "=== ✅ Native OVS 4-스위치 토폴로지 구축 완료 ==="
 # ==============================================================================
 # Self-Defending SDN Tower: Native OVS Topology Teardown & Clean
 # ==============================================================================
+set -euo pipefail
+
+# Root 권한 확인
+if [[ $EUID -ne 0 ]]; then
+   echo "❌ 오류: 본 스크립트는 네트워크 네임스페이스 및 OVS 조작을 위해 root 권한(sudo)이 필요합니다." >&2
+   exit 1
+fi
+
 echo ">>> OVS 브릿지 삭제..."
 for sw in s1 s2 s3 s4; do
   ovs-vsctl --if-exists del-br "$sw"
@@ -243,20 +259,21 @@ echo "=== ✅ Native OVS 토폴로지 정리 완료 ==="
 
 ## 4. 트래픽 주입 및 시연 실행 가이드
 
-Mininet CLI 대신 Linux 네임스페이스 명령을 직접 사용하여 백그라운드/포그라운드 트래픽을 주입합니다.
+Mininet CLI 대신 Linux 네임스페이스 명령을 직접 사용하여 백그라운드/포그라운드 트래픽을 주입합니다.  
+*(※ 의존성 라이브러리가 포함된 가상환경 파이썬 `$(pwd)/.venv/bin/python`을 사용합니다.)*
 
 ```bash
 # 1. 정상 사용자 Ping 테스트
 sudo ip netns exec ns_legit ping -c 3 10.0.0.4
 
 # 2. 정상 HTTP/웹 트래픽 생성기 실행
-sudo ip netns exec ns_legit python3 -m traffic.normal_user --target 10.0.0.4
+sudo ip netns exec ns_legit $(pwd)/.venv/bin/python -m traffic.normal_user --target 10.0.0.4
 
 # 3. 고속 SYN Flood 공격 트래픽 발사
-sudo ip netns exec ns_attacker python3 -m traffic.traffic_flood --target 10.0.0.4 --pps 3000
+sudo ip netns exec ns_attacker $(pwd)/.venv/bin/python -m traffic.traffic_flood --target 10.0.0.4 --pps 3000
 
 # 4. 포트 스캔 모의 공격 발사
-sudo ip netns exec ns_attacker python3 -m traffic.traffic_scan --target 10.0.0.4 --kind tcp
+sudo ip netns exec ns_attacker $(pwd)/.venv/bin/python -m traffic.traffic_scan --target 10.0.0.4 --kind tcp
 ```
 
 ---
