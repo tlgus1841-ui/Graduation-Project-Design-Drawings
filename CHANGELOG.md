@@ -13,6 +13,33 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] refactor(docs): 문서 구조 6대 핵심 디렉토리 통합 개편 및 레거시/스터디 문서 정리
+* **작업자:** 박시현 (Tech Lead) with Antigravity
+* **작업 유형:** `Refactor` / `Docs` / `Chore`
+* **배경:** 상용화 대비 및 프로젝트 구조 단순화를 위해, 깊은 depth(최대 5단계, 21개 폴더)로 파편화되어 있던 `docs/` 디렉터리를 2단계 6대 핵심 폴더로 전면 개편. 16주차 개발 완료 시점에서 더 이상 참조되지 않는 과거 주차별 계획서/지시서 및 이론 스터디 문서를 일괄 정리함.
+* **주요 변경 파일 및 폴더:**
+  - **신규 6대 핵심 디렉토리 체계화**:
+    - `docs/thesis/`: 학사 졸업논문 원고 (`thesis_draft.md`)
+    - `docs/manual/`: 관제탑 시스템 운영 매뉴얼 (`operator_manual.md`)
+    - `docs/specs/`: 핵심 기술 명세 (`attack_criteria.md`, `defense_scenarios.md`, `contract_first_ipc_guide.md`)
+    - `docs/verification/`: 952k 극한 테스트, 다중 공격 방어 보고서 및 실측 JSON 데이터셋 (`data/`)
+    - `docs/presentation/`: 최종 발표 슬라이드, 데모 시연 런북 (`final_demo_runbook.md`, `ppt_slide_deck_outline.md`, `prototype_ppt_prompt.md`, `2_server_live_demo_plan.md`)
+    - `docs/planning/`: 종합 로드맵 (`roadmap_v2.md`), 개발 계획서, 통합 기획서 (`project_proposal.md`, `semester_weekly_report_compilation.md`)
+  - **삭제된 불필요/레거시 문서 (총 40여 개 파일, -7,338줄)**:
+    - `docs/study/`: 8대 기술 학습서 (01~08 교재 9개 파일 삭제)
+    - `docs/archive/`: v1 초기 레거시 지침서 및 기획안 (5개 파일 삭제)
+    - `docs/guides/`: 역할별 주차별 지침서 (`dev_a`, `dev_b`, `dev_c` phase 1~6, 총 18개 파일) 및 과거 협업 문서 삭제
+    - `docs/writing/reports/weekly/`: 주차별 개별 계획서/보고서 파편 (`week04`~`week15` 16개 파일 삭제, 종합본은 `planning/`으로 보존)
+    - 불필요 중간 래퍼 폴더(`docs/writing/`, `docs/plans/`, `docs/guides/`) 완전 삭제
+  - `README.md`: 개편된 6대 디렉터리 구조 및 주요 문서 바로가기 링크 전면 동기화.
+* **로컬 환경 및 저장소 동기화:**
+  - `main` 브랜치 최신화(Fast-forward, PR #10 머지 반영)
+  - 병합 완료된 로컬 브랜치 6개(`integration/week16-final`, `claude/quirky-cerf-h51gg3`, `docs/reorganize-workspace`, `feat/week6-telemetry-pipeline`, `park16week`, `week4-integration`) 안전 정리
+  - 필수 로컬 작업 파일 3개(`.git/info/exclude`로 분리 보존하여 미푸시 유지)
+* **검증:** 전체 265개 테스트 슈트(`pytest`) 100% 정상 통과 (`265 passed in 6.13s`), `flake8` (120자 룰) 0건 무결점 통과.
+* **다음 작업자 인수인계 메모:**
+  - **[상용화/인프라]** Mininet 의존성을 제거하고 순수 Linux 네임스페이스(`ip netns`) + OVS 브릿지 4개 다이아몬드 토폴로지를 단독 구동하는 스크립트(`scripts/setup_native_ovs.sh`) 구현 검토가 완료되어 착수 대기 상태입니다.
+
 ### [2026-10-29] merge: PR #10(공격 판단 기준 세분화)을 main에 통합하며 충돌 해소
 * **작업자:** 유재민 (Domain Dev & QA) with Claude Code
 * **작업 유형:** `Fix` / `Test`
