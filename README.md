@@ -171,6 +171,7 @@ Self_Defending_SDN_Tower/
 * ✅ **952k PPS 극한 스트레스 실증 보고서:** [`docs/verification/week16_stress_limit_test_report.md`](docs/verification/week16_stress_limit_test_report.md)
 * 📊 **발표 슬라이드 아웃라인 & 시연 런북:** [`docs/presentation/ppt_slide_deck_outline.md`](docs/presentation/ppt_slide_deck_outline.md)
 * 📋 **종합 로드맵 (ROADMAP):** [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md)
+* 🚀 **순수 OVS 단독 구동 전환 계획서:** [`docs/planning/native_ovs_transition_plan.md`](docs/planning/native_ovs_transition_plan.md)
 * 📝 **프로젝트 변경 이력 (CHANGELOG):** [`CHANGELOG.md`](CHANGELOG.md)
 
 ---

@@ -13,6 +13,20 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] docs(planning): 순수 OVS 단독 구동 전환 구현 계획서 작성
+* **작업자:** 박시현 (Tech Lead) with Antigravity
+* **작업 유형:** `Docs` / `Plan`
+* **배경:** 상용화(Phase 6-A) 대비를 위해, 교육용 에뮬레이터인 Mininet을 완전 제거하고 커널 레벨 순수 OVS 4-스위치 다이아몬드 토폴로지 및 Linux Network Namespace(`ip netns`) 기반으로 단독 구동하기 위한 세부 구현 명세와 검증 계획서를 수립함.
+* **주요 신규 파일:**
+  - `docs/planning/native_ovs_transition_plan.md`:
+    - 추진 배경 및 Mininet 탈피 상용화 이점 정의
+    - 4-스위치(S1~S4) 엄격한 OpenFlow 포트 고정(`ofport_request`) 및 DPID 매핑 설계
+    - `setup_native_ovs.sh` 및 `teardown_native_ovs.sh` 쉘 스크립트 상세 구현 명세
+    - Linux netns 기반 트래픽 주입 및 5단계 E2E 롤아웃 검증 계획서
+  - `README.md`: 주요 문서 바로가기 섹션에 전환 계획서 링크 추가.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 계획 수립 단계로 기존 코드 영향 없음. 컨트롤러/AI/UI 코드는 무수정(Zero-code change) 호환 보장.
+* **검증:** `pytest` 265 passed 유지.
+
 ### [2026-10-29] feat(rules): AI 에이전트 전용 rules/ 모듈 구축 및 .cursorrules 슬림화
 * **작업자:** 박시현 (Tech Lead) with Antigravity
 * **작업 유형:** `Feat` / `Chore`
