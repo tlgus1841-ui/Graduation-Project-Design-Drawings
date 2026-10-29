@@ -153,13 +153,14 @@ def analyze(out_dir: Path) -> dict:
                 if rec["data"].get(ind) is not None:
                     groups[phase][SERVICE][ind].append(rec["data"][ind])
         elif phase:
-            # 서버 연결 수집기: 접속한 PC마다 열린 연결과 느린 요청 수
+            # 서버 연결 수집기: 접속한 PC마다 열린 연결, 느린 요청, 안 끝난 요청 수
             by_ip = {c["client_ip"]: c for c in rec["data"]["clients"]}
             for (dpid, port), name in PORTS.items():
                 ip = HOST_IPS.get((dpid, port))
-                c = by_ip.get(ip, {"open": 0, "slow": 0})
-                groups[phase][name]["http_open"].append(c["open"])
-                groups[phase][name]["http_slow"].append(c["slow"])
+                c = by_ip.get(ip, {})
+                groups[phase][name]["http_open"].append(c.get("open", 0))
+                groups[phase][name]["http_slow"].append(c.get("slow", 0))
+                groups[phase][name]["http_pending"].append(c.get("pending", 0))
     return {phase: {port: {ind: summarize(vals) for ind, vals in sorted(inds.items())}
                     for port, inds in sorted(ports.items())}
             for phase, ports in groups.items()}

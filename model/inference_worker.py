@@ -240,7 +240,7 @@ def run(worker: InferenceWorker, redis_url: str, log_path: Optional[Path]) -> No
         if channel == REDIS_CHANNEL_SERVER_CONNS:
             conns = ServerConnMessage.model_validate_json(item["data"])
             worker.process_server_conns(conns)
-            busy = {c.client_ip: [c.open, c.slow] for c in conns.clients if c.slow}
+            busy = {c.client_ip: [c.open, c.slow, c.pending] for c in conns.clients if c.slow or c.pending}
             if busy:
                 record("serverconn", slow=busy)
             continue

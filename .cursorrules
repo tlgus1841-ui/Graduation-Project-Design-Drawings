@@ -1,75 +1,21 @@
-# 🛡️ Self-Defending SDN Tower: AI Agent Development Rules (.cursorrules)
+# 🛡️ Self-Defending SDN Tower: AI Agent Development Rules
 
-## 👤 1. 개발자 세션 자동 인식 프로토콜 (Developer Identity Protocol)
-
-사용자가 대화 시작 시 자신의 이름을 선언하면, AI 에이전트는 즉시 해당 개발자의 컴퓨터(환경)임을 인지하고 아래 명시된 **인식 인사말**, **전담 작업 디렉토리**, **핵심 업무**, **Phase 2 가이드북**을 기반으로 맞춤형 개발 지원을 제공하십시오.
-
----
-
-### 🔹 [Case 1] "내가 박시현이야" (또는 "시현", "Tech Lead")
-* **AI 인식 응답:**  
-  `"아, Tech Lead 박시현 개발자님 컴퓨터(환경)이군요! 반갑습니다. 시스템 아키텍처 및 코어 하네스 개발 모드로 전환합니다."`
-* **공식 직책:** Tech Lead & 시스템 아키텍트 (학번: 22101489)
-* **전담 디렉토리 권한:**
-  - `harness/`: 계약 스키마(SSOT), 안전 가드레일, FSM 상태 머신
-  - `topo/`: Mininet 다중 경로 다이아몬드 토폴로지 (`diamond_topo.py`)
-  - `ryu/`: OpenFlow 1.3 코어 스위칭 & 텔레메트리 (`controller.py`), Dockerfile
-  - `tests/harness/`: Mock IPC 버스, Headless 토폴로지 시뮬레이터
-  - `scripts/`: 원클릭 실행 및 초기화 스크립트
-* **즉시 참조 가이드:** [`docs/guides/dev_a_tech_lead/phase2_core_mock_harness.md`](docs/guides/dev_a_tech_lead/phase2_core_mock_harness.md)
-* **핵심 수칙:** Ryu 컨트롤러 내부 동기 블로킹 연산 절대 금지, 다이아몬드 ARP Storm 차단, Trunk 포트 화이트리스트 보호.
+본 프로젝트는 AI 에이전트(Cursor, Claude Code, Antigravity 등)와의 협업을 통해 개발됩니다.
+AI 에이전트는 작업 수행 시 **`rules/` 디렉터리의 모듈별 규칙을 최우선으로 준수**해야 합니다.
 
 ---
 
-### 🔹 [Case 2] "내가 유재민이야" (또는 "재민", "Domain Dev", "QA")
-* **AI 인식 응답:**  
-  `"아, Domain Dev & QA 유재민 개발자님 컴퓨터(환경)이군요! 반갑습니다. AI 모델 및 트래픽/보안 파이프라인 개발 모드로 전환합니다."`
-* **공식 직책:** Domain Dev & QA (AI/보안 엔지니어 & 품질 보증, 학번: 22101498)
-* **전담 디렉토리 권한:**
-  - `traffic/`: Scapy 가변 정상 트래픽(`traffic_normal.py`), 무작위 IP SYN Flood 공격기(`traffic_attack.py`)
-  - `pipeline/`: 실시간 5대 파생 피처 계산기(`feature_extractor.py`), CSV 로거
-  - `model/`: Scikit-learn Isolation Forest 이상 탐지 모델(`model.py`, `inference_worker.py`)
-  - `tests/benchmarks/`: 모델 평가 하네스, E2E 지연시간 프로파일러(`latency_profiler.py`)
-  - `dataset/`: 훈련 및 평가용 CSV 데이터셋
-* **즉시 참조 가이드:** [`docs/guides/dev_b_domain_qa/phase2_traffic_features_model.md`](docs/guides/dev_b_domain_qa/phase2_traffic_features_model.md)
-* **핵심 수칙:** Scapy 패킷 전송 시 Checksum 재계산 강제(`del pkt[IP].chksum`, `del pkt[TCP].chksum`), 모델 추론 지연 <10ms 보장, 무거운 80개 CIC 피처 대신 5대 파생 피처 사용.
+## 📌 Rules Base Index (규칙 바로가기)
+
+1. **[01_environment.md](rules/01_environment.md)**: `uv` 패키지 관리자 엄격 사용, Python 3.10 vs Ryu Python 3.8 Docker 격리 규칙
+2. **[02_architecture.md](rules/02_architecture.md)**: Ryu 이벤트 루프 비차단(Non-blocking), In_port 단일 격리, 선제적 Dijkstra 우회 라우팅, FSM 플래핑 방지
+3. **[03_contracts_ipc.md](rules/03_contracts_ipc.md)**: Pydantic v2 계약 스키마(SSOT), Redis 4채널 Pub/Sub 규격
+4. **[04_quality_testing.md](rules/04_quality_testing.md)**: `pytest` 267개 전수 통과 원칙, `flake8` 120자 룰 위반 0건 유지
 
 ---
 
-### 🔹 [Case 3] "내가 김관우이야" (또는 "관우", "PM", "팀장")
-* **AI 인식 응답:**  
-  `"아, PM & Tech Writer 김관우 팀장님 컴퓨터(환경)이군요! 반갑습니다. 프로젝트 일정 관리 및 문서화/관제 UI 기획 모드로 전환합니다."`
-* **공식 직책:** PM & Tech Writer (팀장, 학번: 22102237)
-* **전담 디렉토리 권한:**
-  - `docs/writing/`: 졸업작품 기획서, 주간/중간 보고서, 최종 졸업논문, PPT 슬라이드/시연 대본
-  - `docs/planning/`: 16주차 마일스톤 추적 및 일정표
-  - `docs/specs/`: 4단계 방어 시나리오 명세서
-  - `ui/`: 웹 관제탑 대시보드(React 18 + Tailwind CSS) 레이아웃 기획 및 시각화 검수
-* **즉시 참조 가이드:** [`docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md`](docs/guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md)
-* **핵심 수칙:** A4 주간 보고서 정량 지표 취합, 웹소켓 Stale 세션 정리 검수, vis-network 물리 안정화 검수.
-
----
-
-## ⚙️ 2. 환경 및 패키지 관리 규칙 (Environment Rules)
-
-1. **`uv` 엄격 사용:**
-   - 절대 `pip install` 또는 `python -m venv` 명령을 사용하지 마십시오.
-   - 패키지 설치: `uv add <package>`
-   - 실행: `uv run <command>` (가상환경은 `./.venv` 단일 관리)
-2. **런타임 분리 (Golden Version Matrix):**
-   - **Ryu SDN 컨트롤러:** Python 3.8 공식 Docker (`python:3.8-slim`, `--net=host`). 호스트 Python 3.10에 직접 Ryu를 설치하지 마십시오.
-   - **AI / 웹 / 테스트:** 호스트 OS Python 3.10.12 및 `uv` 관리하에 실행.
-3. **Pydantic v2 계약 준수 (SSOT):**
-   - Redis IPC 채널(`sdn:stats:port`, `sdn:anomaly:alert`, `sdn:control:command`, `sdn:topology:sync`)의 메시지는 반드시 `harness/contracts/sdn_events.py`의 모델을 통해 직렬화/역직렬화하십시오.
-
----
-
-## 📝 3. AI 에이전트 작업 기록 및 인수인계 규칙 (Agent Logging Protocol)
-
-모든 AI 에이전트(Cursor, Claude, Antigravity 등)는 다른 팀원과의 원활한 비동기 협업을 위해 다음 수칙을 강제 준수하십시오:
-1. **작업 완료 후 로깅 의무:**
-   - 소스코드 생성/수정, 폴더/문서 구조 개편, 인터페이스 계약 변경 작업을 완료한 후, 응답을 종료하기 직전에 반드시 프로젝트 루트의 `CHANGELOG.md` 최상단에 새 작업 블록을 추가하십시오.
-   - [날짜 / 작업자 세션(개발자명 + 에이전트명) / 작업 유형 / 변경 파일 / 상세 내용 / Breaking Changes / 다음 작업자 인수인계 메모] 형식을 철저히 준수하십시오.
-2. **세션 시작 시 최근 이력 파악:**
-   - 새로운 사용자 요청이나 세션을 시작할 때, `CHANGELOG.md`의 가장 최근 기록을 우선 참조하여 이전 작업자의 진행 상황과 주의사항을 파악한 뒤 코딩에 착수하십시오.
-
+## ⚡ Quick Core Directives (핵심 절대 수칙)
+* ❌ `pip install` 절대 금지 ➔ ⭕ 반드시 `uv add` 및 `uv run` 사용
+* ❌ Ryu 컨트롤러 내부에서 AI 모델 직접 추론 금지 ➔ ⭕ 독립 AI Worker 프로세스로 분리
+* ❌ 코드 수정 후 테스트 생략 금지 ➔ ⭕ `uv run pytest`로 267개 테스트 통과 검증 필수
+* ⭕ 모든 변경은 명확하고 직관적인 Git 커밋 메시지(Conventional Commits)로 기록

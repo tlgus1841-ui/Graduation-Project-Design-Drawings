@@ -1,6 +1,5 @@
 """Self-Defending SDN Tower - Redis `sdn:stats:port` 구독 및 5대 파생 피처 실시간 계산기.
 
-주간 계획: docs/writing/reports/weekly/week06_feature_extractor_implementation_plan.md
 실행 예: uv run python pipeline/feature_extractor.py --label 0 --out dataset/traffic_data.csv
 """
 
@@ -30,7 +29,7 @@ PortKey = Tuple[int, int]
 
 # 카운터 리셋/오버플로우로 생기는 비현실적인 델타 방지. 14주차 실측에서 Mininet
 # 종료 시 rx_packets가 0으로 리셋되며 델타가 ~9.2e18(언사인드 64비트 래핑)로
-# 튄 사례가 확인됐다 (docs/writing/reports/verification/week14_e2e_verification.md
+# 튄 사례가 확인됐다 (docs/verification/week14_e2e_verification.md
 # §6). 음수 델타(d_packets < 0)만 걸러내던 기존 가드는 이 "거대한 양수" 케이스를
 # 못 잡는다. 16주차 실측 최대 공격 강도(952,828 PPS)에 여유를 둔 상한을 둔다.
 MAX_PLAUSIBLE_PACKET_DELTA = 10_000_000

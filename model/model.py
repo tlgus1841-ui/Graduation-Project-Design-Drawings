@@ -1,7 +1,4 @@
-"""Self-Defending SDN Tower - Isolation Forest 기반 실시간 이상 탐지 모델.
-
-주간 계획: docs/writing/reports/weekly/week07_model_implementation_plan.md
-"""
+"""Self-Defending SDN Tower - Isolation Forest 기반 실시간 이상 탐지 모델."""
 
 from __future__ import annotations
 
