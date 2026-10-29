@@ -7,7 +7,7 @@
 ![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)
 ![OpenFlow](https://img.shields.io/badge/OpenFlow-1.3-orange)
 ![Redis](https://img.shields.io/badge/Redis-7.2-red?logo=redis)
-![Tests](https://img.shields.io/badge/Tests-265%20Passed%20(100%25)-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-267%20Passed%20(100%25)-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
@@ -35,7 +35,7 @@
 | **데이터 플레인 독립성** | **Mininet 100% 탈피** | 순수 커널 OVS 2.17 + Linux Network Namespace 기반 상용급 구축 |
 | **이상 탐지 확정 시간** | **1.7 ~ 2.5 초** | 1초 주기 실시간 카운트 집계 엔진 기준 |
 | **지원 공격 유형 분류** | **6종 정밀 분류** | SYN/UDP/ICMP Flood, Port Scan, Slow HTTP, 내부 확산 |
-| **테스트 슈트 통과율** | **265 / 265 (100% Pass)** | API, 하네스, 모델, 컨트롤러, 벤치마크 전수 검증 |
+| **테스트 슈트 통과율** | **267 / 267 (100% Pass)** | API, 하네스, 모델, 컨트롤러, 벤치마크 전수 검증 |
 | **관제탑 웹 대시보드 성능** | **60 FPS 무지연 렌더링** | vis-network 토폴로지 및 실시간 ApexCharts 시계열 렌더링 |
 
 ---
