@@ -1,6 +1,6 @@
 # 📡 [공통] Contract-First IPC 및 Pydantic v2 스키마 규격 가이드
 > **문서 대상:** 전 팀원 (박시현, 유재민, 김관우)  
-> **기준 규칙:** `docs/planning/ai_harness_engineering_plan.md`, `docs/planning/roadmap_v2.md`  
+> **기준 규칙:** `docs/planning/ai_harness_engineering_plan.md`, `docs/planning/ROADMAP.md`  
 > **핵심 목적:** Ryu 컨트롤러, AI Worker, FastAPI 웹소켓 간 데이터 통신 불일치를 원천 차단하는 단일 진실 공급원(SSOT) 스키마 관리 표준
 
 ---

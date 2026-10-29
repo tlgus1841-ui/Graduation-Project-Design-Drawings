@@ -5,7 +5,7 @@ AI 에이전트는 컴포넌트 간 통신 인터페이스 수정 시 아래 계
 ---
 
 ## 1. Pydantic 스키마 단일 진실 공급원 (SSOT)
-* 모든 컴포넌트 간 통신 메시지는 [harness/contracts/sdn_events.py](file:///home/tlgus/programming/Self_Defending_SDN_Tower/harness/contracts/sdn_events.py)의 Pydantic v2 모델을 기준으로 직렬화/역직렬화해야 합니다.
+* 모든 컴포넌트 간 통신 메시지는 [`harness/contracts/sdn_events.py`](../harness/contracts/sdn_events.py)의 Pydantic v2 모델을 기준으로 직렬화/역직렬화해야 합니다.
 * 임의의 비표준 딕셔너리(`dict`)나 규격 외 JSON을 채널에 직접 발행하지 마십시오.
 * 스키마 필드를 수정하거나 추가할 경우, 반드시 기존 필드의 하위 호환성을 유지해야 합니다.
 
