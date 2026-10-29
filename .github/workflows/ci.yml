@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 동시에 올라온 push/PR 중 최신 것만 돌리고 이전 실행은 취소한다 (CI 리소스 절약).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (flake8 / mypy / pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # pyproject.toml의 pydantic==2.6.1 등 고정 버전은 Python 3.10 기준으로
+      # 핀 고정되어 있다 (rules/01_environment.md). 다른 버전에서는 빌드 자체가
+      # 안 되는 패키지가 있으니 반드시 3.10을 쓴다.
+      - name: Set up Python 3.10
+        run: uv python install 3.10
+
+      - name: Install dependencies (uv sync)
+        run: uv sync
+
+      # rules/04_quality_testing.md에 적힌 것과 동일한 명령.
+      - name: flake8
+        run: uv run flake8 --max-line-length=120 --exclude=.venv,ui
+
+      - name: mypy
+        run: uv run mypy api model harness pipeline ryu traffic tests
+
+      - name: pytest
+        run: uv run pytest -v
+
+  ui:
+    name: UI (vitest / build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Unit tests (vitest)
+        run: npm run test
+
+      - name: Production build
+        run: npm run build

@@ -2,6 +2,7 @@
 > **SDN 기반 분산 트래픽 이상 탐지 및 자율 라우팅 관제 시스템**  
 > *Self-Defending SDN Tower: AI-driven SDN Traffic Anomaly Detection & Autonomous Rerouting Web Monitoring System*
 
+![CI](https://github.com/tlgus1841-ui/Graduation-Project-Design-Drawings/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.8(Ryu)-blue?logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109.2-009688?logo=fastapi)
 ![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)
