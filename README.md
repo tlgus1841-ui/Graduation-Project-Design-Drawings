@@ -65,7 +65,7 @@ Self_Defending_SDN_Tower/
 * ✅ **실증 검증 보고서 및 데이터셋:** [`docs/verification/`](docs/verification/)
 * 📊 **발표 슬라이드 아웃라인 & 시연 런북:** [`docs/presentation/ppt_slide_deck_outline.md`](docs/presentation/ppt_slide_deck_outline.md), [`docs/presentation/final_demo_runbook.md`](docs/presentation/final_demo_runbook.md)
 * 📑 **공식 졸업작품 개발 기획서 (통합본):** [`docs/planning/project_proposal.md`](docs/planning/project_proposal.md)
-* 📋 **종합 로드맵 및 기술 스택 규격:** [`docs/planning/roadmap_v2.md`](docs/planning/roadmap_v2.md)
+* 📋 **종합 로드맵 및 기술 스택 규격:** [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md)
 * 📝 **팀원 & AI 에이전트 협업 로그:** [`CHANGELOG.md`](CHANGELOG.md)
 
 ---
