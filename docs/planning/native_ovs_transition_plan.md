@@ -86,7 +86,7 @@ OVS는 인터페이스 추가 순서에 따라 포트 번호가 가변될 수 �
 set -euo pipefail
 
 CTRL_IP="${CTRL_IP:-127.0.0.1}"
-CTRL_PORT="${CTRL_PORT:-6633}"
+CTRL_PORT="${CTRL_PORT:-6653}"  # OpenFlow 1.3 IANA 표준 포트 (Ryu 컨테이너 리슨 포트와 일치)
 
 echo ">>> [1/5] OVS 브릿지 4개 생성 및 OpenFlow 1.3 설정..."
 for sw in s1 s2 s3 s4; do
@@ -131,42 +131,51 @@ ovs-vsctl add-port s3 s3-s4 -- set Interface s3-s4 ofport_request=2
 ovs-vsctl add-port s4 s4-s3 -- set Interface s4-s3 ofport_request=3
 ip link set s3-s4 up && ip link set s4-s3 up
 
-echo ">>> [4/5] 호스트 네임스페이스 및 veth 연결..."
+echo ">>> [4/5] 호스트 네임스페이스 및 veth 연결 (체크섬 오프로드 해제 및 IPv6 잡음 차단)..."
 # H_legit (10.0.0.1, 00:00:00:00:00:01) -> S1 ofport: 1
 ip netns add ns_legit
+ip netns exec ns_legit sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
 ip link add veth_legit type veth peer name s1-legit
 ip link set veth_legit netns ns_legit
 ovs-vsctl add-port s1 s1-legit -- set Interface s1-legit ofport_request=1
 ip link set s1-legit up
+ethtool -K s1-legit tx off rx off 2>/dev/null || true
 
 ip netns exec ns_legit ip link set lo up
 ip netns exec ns_legit ip link set veth_legit address 00:00:00:00:00:01
 ip netns exec ns_legit ip addr add 10.0.0.1/24 dev veth_legit
 ip netns exec ns_legit ip link set veth_legit up
+ip netns exec ns_legit ethtool -K veth_legit tx off rx off 2>/dev/null || true
 
 # H_attacker (10.0.0.2, 00:00:00:00:00:02) -> S1 ofport: 2
 ip netns add ns_attacker
+ip netns exec ns_attacker sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
 ip link add veth_att type veth peer name s1-attacker
 ip link set veth_att netns ns_attacker
 ovs-vsctl add-port s1 s1-attacker -- set Interface s1-attacker ofport_request=2
 ip link set s1-attacker up
+ethtool -K s1-attacker tx off rx off 2>/dev/null || true
 
 ip netns exec ns_attacker ip link set lo up
 ip netns exec ns_attacker ip link set veth_att address 00:00:00:00:00:02
 ip netns exec ns_attacker ip addr add 10.0.0.2/24 dev veth_att
 ip netns exec ns_attacker ip link set veth_att up
+ip netns exec ns_attacker ethtool -K veth_att tx off rx off 2>/dev/null || true
 
 # H_server (10.0.0.4, 00:00:00:00:00:04) -> S4 ofport: 1
 ip netns add ns_server
+ip netns exec ns_server sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
 ip link add veth_srv type veth peer name s4-server
 ip link set veth_srv netns ns_server
 ovs-vsctl add-port s4 s4-server -- set Interface s4-server ofport_request=1
 ip link set s4-server up
+ethtool -K s4-server tx off rx off 2>/dev/null || true
 
 ip netns exec ns_server ip link set lo up
 ip netns exec ns_server ip link set veth_srv address 00:00:00:00:00:04
 ip netns exec ns_server ip addr add 10.0.0.4/24 dev veth_srv
 ip netns exec ns_server ip link set veth_srv up
+ip netns exec ns_server ethtool -K veth_srv tx off rx off 2>/dev/null || true
 
 echo ">>> [5/5] ARP 정적 테이블 구성 (초기 브로드캐스트 스톰 방지)..."
 ip netns exec ns_legit arp -s 10.0.0.4 00:00:00:00:00:04
@@ -236,7 +245,20 @@ sudo ip netns exec ns_attacker python3 -m traffic.traffic_scan --target 10.0.0.4
 
 ---
 
-## 6. 기대 효과 및 결론
+## 6. 기술적 리스크 및 예외 방어 대책 (Risk Mitigation)
+
+1. **컨트롤러 포트 불일치 방지 (Port 6653):**
+   * Ryu 컨트롤러는 OpenFlow 1.3 표준 포트인 `6653`으로 리슨합니다. 스크립트 기본값을 반드시 `6653`으로 고정하여 연결 거부(`Connection Refused`)를 원천 차단합니다.
+2. **veth Checksum Offloading 폐기 방지:**
+   * Linux 커널 veth 드라이버는 체크섬 계산을 생략하여 타 네임스페이스 수신 시 Silent Drop을 유발하므로, `ethtool -K <veth> tx off rx off` 설정을 필수 집행합니다.
+3. **IPv6 잡음 패킷 사전 차단:**
+   * 네임스페이스 기동 시 `sysctl -w net.ipv6.conf.all.disable_ipv6=1`을 적용하여 불필요한 Packet-In 멀티캐스트 잡음 부하를 제거합니다.
+4. **하네스 검증 스크립트(`harness/verification/`) 호환성 유지:**
+   * `criteria_measure.py` 등 일부 스크립트의 Mininet 직접 임포트는 향후 점진적으로 `try ... except ImportError` 폴백 어댑터를 적용하여 Mininet 패키지가 없어도 Native OVS 환경에서 구동되도록 호환성을 확보합니다.
+
+---
+
+## 7. 기대 효과 및 결론
 
 1. **상용 프로덕션 환경 완전 호환:** GCP/AWS 클라우드 VM뿐만 아니라 실제 베어메탈 서버, Linux 컨테이너 환경에서 Mininet 없이 즉시 데모 및 상용 서비스 배포 가능.
 2. **소프트웨어 안정성 증대:** Mininet 종료 실패 시 발생하던 OVS 소켓/좀비 프로세스 꼬임 문제를 `teardown_native_ovs.sh`로 1초 만에 완벽 클린업.
