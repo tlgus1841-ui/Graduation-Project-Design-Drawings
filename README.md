@@ -46,7 +46,7 @@
 ```
 +-----------------------------------------------------------------------------------+
 |                        [Layer 4: 웹 관제탑 (Frontend)]                            |
-|  - React 18.2 (Vite) + Tailwind CSS + Lucide Icons                                |
+|  - React 18.3 (Vite) + Tailwind CSS + Lucide Icons                                |
 |  - vis-network: 실시간 네트워크 토폴로지 시각화 (노드 상태, 링크 트래픽, 우회 활성화)  |
 |  - ApexCharts: 실시간 BPP / PPS 시계열 차트 & 이상치 스코어 스트리밍               |
 |  - Event Timeline: 실시간 보안 알림 피드 & 비상 수동 격리/복원 제어 패널           |
