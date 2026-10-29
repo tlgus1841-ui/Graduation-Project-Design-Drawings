@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - 공격 소멸 판정 및 쿨다운 플래핑 방지 (AI Worker 측).
 
-주간 계획: docs/writing/reports/weekly/week11_recovery_monitor_plan.md
-
 docs/specs/defense_scenarios.md §2, §3.4의 FSM 중 MITIGATED <-> COOLDOWN_VERIFY
 -> NORMAL 구간을 AI Worker 쪽에서 판단한다. 차단/우회 플로우 설치·삭제 자체는
 박시현 담당(ryu/app/controller.py, flapping_fsm.py)이며, 이 모듈은 "지금
