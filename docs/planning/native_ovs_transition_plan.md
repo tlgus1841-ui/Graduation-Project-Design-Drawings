@@ -85,8 +85,30 @@ OVS는 인터페이스 추가 순서에 따라 포트 번호가 가변될 수 �
 # ==============================================================================
 set -euo pipefail
 
+# [Pre-flight Check 1] Root 권한 확인
+if [[ $EUID -ne 0 ]]; then
+   echo "❌ 오류: 본 스크립트는 네트워크 네임스페이스 및 OVS 조작을 위해 root 권한(sudo)이 필요합니다." >&2
+   exit 1
+fi
+
+# [Pre-flight Check 2] 필수 패키지 설치 확인
+for cmd in ovs-vsctl ethtool ip; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "❌ 오류: 필수 명령어 '$cmd'를 찾을 수 없습니다." >&2
+    echo "👉 설치 명령: sudo apt update && sudo apt install -y openvswitch-switch ethtool iproute2" >&2
+    exit 1
+  fi
+done
+
 CTRL_IP="${CTRL_IP:-127.0.0.1}"
 CTRL_PORT="${CTRL_PORT:-6653}"  # OpenFlow 1.3 IANA 표준 포트 (Ryu 컨테이너 리슨 포트와 일치)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# [멱등성 보장] 기존 잔여 브릿지 및 네임스페이스 사전 정리
+if [[ -f "${SCRIPT_DIR}/teardown_native_ovs.sh" ]]; then
+  echo ">>> [0/5] 기존 잔여 토폴로지 사전 클린업..."
+  bash "${SCRIPT_DIR}/teardown_native_ovs.sh" >/dev/null 2>&1 || true
+fi
 
 echo ">>> [1/5] OVS 브릿지 4개 생성 및 OpenFlow 1.3 설정..."
 for sw in s1 s2 s3 s4; do
@@ -101,7 +123,7 @@ ovs-vsctl set bridge s2 other-config:datapath-id=0000000000000002
 ovs-vsctl set bridge s3 other-config:datapath-id=0000000000000003
 ovs-vsctl set bridge s4 other-config:datapath-id=0000000000000004
 
-echo ">>> [2/5] Ryu SDN 컨트롤러 연결..."
+echo ">>> [2/5] Ryu SDN 컨트롤러 연결 (${CTRL_IP}:${CTRL_PORT})..."
 for sw in s1 s2 s3 s4; do
   ovs-vsctl set-controller "$sw" "tcp:${CTRL_IP}:${CTRL_PORT}"
 done
@@ -131,7 +153,7 @@ ovs-vsctl add-port s3 s3-s4 -- set Interface s3-s4 ofport_request=2
 ovs-vsctl add-port s4 s4-s3 -- set Interface s4-s3 ofport_request=3
 ip link set s3-s4 up && ip link set s4-s3 up
 
-echo ">>> [4/5] 호스트 네임스페이스 및 veth 연결 (체크섬 오프로드 해제 및 IPv6 잡음 차단)..."
+echo ">>> [4/5] 호스트 네임스페이스 및 veth 연결 (체크섬 오프로드 해제, rp_filter 해제, 기본 라우트 추가)..."
 # H_legit (10.0.0.1, 00:00:00:00:00:01) -> S1 ofport: 1
 ip netns add ns_legit
 ip netns exec ns_legit sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
@@ -145,11 +167,14 @@ ip netns exec ns_legit ip link set lo up
 ip netns exec ns_legit ip link set veth_legit address 00:00:00:00:00:01
 ip netns exec ns_legit ip addr add 10.0.0.1/24 dev veth_legit
 ip netns exec ns_legit ip link set veth_legit up
+ip netns exec ns_legit ip route add default via 10.0.0.254 dev veth_legit 2>/dev/null || true
 ip netns exec ns_legit ethtool -K veth_legit tx off rx off 2>/dev/null || true
 
 # H_attacker (10.0.0.2, 00:00:00:00:00:02) -> S1 ofport: 2
 ip netns add ns_attacker
 ip netns exec ns_attacker sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
+# [중요] Scapy 무작위 IP 스푸핑 패킷이 커널에서 드랍되지 않도록 rp_filter 해제
+ip netns exec ns_attacker sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null
 ip link add veth_att type veth peer name s1-attacker
 ip link set veth_att netns ns_attacker
 ovs-vsctl add-port s1 s1-attacker -- set Interface s1-attacker ofport_request=2
@@ -160,6 +185,8 @@ ip netns exec ns_attacker ip link set lo up
 ip netns exec ns_attacker ip link set veth_att address 00:00:00:00:00:02
 ip netns exec ns_attacker ip addr add 10.0.0.2/24 dev veth_att
 ip netns exec ns_attacker ip link set veth_att up
+ip netns exec ns_attacker sysctl -w net.ipv4.conf.veth_att.rp_filter=0 >/dev/null
+ip netns exec ns_attacker ip route add default via 10.0.0.254 dev veth_att 2>/dev/null || true
 ip netns exec ns_attacker ethtool -K veth_att tx off rx off 2>/dev/null || true
 
 # H_server (10.0.0.4, 00:00:00:00:00:04) -> S4 ofport: 1
@@ -175,6 +202,7 @@ ip netns exec ns_server ip link set lo up
 ip netns exec ns_server ip link set veth_srv address 00:00:00:00:00:04
 ip netns exec ns_server ip addr add 10.0.0.4/24 dev veth_srv
 ip netns exec ns_server ip link set veth_srv up
+ip netns exec ns_server ip route add default via 10.0.0.254 dev veth_srv 2>/dev/null || true
 ip netns exec ns_server ethtool -K veth_srv tx off rx off 2>/dev/null || true
 
 echo ">>> [5/5] ARP 정적 테이블 구성 (초기 브로드캐스트 스톰 방지)..."
@@ -253,7 +281,11 @@ sudo ip netns exec ns_attacker python3 -m traffic.traffic_scan --target 10.0.0.4
    * Linux 커널 veth 드라이버는 체크섬 계산을 생략하여 타 네임스페이스 수신 시 Silent Drop을 유발하므로, `ethtool -K <veth> tx off rx off` 설정을 필수 집행합니다.
 3. **IPv6 잡음 패킷 사전 차단:**
    * 네임스페이스 기동 시 `sysctl -w net.ipv6.conf.all.disable_ipv6=1`을 적용하여 불필요한 Packet-In 멀티캐스트 잡음 부하를 제거합니다.
-4. **하네스 검증 스크립트(`harness/verification/`) 호환성 유지:**
+4. **리눅스 커널 `rp_filter`(Reverse Path Filter) 해제:**
+   * Linux 커널 기본 보안인 Strict rp_filter가 켜져 있으면, `ns_attacker`에서 무작위 변조된 IP(IP Spoofing)로 패킷을 쏠 때 커널이 패킷을 자체 드랍합니다. 반드시 `net.ipv4.conf.all.rp_filter=0`을 적용해야 Scapy 스푸핑 패킷이 스위치로 방출됩니다.
+5. **Scapy 기본 게이트웨이(Default Route) 보장:**
+   * Scapy의 L3 `send()` 함수는 시스템 라우팅 테이블을 조회합니다. 네임스페이스 내에 기본 라우트(`default via 10.0.0.254`)가 없으면 `Scapy_Exception: No route found` 예외가 발생하므로 가상 게이트웨이 라우트를 필수 등록합니다.
+6. **하네스 검증 스크립트(`harness/verification/`) 호환성 유지:**
    * `criteria_measure.py` 등 일부 스크립트의 Mininet 직접 임포트는 향후 점진적으로 `try ... except ImportError` 폴백 어댑터를 적용하여 Mininet 패키지가 없어도 Native OVS 환경에서 구동되도록 호환성을 확보합니다.
 
 ---
