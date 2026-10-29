@@ -135,6 +135,9 @@ Self_Defending_SDN_Tower/
 ├── CHANGELOG.md                           # 팀원 & AI 에이전트 작업 변경 이력 공식 기록 (SSOT)
 ├── docker-compose.yml                     # Redis 7.2 및 Ryu 4.34 컨테이너 오케스트레이션
 ├── pyproject.toml                         # Python 3.10 (uv) 의존성 및 린트/테스트 설정
+├── .cursorrules                           # AI 에이전트 개발 수칙 인덱스 및 핵심 수칙
+│
+├── rules/                                 # 🤖 AI 에이전트 개발 규칙 (환경, 아키텍처, 계약, 품질, CHANGELOG)
 │
 ├── docs/                                  # 6대 핵심 기술 및 프로젝트 문서
 │   ├── thesis/                            # 🎓 학사 졸업논문 원고 (thesis_draft.md)
