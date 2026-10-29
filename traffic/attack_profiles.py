@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - 시연용 공격 프로파일 프리셋.
 
-주간 계획: docs/writing/reports/weekly/week15_demo_packaging_plan.md
-
 실제 시연 중에는 매번 --min-pps/--max-pps를 손으로 맞추는 대신, 시나리오에
 맞는 프리셋 이름 하나만 고르면 되도록 패키징한다.
 """

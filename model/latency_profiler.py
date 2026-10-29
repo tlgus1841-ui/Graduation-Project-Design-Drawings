@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - AI 파이프라인(피처 추출 + 추론) E2E 지연시간 프로파일러.
 
-주간 계획: docs/writing/reports/weekly/week12_latency_profiler_plan.md
-
 전체 E2E 지연(피처 추출 + 추론 + 플로우 주입)에서 "플로우 주입"은 박시현의
 Ryu 컨트롤러가 실제 스위치에 OFPFC_ADD를 적용하는 구간이라 이 환경에선
 측정할 수 없다. 이 모듈은 AI Worker가 통제 가능한 구간(피처 추출 + 추론)만

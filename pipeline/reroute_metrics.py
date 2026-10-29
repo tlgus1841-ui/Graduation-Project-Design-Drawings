@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - 우회 라우팅 성능 측정 유틸 (손실률/RTT/경로 부하).
 
-주간 계획: docs/writing/reports/weekly/week10_reroute_metrics_plan.md
-
 Mininet `ping`/`iperf` 또는 Ryu 포트 통계에서 뽑은 실측값을 받아 집계하는
 순수 함수로만 구성한다. 네트워크 동작 자체를 흉내 내지 않는다 — 측정 대상
 (박시현의 우회 라우팅 구현)이 아직 없는 상태에서 가짜로 흉내 내면 실제

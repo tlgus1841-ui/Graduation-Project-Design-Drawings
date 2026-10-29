@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - 최종 시연용 정량 성능 지표 리포트 생성기.
 
-주간 계획: docs/writing/reports/weekly/week15_demo_packaging_plan.md
-
 7~14주차에 검증한 AI Worker 측 DoD 수치(F1, FPR, 추론/피처 추출 지연)를
 하나의 JSON 리포트로 모아, 최종 발표/시연 자료(김관우 담당)에 바로 쓸 수
 있게 한다. 실제 Mininet 손실률/RTT(V2)는 포함하지 않는다 — 9/10/12/14주차
