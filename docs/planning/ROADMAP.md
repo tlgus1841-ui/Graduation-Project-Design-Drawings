@@ -81,6 +81,12 @@
   ├── eBPF / XDP 기반 커널 레벨 1차 패킷 필터링 연동 검토 (Tbps 급 방어)
   ├── 다중 Ingress 스위치 분산 관제 클러스터 확장
   └── 실시간 위협 인텔리전스(TI) 피드 자동 차단 룰 연동
+
+[Phase 6-D] IPv6 Dual-Stack 지원 및 대규모 주소 스푸핑 방어
+  ├── IPv4 / IPv6 듀얼 스택 지원 (ICMPv6 Neighbor Discovery / Proxy ND 파서 구현)
+  ├── IPv6 초거대 주소 공간($2^{64}$개) 무작위 변조 공격 시 In_port 단일 룰 방어 실증
+  ├── IPv6 기본 헤더(40B) 반영 AI BPP(Bytes Per Packet) 임계값 동적 보정
+  └── 관제탑 UI IPv6 토폴로지 및 트래픽 시각화 확장
 ```
 
 ---

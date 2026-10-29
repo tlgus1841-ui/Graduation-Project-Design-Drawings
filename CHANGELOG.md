@@ -13,6 +13,14 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] docs(roadmap): IPv6 듀얼 스택 및 대규모 스푸핑 방어 마일스톤(Phase 6-D) 추가
+* **작업자:** 박시현 (Tech Lead) with Antigravity
+* **작업 유형:** `Docs` / `Plan`
+* **배경:** 상용화 대비 향후 확장 로드맵으로, 128비트 초거대 주소 공간을 갖는 IPv6 환경에서의 무작위 주소 변조 공격 방어 및 ICMPv6 ND 지원을 위한 Phase 6-D 마일스톤을 ROADMAP.md에 공식 추가.
+* **주요 변경 파일:**
+  - `docs/planning/ROADMAP.md`: [Phase 6-D] IPv6 Dual-Stack 지원 및 대규모 주소 스푸핑 방어 마일스톤 추가 (Proxy ND 파서, BPP 동적 보정, UI 시각화 확장).
+* **검증:** 문서 린트 및 마크다운 포맷팅 확인.
+
 ### [2026-10-29] docs(planning): 순수 OVS 단독 구동 전환 구현 계획서 작성
 * **작업자:** 박시현 (Tech Lead) with Antigravity
 * **작업 유형:** `Docs` / `Plan`
