@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.8(Ryu)-blue?logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109.2-009688?logo=fastapi)
-![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)
+![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)
 ![OpenFlow](https://img.shields.io/badge/OpenFlow-1.3-orange)
 ![Redis](https://img.shields.io/badge/Redis-7.2-red?logo=redis)
 ![Tests](https://img.shields.io/badge/Tests-267%20Passed%20(100%25)-brightgreen)
@@ -123,10 +123,10 @@
 | **Web Backend**| **FastAPI** | **0.109.2** | Python 3.10 | 비동기 WebSocket Hub 및 REST 관제 API |
 | | **Uvicorn** | **0.27.1** | Python 3.10 | 고성능 비동기 ASGI 서버 |
 | | **Pydantic** | **2.6.1** | Python 3.10 | IPC 메시지 계약(Contracts) 검증 및 직렬화 |
-| **Web Frontend**| **React** | **18.2.0** | Node.js 20 LTS (Vite) | 관제탑 SPA 프론트엔드 |
-| | **vis-network** | **9.1.9** | npm | 동적 네트워크 토폴로지 실시간 렌더링 |
-| | **ApexCharts** | **3.46.0** | npm | BPP / PPS 시계열 트래픽 모니터링 차트 |
-| | **Tailwind CSS**| **3.4.1** | npm | 반응형 관제탑 다크 테마 스타일링 |
+| **Web Frontend**| **React** | **18.3.1** | Node.js 20 LTS (Vite) | 관제탑 SPA 프론트엔드 |
+| | **vis-network** | **9.1.13** | npm | 동적 네트워크 토폴로지 실시간 렌더링 |
+| | **ApexCharts** | **3.54.1** | npm | BPP / PPS 시계열 트래픽 모니터링 차트 |
+| | **Tailwind CSS**| **3.4.19** | npm | 반응형 관제탑 다크 테마 스타일링 |
 
 ---
 
