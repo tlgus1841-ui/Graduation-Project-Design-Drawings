@@ -101,11 +101,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dst", default="10.0.0.4", help="목적지 호스트 IP (H_server)")
     parser.add_argument("--dport", type=int, default=80, help="목적지 포트")
     parser.add_argument("--duration", type=float, default=10.0, help="총 실행 시간(초)")
+    parser.add_argument("--rate", type=int, default=None, help="초당 고정 패킷 수 (--min-pps 및 --max-pps를 동일 값으로 설정)")
     parser.add_argument("--min-pps", type=int, default=PPS_RANGE[0], help="초당 최소 패킷 수")
     parser.add_argument("--max-pps", type=int, default=PPS_RANGE[1], help="초당 최대 패킷 수")
     parser.add_argument(
         "--preset", choices=sorted(PRESETS), default=None,
-        help="시연용 프리셋 (지정 시 --min-pps/--max-pps 대신 사용)",
+        help="시연용 프리셋 (지정 시 --rate/--min-pps/--max-pps 대신 사용)",
     )
     parser.add_argument("--verbose", action="store_true", help="Scapy 전송 로그 출력")
     return parser.parse_args()
@@ -116,6 +117,8 @@ def main() -> None:
     if args.preset:
         preset = get_preset(args.preset)
         pps_range = (preset.min_pps, preset.max_pps)
+    elif args.rate is not None:
+        pps_range = (args.rate, args.rate)
     else:
         pps_range = (args.min_pps, args.max_pps)
 
