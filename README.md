@@ -11,11 +11,11 @@
 
 ## 👥 2. 팀 역할 분담 (3인 협업 체계)
 
-| 역할 | 담당자 (학번) | 주 업무 | 깃허브 / 산출물 기여 | 바로가기 가이드 |
-|:---:|:---:|:---|:---|:---:|
-| **Tech Lead** | **박시현 (본인)**<br>(22101489) | • 가상 네트워크(Mininet) 및 테스트 하네스 아키텍처 설계<br>• 전체 파이프라인 통합 및 인터페이스 규격 정의<br>• 코어 SDN 컨트롤러(OpenFlow 차단 룰 주입 엔진) 연동 | 레포지토리 관리자, 코어 아키텍처 커밋 독점, 하네스 프레임워크 구축 | [Tech Lead 가이드](docs/guides/dev_a_tech_lead/dev_a_overview.md) |
-| **Domain Dev & QA** | **유재민 (팀원 B)**<br>(22101498) | • 위협 탐지 알고리즘 구현<br>• Scapy 기반 공격 시나리오 패킷 생성<br>• 벤치마크 실행 및 정량 데이터(성능 지표) 추출 | 탐지/공격 모듈 커밋, 테스트 결과 보고서 및 그래프 데이터셋 | [Domain QA 가이드](docs/guides/dev_b_domain_qa/dev_b_overview.md) |
-| **PM & Tech Writer** | **김관우 (팀장)**<br>(22102237) | • 교수님 주간 보고 및 일정 관리<br>• 방어 정책/시나리오 기획서 작성<br>• 최종 논문(보고서) 작성 및 발표 PPT 제작 | 문서화(Docs), 시스템 흐름도 기획, 최종 발표 총괄 | [PM & Writer 가이드](docs/guides/dev_c_pm_writer/dev_c_overview.md) |
+| 역할 | 담당자 (학번) | 주 업무 | 깃허브 / 산출물 기여 |
+|:---:|:---:|:---|:---|
+| **Tech Lead** | **박시현 (본인)**<br>(22101489) | • 가상 네트워크 및 테스트 하네스 아키텍처 설계<br>• 전체 파이프라인 통합 및 인터페이스 규격 정의<br>• 코어 SDN 컨트롤러(OpenFlow 차단 룰 주입 엔진) 연동 | 레포지토리 관리자, 코어 아키텍처 커밋 독점, 하네스 프레임워크 구축 |
+| **Domain Dev & QA** | **유재민 (팀원 B)**<br>(22101498) | • 위협 탐지 알고리즘 구현<br>• Scapy 기반 공격 시나리오 패킷 생성<br>• 벤치마크 실행 및 정량 데이터(성능 지표) 추출 | 탐지/공격 모듈 커밋, 테스트 결과 보고서 및 그래프 데이터셋 |
+| **PM & Tech Writer** | **김관우 (팀장)**<br>(22102237) | • 교수님 주간 보고 및 일정 관리<br>• 방어 정책/시나리오 기획서 작성<br>• 최종 논문(보고서) 작성 및 발표 PPT 제작 | 문서화(Docs), 시스템 흐름도 기획, 최종 발표 총괄 |
 
 ---
 
@@ -29,18 +29,12 @@ Self_Defending_SDN_Tower/
 ├── pyproject.toml                         # Python 3.10 (uv) 의존성 및 린트/테스트 설정
 │
 ├── docs/                                  # 프로젝트 기술 및 기획 문서 일원화
-│   ├── writing/                           # ✍️ [집필 전용] 제출/발표 공식 산출물
-│   │   ├── proposal/                      # 공식 졸업작품 개발 기획서 (project_proposal.md)
-│   │   ├── manual/                        # 관제탑 운영자 매뉴얼 (operator_manual.md)
-│   │   ├── reports/                       # 주간/중간 보고서(weekly/) 및 실증 검증서(verification/)
-│   │   ├── thesis/                        # 최종 학술 논문 원고 (thesis_draft.md)
-│   │   └── presentations/                 # 발표 슬라이드 아웃라인 및 시연 진행표 (final_demo_runbook.md)
-│   ├── planning/                          # 📐 [설계/일정] 로드맵, 16주차 마일스톤, 하네스 계획, 환경 규칙
-│   ├── plans/                             # 🎯 [시연 기획] 2-Server 실전 라이브 시연 기획서
-│   ├── specs/                             # 🔍 [기술 명세] 4단계 자율 방어 시나리오 명세서 (defense_scenarios.md)
-│   ├── guides/                            # 🛠️ [3인 가이드] 실전 개발 가이드북 (00_common, dev_a, dev_b, dev_c)
-│   ├── study/                             # 📚 [이론 스터디] 네트워크/SDN/AI/웹 8대 기술 학습서
-│   └── archive/                           # 🗄️ [통합 아카이브] 구버전 v1 파일 격리 보관소
+│   ├── thesis/                            # 🎓 학사 졸업논문 원고 (thesis_draft.md)
+│   ├── manual/                            # 🖥️ 관제탑 운영자 매뉴얼 (operator_manual.md)
+│   ├── specs/                             # 🔍 핵심 기술 명세 (공격 판단 기준, 방어 시나리오, IPC 통신 규격)
+│   ├── verification/                      # ✅ 952k 극한 테스트 및 다중 공격 실측 검증 보고서 (data/)
+│   ├── presentation/                      # 📊 최종 발표 슬라이드, 데모 시연 런북, PPT 프롬프트
+│   └── planning/                          # 📐 종합 로드맵, 개발 계획서, 프로젝트 기획서 통합본
 │
 ├── api/                                   # [김관우] FastAPI 관제탑 백엔드
 │   ├── main.py                            # REST(/api/health, /api/topology, /api/control/manual) + WebSocket(/ws)
@@ -64,17 +58,14 @@ Self_Defending_SDN_Tower/
 
 ## 📚 4. 주요 문서 바로가기
 
-* 📑 **공식 졸업작품 개발 기획서 (통합본):** [`docs/writing/proposal/project_proposal.md`](docs/writing/proposal/project_proposal.md)
+* 🎓 **최종 학술 논문 초안:** [`docs/thesis/thesis_draft.md`](docs/thesis/thesis_draft.md)
+* 🖥️ **관제탑 사용자 매뉴얼:** [`docs/manual/operator_manual.md`](docs/manual/operator_manual.md)
+* 🔍 **6종 공격 판단 기준 및 방어 시나리오:** [`docs/specs/attack_criteria.md`](docs/specs/attack_criteria.md), [`docs/specs/defense_scenarios.md`](docs/specs/defense_scenarios.md)
+* 📡 **컴포넌트 간 IPC 통신 계약 규격:** [`docs/specs/contract_first_ipc_guide.md`](docs/specs/contract_first_ipc_guide.md)
+* ✅ **실증 검증 보고서 및 데이터셋:** [`docs/verification/`](docs/verification/)
+* 📊 **발표 슬라이드 아웃라인 & 시연 런북:** [`docs/presentation/ppt_slide_deck_outline.md`](docs/presentation/ppt_slide_deck_outline.md), [`docs/presentation/final_demo_runbook.md`](docs/presentation/final_demo_runbook.md)
+* 📑 **공식 졸업작품 개발 기획서 (통합본):** [`docs/planning/project_proposal.md`](docs/planning/project_proposal.md)
 * 📋 **종합 로드맵 및 기술 스택 규격:** [`docs/planning/roadmap_v2.md`](docs/planning/roadmap_v2.md)
-* 📅 **16주차 상세 일정 및 마일스톤:** [`docs/planning/schedule_and_milestones.md`](docs/planning/schedule_and_milestones.md)
-* 🛡️ **[공식] AI 하네스 엔지니어링 개발 계획서:** [`docs/planning/ai_harness_engineering_plan.md`](docs/planning/ai_harness_engineering_plan.md)
-* 🔍 **4단계 자율 방어 시나리오 명세서:** [`docs/specs/defense_scenarios.md`](docs/specs/defense_scenarios.md)
-* 🖥️ **관제탑 사용자 매뉴얼:** [`docs/writing/manual/operator_manual.md`](docs/writing/manual/operator_manual.md)
-* ✅ **실증 검증서 (9~16주차):** [`docs/writing/reports/verification/`](docs/writing/reports/verification/)
-* 🎓 **최종 학술 논문 초안 (작성용):** [`docs/writing/thesis/thesis_draft.md`](docs/writing/thesis/thesis_draft.md)
-* 📊 **발표 슬라이드 덱 아웃라인 & 시연 런북:** [`docs/writing/presentations/ppt_slide_deck_outline.md`](docs/writing/presentations/ppt_slide_deck_outline.md), [`docs/writing/presentations/final_demo_runbook.md`](docs/writing/presentations/final_demo_runbook.md)
-* 🐙 **실전 Git & GitHub 3인 협업 가이드:** [`docs/guides/00_common/git_collaboration_guide.md`](docs/guides/00_common/git_collaboration_guide.md)
-* 📖 **8대 기술 스터디 종합 인덱스:** [`docs/study/README.md`](docs/study/README.md)
 * 📝 **팀원 & AI 에이전트 협업 로그:** [`CHANGELOG.md`](CHANGELOG.md)
 
 ---
