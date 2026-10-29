@@ -213,11 +213,11 @@ ip netns exec ns_server ip link set veth_srv up
 ip netns exec ns_server ip route add default via 10.0.0.254 dev veth_srv 2>/dev/null || true
 ip netns exec ns_server ethtool -K veth_srv tx off rx off 2>/dev/null || true
 
-echo ">>> [5/5] ARP 정적 테이블 구성 (초기 브로드캐스트 스톰 방지)..."
-ip netns exec ns_legit arp -s 10.0.0.4 00:00:00:00:00:04
-ip netns exec ns_attacker arp -s 10.0.0.4 00:00:00:00:00:04
-ip netns exec ns_server arp -s 10.0.0.1 00:00:00:00:00:01
-ip netns exec ns_server arp -s 10.0.0.2 00:00:00:00:00:02
+echo ">>> [5/5] 정적 ARP(Neighbor) 테이블 구성 (iproute2 표준)..."
+ip netns exec ns_legit ip neigh replace 10.0.0.4 lladdr 00:00:00:00:00:04 dev veth_legit nud permanent
+ip netns exec ns_attacker ip neigh replace 10.0.0.4 lladdr 00:00:00:00:00:04 dev veth_att nud permanent
+ip netns exec ns_server ip neigh replace 10.0.0.1 lladdr 00:00:00:00:00:01 dev veth_srv nud permanent
+ip netns exec ns_server ip neigh replace 10.0.0.2 lladdr 00:00:00:00:00:02 dev veth_srv nud permanent
 
 echo "=== ✅ Native OVS 4-스위치 토폴로지 구축 완료 ==="
 ```
