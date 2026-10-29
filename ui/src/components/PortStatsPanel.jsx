@@ -8,17 +8,17 @@ export default function PortStatsPanel({ ports, phase, incident }) {
   return (
     <Panel title="Port Telemetry" subtitle="수신 기준 · 2초 주기" className="h-[300px]">
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-400">포트 통계 수신 대기 중…</p>
+        <p className="text-base text-slate-300">포트 통계 수신 대기 중…</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase tracking-wider text-slate-400">
+        <table className="w-full text-base">
+          <thead className="text-left text-sm uppercase tracking-wider text-slate-300">
             <tr>
               <th className="pb-2">Port</th><th className="pb-2">연결</th>
               <th className="pb-2 text-right">PPS</th><th className="pb-2 text-right">bps</th>
               <th className="pb-2 text-right">BPP</th>
             </tr>
           </thead>
-          <tbody className="font-mono text-slate-200">
+          <tbody className="font-mono text-slate-100">
             {rows.map(([key, p]) => {
               const hot = p.pps > 1000 && p.bpp > 0 && p.bpp < 80;
               const alerting = key === alertKey;
@@ -30,11 +30,11 @@ export default function PortStatsPanel({ ports, phase, incident }) {
                     alerting ? "bg-red-950/60 font-bold animate-pulse motion-reduce:animate-none" : ""
                   }`}
                 >
-                  <td className="py-1.5">S{p.dpid}:{p.portNo}</td>
-                  <td className="py-1.5 font-sans text-slate-400">{PORT_NAMES[key] ?? "-"}</td>
-                  <td className="py-1.5 text-right">{fmt(p.pps)}</td>
-                  <td className="py-1.5 text-right">{fmt(p.bps)}</td>
-                  <td className="py-1.5 text-right">{p.bpp ? `${fmt(p.bpp)}B` : "-"}{(hot || alerting) && " ⚠"}</td>
+                  <td className="py-2">S{p.dpid}:{p.portNo}</td>
+                  <td className="py-2 font-sans text-slate-300">{PORT_NAMES[key] ?? "-"}</td>
+                  <td className="py-2 text-right">{fmt(p.pps)}</td>
+                  <td className="py-2 text-right">{fmt(p.bps)}</td>
+                  <td className="py-2 text-right">{p.bpp ? `${fmt(p.bpp)}B` : "-"}{(hot || alerting) && " ⚠"}</td>
                 </tr>
               );
             })}

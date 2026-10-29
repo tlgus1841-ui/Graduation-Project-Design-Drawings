@@ -17,7 +17,7 @@ export default function ConnectionBadge({ status, retries }) {
     >
       <span className={`h-2 w-2 rounded-full ${s.dot}`} />
       WS {s.label}
-      {status !== "CONNECTED" && retries > 0 && <span className="font-normal text-slate-400">· {retries}</span>}
+      {status !== "CONNECTED" && retries > 0 && <span className="font-normal text-slate-300">· {retries}</span>}
     </span>
   );
 }

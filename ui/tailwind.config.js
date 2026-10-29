@@ -3,6 +3,11 @@ export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        // Pretendard first: Tailwind's default ui-sans-serif/system-ui stack renders Korean
+        // thin and tightly packed on this dark UI, which was flagged as hard to read.
+        sans: ["Pretendard Variable", "Pretendard", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       keyframes: {
         // Red-alert flash: background and border swing between dim and bright red (week-9 review item).
         "alert-blink": {
