@@ -7,7 +7,9 @@ const SERIES = [
   { key: "1:1", name: "H_legit (S1:1)", color: "#3987e5" },
   { key: "1:2", name: "H_attacker (S1:2)", color: "#d95926" },
 ];
-const INK = { primary: "#e2e8f0", secondary: "#94a3b8", grid: "#334155" };
+// secondary was slate-400 (#94a3b8): under ~3.8:1 against the panel background, flagged as hard to
+// read for axis/tooltip text. slate-300 clears 4.5:1 while staying visually secondary to `primary`.
+const INK = { primary: "#e2e8f0", secondary: "#cbd5e1", grid: "#334155" };
 // Same value as model/detection_guard.py BPP_ATTACK_MAX: at or below it a port counts as attack-like.
 const BPP_ATTACK_MAX = 80;
 
@@ -31,7 +33,7 @@ const BPP_ANNOTATIONS = {
         textAnchor: "start",
         offsetX: 8,
         borderColor: "transparent",
-        style: { color: INK.primary, background: "#1e293b", fontSize: "11px" },
+        style: { color: INK.primary, background: "#1e293b", fontSize: "12px" },
       },
     },
   ],
@@ -94,7 +96,7 @@ const BPP_OPTIONS = buildOptions("B", bppAxisMax, BPP_ANNOTATIONS);
 
 function LatestValues({ history, field, unit, attackMax }) {
   return (
-    <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs" data-testid={`latest-${field}`}>
+    <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm" data-testid={`latest-${field}`}>
       {SERIES.map((s) => {
         const last = history[s.key]?.at(-1)?.[field];
         return (
@@ -153,5 +155,5 @@ function TrafficCharts({ history }) {
 export default memo(TrafficCharts);
 
 function Waiting() {
-  return <p className="text-sm text-slate-400">포트 통계 수신 대기 중…</p>;
+  return <p className="text-base text-slate-300">포트 통계 수신 대기 중…</p>;
 }

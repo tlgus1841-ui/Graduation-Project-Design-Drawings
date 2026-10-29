@@ -18,7 +18,7 @@ export default function App() {
       badges={
         <>
           {state.mode === "mock" && (
-            <span className="rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-400">MOCK DATA</span>
+            <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300">MOCK DATA</span>
           )}
           {state.mode === "live" && (
             <span

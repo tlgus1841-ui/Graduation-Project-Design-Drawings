@@ -48,7 +48,7 @@ export default function RecoveryNotice({ recovery }) {
           확인
         </button>
       </div>
-      <ol className="mt-3 space-y-1 text-sm">
+      <ol className="mt-3 space-y-1.5 text-base">
         {rows.map(([label, ts]) => (
           <li key={label} className="flex justify-between gap-4">
             <span className="text-slate-300">{label}</span>
@@ -56,7 +56,7 @@ export default function RecoveryNotice({ recovery }) {
           </li>
         ))}
       </ol>
-      <p className="mt-3 border-t border-slate-700 pt-2 text-sm text-slate-300">
+      <p className="mt-3 border-t border-slate-700 pt-2 text-base text-slate-300">
         총 소요 <span className="font-mono font-bold text-emerald-300">{total.toFixed(1)}초</span>
         {" · "}차단·우회 규칙 해제, 기본 경로 복귀
       </p>

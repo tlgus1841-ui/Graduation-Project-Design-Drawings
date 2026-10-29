@@ -116,7 +116,7 @@ function ManualControlDialog({ onClose }) {
         <div>
           <p className="font-mono text-xs font-bold tracking-widest text-red-300">EMERGENCY MANUAL CONTROL</p>
           <h2 id="manual-title" className="text-lg font-bold text-slate-50">비상 수동 제어</h2>
-          <p className="mt-1 text-sm text-slate-400">자동 방어와 별개로 포트를 직접 격리하거나 복원합니다. 모든 조작은 보안 이벤트에 기록됩니다.</p>
+          <p className="mt-1 text-sm text-slate-300">자동 방어와 별개로 포트를 직접 격리하거나 복원합니다. 모든 조작은 보안 이벤트에 기록됩니다.</p>
         </div>
 
         <fieldset className="space-y-1">
@@ -138,7 +138,7 @@ function ManualControlDialog({ onClose }) {
             className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-slate-100">
             {TARGETS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
           </select>
-          <span className="block text-xs text-slate-400">스위치끼리 연결된 포트는 망 전체가 끊길 수 있어 선택할 수 없습니다.</span>
+          <span className="block text-sm text-slate-300">스위치끼리 연결된 포트는 망 전체가 끊길 수 있어 선택할 수 없습니다.</span>
         </label>
 
         {isProtectedIsolate && (

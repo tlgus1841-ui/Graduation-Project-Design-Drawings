@@ -107,7 +107,7 @@ function RelearnDialog({ onClose }) {
         <div>
           <p className="font-mono text-xs font-bold tracking-widest text-sky-300">SPECIAL-SITUATION RELEARN</p>
           <h2 id="relearn-title" className="text-lg font-bold text-slate-50">특수 상황 재학습 승인</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-slate-300">
             수강신청 · 이벤트처럼 정상 트래픽이 진짜로 늘었을 때, 정한 기간 동안 트래픽 양(SYN · UDP · ICMP)을 새로 배웁니다.
             짝이 안 맞는 연결이나 실패 응답 같은 공격 신호는 다시 배우지 않고, 기간이 끝나면 원래 평소값으로 돌아갑니다.
           </p>

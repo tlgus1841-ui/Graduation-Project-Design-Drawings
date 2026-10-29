@@ -13,6 +13,18 @@
 
 ## 📋 변경 이력 (Latest Changes)
 
+### [2026-10-29] fix(ui): 관제탑 대시보드 가독성 개선 (한글 폰트 · 저대비 텍스트 · 작은 글자)
+* **작업자:** 김관우 (PM & Tech Writer) with Claude Code
+* **작업 유형:** `Fix`
+* **배경:** "가독성이 좋지 않다"는 평가를 받음. 원인은 세 가지 — (1) 한글 전용 웹폰트 없이 Tailwind 기본 `ui-sans-serif/system-ui` 스택에 의존해 한글이 가늘고 빽빽하게 렌더링, (2) 실질 정보(이벤트 상세, 포트 통계, 패널 부제, 차트 축/툴팁 텍스트)에 저대비 회색(`text-slate-400`, 어두운 배경 대비 ~3.7:1로 WCAG AA 4.5:1 미달)을 과용, (3) 이벤트 피드·포트 텔레메트리 표 같은 핵심 데이터가 `text-xs`/`text-sm`으로 지나치게 작게 표시됨.
+* **주요 변경 파일:**
+  - `ui/index.html`, `ui/tailwind.config.js`: Pretendard Variable(CDN, jsdelivr) 추가해 `font-sans` 기본값으로 지정.
+  - `ui/src/index.css`: 전역 `line-height: 1.5` · 폰트 안티앨리어싱 적용.
+  - `ui/src/components/{Panel,EventFeed,PortStatsPanel,TopologyMap,TrafficCharts,ConnectionBadge,RecoveryNotice,ManualControl,RelearnControl}.jsx`, `ui/src/App.jsx`: 실질 정보 텍스트의 `text-slate-400`→`text-slate-300`(대비 개선), 핵심 콘텐츠(이벤트 상세, 포트 표, 패널 부제, 차트 범례)의 `text-xs`→`text-sm`, `text-sm`→`text-base` 승격. 차트 축/툴팁 색(`INK.secondary`)도 slate-400→slate-300로 교체.
+* **영향 범위 및 주의사항 (Breaking Changes):** 없음. 순수 스타일 변경(색상·크기·폰트)만 적용, 레이아웃 구조·테스트 대상 로직(`data-testid` 등)은 그대로. 상태 색상(빨강/파랑/초록 등 FSM 의미 매핑)과 영문 모노스페이스 배지(라벨, command ID 등)는 의도적으로 유지.
+* **검증:** `npx vitest run` 26 passed, `npm run build` 성공. Playwright로 `vite preview` 화면 스크린샷 확인 — 한글 렌더링 개선, 텍스트 대비·크기 증가 확인.
+* **다음 작업자 인수인계 메모:** 실데이터(WS/Redis 연결)로 이벤트 피드 · 포트 텔레메트리 · 차트가 채워진 상태에서 추가로 가독성을 재평가해보는 것을 권장. `text-slate-400`이 여전히 남은 곳(IncidentStrip의 대기 상태 점 색 등)은 장식용 인디케이터라 의도적으로 보존함.
+
 ### [2026-10-29] merge: PR #10(공격 판단 기준 세분화)을 main에 통합하며 충돌 해소
 * **작업자:** 유재민 (Domain Dev & QA) with Claude Code
 * **작업 유형:** `Fix` / `Test`

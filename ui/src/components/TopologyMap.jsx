@@ -123,7 +123,7 @@ function TopologyMap({ topology, ports }) {
     <Panel title="Topology" subtitle="드래그로 배치 · 노드 클릭 시 상세" className="h-[420px]">
       <div className="flex h-full flex-col gap-2">
         <div ref={containerRef} data-testid="topology-map" className="min-h-0 flex-1" aria-label="다이아몬드 토폴로지 상태 지도" />
-        <div className="flex min-h-[28px] flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+        <div className="flex min-h-[28px] flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-300">
           {node ? (
             <>
               <span className="font-semibold text-slate-100">{node.label}</span>
