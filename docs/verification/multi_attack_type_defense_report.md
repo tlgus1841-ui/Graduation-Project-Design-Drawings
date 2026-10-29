@@ -25,10 +25,10 @@
 
 | 파일 | 상태 | 내용 |
 | :--- | :--- | :--- |
-| [`model/ewma_detector.py`](../../../../model/ewma_detector.py) | 신규 | EWMA(지수 가중 이동평균) + SPC(통계적 공정관리) 기반 경량 드리프트 탐지기 |
-| [`model/attack_classifier.py`](../../../../model/attack_classifier.py) | 신규 | `err_rate` 임계값 기반 **PORT_SCAN** 판정 + EWMA 기반 **SLOW_DRIFT** 판정, `StreakGuard`로 N회 연속 확정(오탐 방지) |
-| [`model/inference_worker.py`](../../../../model/inference_worker.py#L83-L112) | 수정 | `InferenceWorker.process()`가 `SecondaryAttackClassifier`를 플러드 경로와 함께 호출 |
-| [`harness/contracts/sdn_events.py`](../../../../harness/contracts/sdn_events.py) | 수정 (리뷰 요청) | `ThreatType` enum에 `PORT_SCAN = "PORT_SCAN"` 한 줄 추가 (기존 값 변경 없음, 하위 호환) |
+| [`model/ewma_detector.py`](../../model/ewma_detector.py) | 신규 | EWMA(지수 가중 이동평균) + SPC(통계적 공정관리) 기반 경량 드리프트 탐지기 |
+| [`model/attack_classifier.py`](../../model/attack_classifier.py) | 신규 | `err_rate` 임계값 기반 **PORT_SCAN** 판정 + EWMA 기반 **SLOW_DRIFT** 판정, `StreakGuard`로 N회 연속 확정(오탐 방지) |
+| [`model/inference_worker.py`](../../model/inference_worker.py#L83-L112) | 수정 | `InferenceWorker.process()`가 `SecondaryAttackClassifier`를 플러드 경로와 함께 호출 |
+| [`harness/contracts/sdn_events.py`](../../harness/contracts/sdn_events.py) | 수정 (리뷰 요청) | `ThreatType` enum에 `PORT_SCAN = "PORT_SCAN"` 한 줄 추가 (기존 값 변경 없음, 하위 호환) |
 | `tests/model/test_ewma_detector.py`, `test_attack_classifier.py`, `test_inference_worker.py`(확장) | 신규/확장 | 아래 4절 |
 
 ### 탐지 로직 요약

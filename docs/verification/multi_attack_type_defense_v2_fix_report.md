@@ -13,7 +13,7 @@
 
 | 유형 | v1 신호 | 왜 실제로는 안 움직이는가 |
 | :--- | :--- | :--- |
-| **PORT_SCAN** | `err_rate` (OpenFlow `rx_errors`) | `rx_errors`는 스위치의 **물리/링크 계층** 수신 오류(CRC·프레임 오류 등) 카운터입니다. 닫힌 포트로 보낸 TCP SYN에 대한 RST 응답은 스위치 입장에서 완전히 정상적인 프레임이라 전혀 반응하지 않습니다. 게다가 이 프로젝트의 공격 트래픽은 [`traffic/checksum_utils.py`](../../../../traffic/checksum_utils.py)로 체크섬을 일부러 정상화해서 보내므로, 코드베이스 안 **어떤 트래픽 생성기도 `rx_errors`를 움직이지 못합니다**. |
+| **PORT_SCAN** | `err_rate` (OpenFlow `rx_errors`) | `rx_errors`는 스위치의 **물리/링크 계층** 수신 오류(CRC·프레임 오류 등) 카운터입니다. 닫힌 포트로 보낸 TCP SYN에 대한 RST 응답은 스위치 입장에서 완전히 정상적인 프레임이라 전혀 반응하지 않습니다. 게다가 이 프로젝트의 공격 트래픽은 [`traffic/checksum_utils.py`](../../traffic/checksum_utils.py)로 체크섬을 일부러 정상화해서 보내므로, 코드베이스 안 **어떤 트래픽 생성기도 `rx_errors`를 움직이지 못합니다**. |
 | **SLOW_DRIFT** | `duration_sec` (포트 가동 시간) EWMA 추세 | `duration_sec`은 "그 포트가 켜져 있던 시간"(업타임)입니다. 공격이든 아니든 2초 주기마다 항상 똑같이 2씩 늘어나므로, 이걸 EWMA로 추적해도 "공격 추세"가 아니라 "시간이 흐른다"는 사실만 감지하게 됩니다. |
 
 ## 2. 재설계
@@ -31,20 +31,20 @@ EWMA(delta_pps) 기준선보다 증가
     -> 10틱 이상 계속: SLOW_DRIFT
 ```
 
-이 신호는 [`model/detection_guard.py`](../../../../model/detection_guard.py)가 플러드 판정에 쓰는 것과 같은 `BPP_ATTACK_MAX=80` 관례를 그대로 재사용하고, `delta_pps`는 Ryu `OFPPortStatsReply`에서 직접 나오는 값이라 실제 OVS 환경에서 의미 있게 움직입니다.
+이 신호는 [`model/detection_guard.py`](../../model/detection_guard.py)가 플러드 판정에 쓰는 것과 같은 `BPP_ATTACK_MAX=80` 관례를 그대로 재사용하고, `delta_pps`는 Ryu `OFPPortStatsReply`에서 직접 나오는 값이라 실제 OVS 환경에서 의미 있게 움직입니다.
 
-EWMA는 기준선 대비 증가·감소 양방향 이탈을 모두 "이상"으로 보는 범용 SPC 설계([`model/ewma_detector.py`](../../../../model/ewma_detector.py), 변경 없음)라서, "증가만" 의심하도록 걸러주는 조건을 분류기 쪽에 추가했습니다 — 그렇지 않으면 버스트 직후 기준선 복귀도 반대 방향의 큰 편차로 잡혀, 바로 다음 재급등을 "연속 2틱"으로 오인하는 문제가 테스트로 발견됐습니다(아래 4절).
+EWMA는 기준선 대비 증가·감소 양방향 이탈을 모두 "이상"으로 보는 범용 SPC 설계([`model/ewma_detector.py`](../../model/ewma_detector.py), 변경 없음)라서, "증가만" 의심하도록 걸러주는 조건을 분류기 쪽에 추가했습니다 — 그렇지 않으면 버스트 직후 기준선 복귀도 반대 방향의 큰 편차로 잡혀, 바로 다음 재급등을 "연속 2틱"으로 오인하는 문제가 테스트로 발견됐습니다(아래 4절).
 
 ## 3. 변경 파일
 
 | 파일 | 상태 | 내용 |
 | :--- | :--- | :--- |
-| [`model/attack_classifier.py`](../../../../model/attack_classifier.py) | 재작성 | `SecondaryAttackClassifier`를 새 신호로 교체. `AttackCategory`/`CATEGORY_TO_THREAT_TYPE`/`StreakGuard` 인터페이스는 그대로 (스트릭 길이를 읽는 `streak` 속성만 추가) |
-| [`tests/model/test_attack_classifier.py`](../../../../tests/model/test_attack_classifier.py) | 재작성 | err_rate 기반 테스트 제거, 소형 패킷 서브플러드 버스트·PORT_SCAN→SLOW_DRIFT 승격 테스트로 교체 |
-| [`tests/model/test_inference_worker.py`](../../../../tests/model/test_inference_worker.py) | 수정 | `ErrorCounters` 제거, 같은 새 신호로 통합 테스트 재작성 |
-| [`traffic/traffic_scan.py`](../../../../traffic/traffic_scan.py) | 신규 | 새 탐지 신호를 실제 Mininet 패킷으로 검증·시연하는 생성기 (아래 5절) |
-| [`tests/traffic/test_traffic_scan.py`](../../../../tests/traffic/test_traffic_scan.py) | 신규 | 패킷 생성·포트 순환·PPS 루프 단위 테스트 |
-| [`model/inference_worker.py`](../../../../model/inference_worker.py) | 문서만 | `pipeline/feature_extractor.py`에 이미 실데이터 캡처 CLI가 있다는 안내만 추가 (아래 6절) |
+| [`model/attack_classifier.py`](../../model/attack_classifier.py) | 재작성 | `SecondaryAttackClassifier`를 새 신호로 교체. `AttackCategory`/`CATEGORY_TO_THREAT_TYPE`/`StreakGuard` 인터페이스는 그대로 (스트릭 길이를 읽는 `streak` 속성만 추가) |
+| [`tests/model/test_attack_classifier.py`](../../tests/model/test_attack_classifier.py) | 재작성 | err_rate 기반 테스트 제거, 소형 패킷 서브플러드 버스트·PORT_SCAN→SLOW_DRIFT 승격 테스트로 교체 |
+| [`tests/model/test_inference_worker.py`](../../tests/model/test_inference_worker.py) | 수정 | `ErrorCounters` 제거, 같은 새 신호로 통합 테스트 재작성 |
+| [`traffic/traffic_scan.py`](../../traffic/traffic_scan.py) | 신규 | 새 탐지 신호를 실제 Mininet 패킷으로 검증·시연하는 생성기 (아래 5절) |
+| [`tests/traffic/test_traffic_scan.py`](../../tests/traffic/test_traffic_scan.py) | 신규 | 패킷 생성·포트 순환·PPS 루프 단위 테스트 |
+| [`model/inference_worker.py`](../../model/inference_worker.py) | 문서만 | `pipeline/feature_extractor.py`에 이미 실데이터 캡처 CLI가 있다는 안내만 추가 (아래 6절) |
 
 `AttackCategory`, `ThreatType.PORT_SCAN`/`SLOW_DDOS`, `CATEGORY_TO_THREAT_TYPE` 등 외부에 노출된 인터페이스는 전부 그대로이며, `model/inference_worker.py`가 `SecondaryAttackClassifier`를 생성·호출하는 코드도 무변경입니다. 내부 판정 로직만 바뀐 비파괴적 교체입니다.
 
@@ -70,7 +70,7 @@ sudo uv run python traffic/traffic_scan.py --dst 10.0.0.4 --duration 30   # Slow
 
 ## 6. 바로잡습니다: "실데이터 F1 캡처 도구가 없다"는 이전 보고는 제 조사 실수였습니다
 
-지난 리뷰에서 "실데이터로 재학습·F1 측정할 캡처 도구가 없다"고 말씀드렸는데, 다시 확인해보니 **[`pipeline/feature_extractor.py`](../../../../pipeline/feature_extractor.py)에 이미 완전히 구현되고 테스트까지 된 캡처 CLI가 있었습니다**:
+지난 리뷰에서 "실데이터로 재학습·F1 측정할 캡처 도구가 없다"고 말씀드렸는데, 다시 확인해보니 **[`pipeline/feature_extractor.py`](../../pipeline/feature_extractor.py)에 이미 완전히 구현되고 테스트까지 된 캡처 CLI가 있었습니다**:
 
 ```bash
 uv run python pipeline/feature_extractor.py --label 0 --out dataset/real_normal.csv   # 정상 구간
@@ -97,4 +97,4 @@ Redis `sdn:stats:port`를 직접 구독해 레이블이 붙은 CSV를 기록하�
 
 - `fix/secondary-attack-classifier-real-signals` 브랜치 리뷰·머지 부탁드립니다.
 - GCP Mininet 접속 시: (1) `traffic_scan.py`로 실제 포트 스캔/Slow 패킷을 쏴서 탐지 확정 여부 재현, (2) `pipeline/feature_extractor.py`로 실데이터 캡처 후 재학습·F1 재측정.
-- `docs/writing/reports/verification/v2_breaking_points_fix_backlog.md`의 BP-01(서킷 브레이커 조기 복구)은 여전히 미해결입니다. 이번에 PORT_SCAN/SLOW_DRIFT 경보가 늘어난 만큼 같은 경로를 타는 경보 종류도 늘었으니, 박시현님 쪽에서 우선순위를 다시 봐주시면 좋겠습니다.
+- `docs/verification/v2_breaking_points_fix_backlog.md`의 BP-01(서킷 브레이커 조기 복구)은 여전히 미해결입니다. 이번에 PORT_SCAN/SLOW_DRIFT 경보가 늘어난 만큼 같은 경로를 타는 경보 종류도 늘었으니, 박시현님 쪽에서 우선순위를 다시 봐주시면 좋겠습니다.

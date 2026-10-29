@@ -101,4 +101,4 @@ ping 창에서 `icmp_seq` 번호가 건너뛰지 않는 것을 마지막에 짚�
 | 발표 | 1 ~ 8장 발표 → 9장 시연 → 10장 결론 | 김관우 |
 | 시연 중 | 터미널 감시, 문제 시 §4 판단 신호 | 박시현 · 유재민 |
 | 질의응답 | 기술 질문은 박시현 · 유재민, 일정 · 범위 질문은 김관우 | 공통 |
-| 직후 | 질문 · 피드백을 `docs/writing/reports/final_review_feedback.md` §1 ~ §3에 기록 | 김관우 |
+| 직후 | 질문 · 피드백을 `docs/verification/final_review_feedback.md` §1 ~ §3에 기록 | 김관우 |

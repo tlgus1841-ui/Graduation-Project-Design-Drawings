@@ -2,7 +2,7 @@
 > **작성자:** 김관우 (22102237 / PM & Tech Writer, 팀장)
 > **해당 주차:** 4주차 (2026.09.21 ~ 2026.09.27) — Phase 2 산출물
 > **문서 상태:** v1.0 초안 (박시현·유재민 검토 후 확정)
-> **상위 근거 문서:** [`roadmap_v2.md`](../planning/roadmap_v2.md), [`ai_harness_engineering_plan.md`](../planning/ai_harness_engineering_plan.md), [`contract_first_ipc_guide.md`](../guides/00_common/contract_first_ipc_guide.md), [`phase2_defense_scenario_web_spec.md`](../guides/dev_c_pm_writer/phase2_defense_scenario_web_spec.md)
+> **상위 근거 문서:** [`ROADMAP.md`](../planning/ROADMAP.md), [`ai_harness_engineering_plan.md`](../planning/ai_harness_engineering_plan.md), [`contract_first_ipc_guide.md`](contract_first_ipc_guide.md)
 > **계약 스키마(SSOT):** [`harness/contracts/sdn_events.py`](../../harness/contracts/sdn_events.py)
 
 ---

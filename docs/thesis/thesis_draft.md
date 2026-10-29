@@ -66,7 +66,7 @@ Isolation Forest는 데이터를 무작위로 분할할 때 이상치가 정상 
 ---
 
 ## 3. 시스템 아키텍처 및 설계 (System Architecture)
-> 💡 *참조 자료: `docs/planning/roadmap_v2.md`, `harness/contracts/sdn_events.py`, `docs/specs/defense_scenarios.md`*
+> 💡 *참조 자료: `docs/planning/ROADMAP.md`, `harness/contracts/sdn_events.py`, `docs/specs/defense_scenarios.md`*
 
 ### 3.1 전체 계층 구조
 

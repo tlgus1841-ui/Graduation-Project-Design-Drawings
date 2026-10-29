@@ -20,7 +20,7 @@
 | 목표 | IP 스푸핑 SYN Flood를 사람 개입 없이 탐지 → 격리 → 우회 → 복구하는 SDN 자율 방어 루프와 실시간 웹 관제탑 |
 | 완성된 것 | 다이아몬드 토폴로지, Ryu OpenFlow 1.3 스위칭·2초 통계 발행·In_port 차단(Priority 100)·Dijkstra 우회(Priority 20)·쿨다운 FSM·화이트리스트·서킷 브레이커, SYN Flood 공격기, 5대 피처 계산기, Isolation Forest 모델·오탐 방지 게이트·실시간 추론 워커, 웹 관제탑(실데이터 · 더미 모드)과 비상 수동 제어, 4단계 실제 구성 E2E 및 30초 연속 공격 실증 |
 | 핵심 수치 | 경보 → 컨트롤러 차단·우회 **1.4~2.5ms** (14주차 `ovs-ofctl` 78.4ms), 공격 시작 → 격리 **3.20~3.35초**, 공격 중 정상 손실 **0%** (0 / 4,337), 격리 후 서버 도달 공격 **0**, 스푸핑 중 규칙 증가 **0**, 플래핑 **0**, 자동 복구 **10.36~10.87초**, 관제탑 **60fps** |
-| 향후 확장 | 외부 독립 웹서버 GRE 터널 연동 2-Server 라이브 데모(`docs/plans/2_server_live_demo_plan.md`) |
+| 향후 확장 | 외부 독립 웹서버 GRE 터널 연동 2-Server 라이브 데모(`docs/presentation/2_server_live_demo_plan.md`) |
 
 ## 2. 주차별 한눈에 보기
 
@@ -159,7 +159,7 @@
 |:---|:---|:---|:---:|
 | 박시현 | 시연 데모 러너(`scripts/demo_scenario.sh`), 환경 초기화 도구(`scripts/reset_env.sh`) | 완료 | 완료 |
 | 유재민 | 시연용 공격 프리셋(`traffic/attack_profiles.py`), 종합 벤치마크 리포트(`model/benchmark_report.py`) | 완료 | 완료 |
-| 김관우 | 최종 발표 10장, 시연 진행표 · 리허설 기록지 | `docs/writing/presentations/final_demo_runbook.md` | 완료 |
+| 김관우 | 최종 발표 10장, 시연 진행표 · 리허설 기록지 | `docs/presentation/final_demo_runbook.md` | 완료 |
 
 ### 16주차 (12.14 ~ 12.20) · 실제 구성 E2E 검증 & 최종 심사 — 완료
 | 담당 | 내용 | 결과 | 상태 |
@@ -174,7 +174,7 @@
 
 | 분류 | 산출물 | 위치 |
 |:---|:---|:---|
-| 기획 | 개발 기획서, 일정표, 로드맵, 2-Server 데모 기획서 | `docs/planning/`, `docs/plans/` |
+| 기획 | 개발 기획서, 일정표, 로드맵, 2-Server 데모 기획서 | `docs/planning/`, `docs/presentation/` |
 | 명세 | 방어 시나리오 명세서 v1.2 | `docs/specs/defense_scenarios.md` |
 | 계약 · 안전 | Redis 4채널 메시지 규격, 화이트리스트 · FSM · 서킷 브레이커 | `harness/contracts/`, `harness/safety/` |
 | 네트워크 | 다이아몬드 토폴로지, Ryu 컨트롤러, Dijkstra 우회 엔진 | `topo/`, `ryu/app/` |
