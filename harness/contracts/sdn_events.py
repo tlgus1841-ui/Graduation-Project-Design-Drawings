@@ -128,7 +128,7 @@ class PortStatItem(BaseModel):
     tx_packets: int = Field(..., description="Cumulative transmitted packet count")
     rx_bytes: int = Field(..., description="Cumulative received byte count")
     tx_bytes: int = Field(..., description="Cumulative transmitted byte count")
-    rx_errors: int = Field(0, description="Cumulative receive error count")
+    rx_errors: int = Field(default=0, description="Cumulative receive error count")
     duration_sec: int = Field(..., description="Port active duration in seconds")
 
 
@@ -163,8 +163,8 @@ class ServiceHealthMessage(BaseModel):
     sent: int = Field(..., description="Probes settled in this report")
     received: int = Field(..., description="Probes answered within the timeout")
     loss_percent: float = Field(..., description="100 * (sent - received) / sent, 0 when nothing was sent")
-    rtt_avg_ms: Optional[float] = Field(None, description="Mean round-trip time of the answered probes")
-    rtt_max_ms: Optional[float] = Field(None, description="Largest round-trip time of the answered probes")
+    rtt_avg_ms: Optional[float] = Field(default=None, description="Mean round-trip time of the answered probes")
+    rtt_max_ms: Optional[float] = Field(default=None, description="Largest round-trip time of the answered probes")
 
 
 class ServerConnItem(BaseModel):
@@ -172,8 +172,8 @@ class ServerConnItem(BaseModel):
     client_ip: str
     open: int = Field(..., description="Established connections from this client")
     slow: int = Field(..., description="Of those, slow requests: open >= 20 s, no response sent yet, < 500 B/s")
-    pending: int = Field(0, description="Of those, unfinished requests: request started, open >= 5 s, "
-                                        "no response sent yet, < 500 B/s")
+    pending: int = Field(default=0, description="Of those, unfinished requests: request started, open >= 5 s, "
+                                                 "no response sent yet, < 500 B/s")
 
 
 class ServerConnMessage(BaseModel):
@@ -193,7 +193,7 @@ class AnomalyAlertMessage(BaseModel):
     dpid: int = Field(..., description="Ingress switch DPID experiencing anomaly")
     in_port: int = Field(..., description="Attacking traffic ingress port")
     threat_type: str = Field(
-        ThreatType.SYN_FLOOD_SPOOFING.value,
+        default=ThreatType.SYN_FLOOD_SPOOFING.value,
         description="Detected threat type",
     )
     score: float = Field(..., description="Anomaly score from Isolation Forest (e.g., -1.0 to 0.0)")
@@ -213,7 +213,7 @@ class AnomalyAlertMessage(BaseModel):
         description="Error packet rate (Δrx_errors / Δpackets)",
     )
     stage: str = Field(
-        RiskStage.DANGER.value,
+        default=RiskStage.DANGER.value,
         description="WARNING (rate limit) | DANGER (isolate + reroute); older senders mean DANGER",
     )
     metadata: Dict[str, str] = Field(
@@ -233,10 +233,16 @@ class ControlCommandMessage(BaseModel):
     target_dpid: int = Field(..., description="Target switch DPID")
     target_port: int = Field(..., description="Target switch port number")
     reason: str = Field(..., description="Human or AI rationale for mitigation")
-    priority: int = Field(100, description="OpenFlow flow rule priority to install/modify")
-    duration_sec: Optional[float] = Field(None, description="RELEARN only: approved relearning period (seconds)")
-    target_ip: Optional[str] = Field(None, description="QUARANTINE/RELEASE only: target host IP to isolate/release")
-    target_mac: Optional[str] = Field(None, description="QUARANTINE/RELEASE only: target host MAC to isolate/release")
+    priority: int = Field(default=100, description="OpenFlow flow rule priority to install/modify")
+    duration_sec: Optional[float] = Field(
+        default=None, description="RELEARN only: approved relearning period (seconds)"
+    )
+    target_ip: Optional[str] = Field(
+        default=None, description="QUARANTINE/RELEASE only: target host IP to isolate/release"
+    )
+    target_mac: Optional[str] = Field(
+        default=None, description="QUARANTINE/RELEASE only: target host MAC to isolate/release"
+    )
 
 
 # =====================================================================
@@ -249,7 +255,7 @@ class TopologyNode(BaseModel):
     dpid: Optional[int] = None
     ip: Optional[str] = None
     mac: Optional[str] = None
-    status: str = Field("NORMAL", description="NORMAL | ATTACKED | MITIGATED | OFFLINE")
+    status: str = Field(default="NORMAL", description="NORMAL | ATTACKED | MITIGATED | OFFLINE")
 
 
 class TopologyLink(BaseModel):
@@ -257,8 +263,8 @@ class TopologyLink(BaseModel):
     target: str = Field(..., description="Target node ID")
     src_port: int = Field(..., description="Source port")
     dst_port: int = Field(..., description="Destination port")
-    is_trunk: bool = Field(False, description="True if link is a switch-to-switch trunk")
-    status: str = Field("ACTIVE", description="ACTIVE | REROUTED | BLOCKED")
+    is_trunk: bool = Field(default=False, description="True if link is a switch-to-switch trunk")
+    status: str = Field(default="ACTIVE", description="ACTIVE | REROUTED | BLOCKED")
 
 
 class TopologySyncMessage(BaseModel):
