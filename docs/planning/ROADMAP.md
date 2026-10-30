@@ -75,7 +75,7 @@
 | **2. 오탐 방지 및<br>정상 사용자 보호** | 단순 임계치 초과 차단으로 타임세일/정상 급증 시 고객 차단 사고 | • 다단계 정화(SYN Cookie, CAPTCHA, 스크러빙 센터 우회)<br>• 결제/인증/DNS 등 핵심 비즈니스 트래픽 절대 화이트리스트 | • Flash Crowd 오탐 방지(EwmaDetector + BPP)<br>• 영구 화이트리스트 가드(`whitelist_guard.py`)<br>• 정상 트래픽 무유실 우회(0.0% Loss) 실증 |
 | **3. 심층 방어<br>(L7 가시성 & SFC)** | L2~L4 헤더만 검사하여 80/443 정상 포트로 위장한 웹 공격(SQLi 등) 미탐 | • **SFC (Service Function Chaining)** 도입<br>• 의심 플로우만 가상 WAF/IPS(Suricata)로 동적 라우팅하여 L7 정밀 검사 | • SDN 기반 선택적 트래픽 스티어링(Dynamic Rerouting)<br>• WAF/IPS 컨테이너 연동 체인 구축 |
 | **4. 로깅 및 컴플라이언스<br>(Compliance & SIEM)** | 단순 로컬 파일/콘솔 로깅에 의존, 침해 사고 증적 위변조 취약 | • SIEM 연동 (Kafka ➔ Splunk / ElasticSearch 실시간 전송)<br>• ISMS-P, ISO27001 규제 준수를 위한 WORM 무결성 감사 보관 | • Redis 실시간 이벤트 버스 및 WebSocket 피드<br>• 엔터프라이즈 SIEM 수집 파이프라인 확장 |
-| **5. 소프트웨어 정의 망 분리<br>(Zero-Trust Segmentation)** | 단일 서브넷(10.0.0.x) 플랫 구조로 침해 시 내부 확산(Lateral Movement) 취약 | • 용도별 논리 격벽(업무망/인터넷망/서버망/격리망)<br>• Default-Deny 기반 제로 트러스트 마이크로 세그멘테이션 | • OVS 커널 VLAN 태깅 기반 무손실(0.07ms RTT 유지) 망 분리<br>• 침해 단말 Quarantine Zone(VLAN 99) 동적 강등 격리<br>• 금융/공공 ISMS-P 망간 분리 규정 충족 |
+| **5. 소프트웨어 정의 동적 망 분리<br>(Dynamic Zero-Trust Segmentation)** | 단일 서브넷(10.0.0.x) 플랫 구조로 침해 시 내부 확산(Lateral Movement) 취약, 포트 일괄 차단으로 인한 정상 호스트 단절 | • 용도별 논리 Zone 분리 (`USER`, `SERVER`, `ADMIN`, `QUARANTINE`)<br>• Default-Deny 기반 제로 트러스트 마이크로 세그멘테이션<br>• OpenFlow 4-테이블 파이프라인 (Table 1 정책 테이블 신설) | • IP 대역 변경 없는 OpenFlow 컨트롤러 정책 기반 논리 망 분리<br>• 침해 단말(MAC/IP) 단위 동적 격리망(`QUARANTINE`) 즉각 강등<br>• 차단 패킷 `ZONE_DENY` 신호화로 무증상 랜섬웨어 확산 탐지<br>• 관리자 수동 복귀 승인 체계 및 국정원 N²SF 가이드라인 부합 |
 
 ---
 
@@ -88,12 +88,16 @@
   ├── [Phase 6-B] 올인원 Docker Compose 패키징 & 프로덕션 서빙
   │     ├── OVS / Ryu / Redis / FastAPI / AI Worker / UI 무중단 단일 컨테이너 패키징
   │     ├── tmux 수동 백그라운드 세션 의존성 완전 제거 (docker compose up -d 원클릭 자동 복구)
-  │     └── 웹 프론트엔드 프로덕션 빌드 서빙 (Vite Dev Server 탈피 ➔ Nginx / FastAPI 정적 마운트 최적화)
-  └── [Phase 6-B-2] 소프트웨어 정의 제로 트러스트 망 분리 (Micro-segmentation)
-        ├── L2 VLAN 기반 3-Tier 용도별 논리 망 분리 (VLAN 10: 외부망, VLAN 20: 업무망, VLAN 30: 서버망)
-        ├── Zero-Trust 마이크로 세그멘테이션: Default-Deny(Table-Miss Drop) 및 포트별 최소 권한 통제
-        ├── 침해 단말 동적 격리망 강등: 공격 감지 즉시 Quarantine Zone(VLAN 99) 강제 스티어링 (허니팟/포렌식 유도)
-        └── 기존 0.07ms 저지연 및 정상 트래픽 손실률 0.0% 성능 100% 유지 보장
+  │     ├── 웹 프론트엔드 프로덕션 빌드 서빙 (Vite Dev Server 탈피 ➔ Nginx / FastAPI 정적 마운트 최적화)
+  │     └── [상세 실행 계획서](docker_compose_production_plan.md) 기준 5단계 마일스톤 순차 구현
+  └── [Phase 6-B-2] 소프트웨어 정의 동적 망 분리 (Dynamic Micro-segmentation) - [옵션 A 채택]
+        ├── 4-Zone 논리 망 모델: USER(업무망), SERVER(서버망), ADMIN(관리망), QUARANTINE(격리망)
+        ├── OpenFlow 4-Table 파이프라인 신설: Table 0(카운팅) ➔ Table 1(망정책) ➔ Table 2(미터링) ➔ Table 3(포워딩)
+        ├── Default-Deny & Ingress Enforcement: 사용자 간 통신(SMB 445, RDP 3389) 전면 차단
+        ├── 무증상 확산 탐지: 차단 패킷 통계를 `ZONE_DENY` 신호로 집계하여 이상 탐지 엔진 연동
+        ├── 호스트(MAC/IP) 단위 동적 격리: 내부 확산/스캔 시 해당 단말만 QUARANTINE으로 즉각 격리 (정상 사용자 무영향)
+        ├── 관리자 통제권 보장: 관제탑 UI 수동 승인 기반 복귀(Release) 및 감사 로그 저장
+        └── [상세 실행 계획서](dynamic_segmentation_detailed_plan.md) 기준 5단계 마일스톤 순차 검증
 
 [2단계: 중기 과제 - 기술적 차별성 & 대외 경쟁력 확보]
   ├── [Phase 6-C] IPv6 Dual-Stack 지원 및 대규모 주소 스푸핑 방어
