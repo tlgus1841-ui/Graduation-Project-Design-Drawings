@@ -172,8 +172,10 @@ class ServerConnItem(BaseModel):
     client_ip: str
     open: int = Field(..., description="Established connections from this client")
     slow: int = Field(..., description="Of those, slow requests: open >= 20 s, no response sent yet, < 500 B/s")
-    pending: int = Field(default=0, description="Of those, unfinished requests: request started, open >= 5 s, "
-                                                 "no response sent yet, < 500 B/s")
+    pending: int = Field(
+        default=0,
+        description="Of those, unfinished requests: request started, open >= 5 s, no response sent yet, < 500 B/s",
+    )
 
 
 class ServerConnMessage(BaseModel):

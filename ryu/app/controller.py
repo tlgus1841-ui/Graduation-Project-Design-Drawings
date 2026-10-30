@@ -659,7 +659,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def quarantine_host(
         self,
-        target_ip: str,
+        target_ip: Optional[str],
         target_mac: Optional[str] = None,
         dpid: Optional[int] = None,
         port: Optional[int] = None,
@@ -729,7 +729,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def release_host(
         self,
-        target_ip: str,
+        target_ip: Optional[str],
         target_mac: Optional[str] = None,
         dpid: Optional[int] = None,
         port: Optional[int] = None,
