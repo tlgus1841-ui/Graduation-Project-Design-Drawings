@@ -56,6 +56,7 @@
 | 영역 | 개발 완료 항목 | 세부 구현 성과 (축약) | 상태 |
 | :--- | :--- | :--- | :---: |
 | **Native Data Plane<br>(Phase 6-A 완결)** | • Mininet 의존성 완전 제거<br>• 리눅스 커널 OVS 2.17 단독 구동<br>• Linux netns 4-스위치 토폴로지 | • 교육용 에뮬레이터 탈피, 순수 커널 OVS 및 `ip netns` 기반 프로덕션 환경 구축<br>• 왕복 지연시간(RTT) **평균 0.07 ms** 달성, 정상 트래픽 손실률 **0.0% (무유실)**<br>• 원클릭 토폴로지 기동/정리 스크립트(`setup_native_ovs.sh`, `teardown_native_ovs.sh`)<br>• 6종 트래픽 주입 및 VM 원격 제어 도구(`native_attack.sh`, `vm_demo_controller.sh`) 구축 | **완료**<br>(Verified) |
+| **All-in-One 배포<br>(Phase 6-B 완결)** | • 5대 서비스 단일 Compose 패키징<br>• 포트 80 Nginx 프로덕션 서빙<br>• tmux 완전 제거 및 원클릭 자율 복구 | • Redis, Ryu, FastAPI, AI Worker, UI Nginx 5개 서비스 단일 `docker-compose.yml` 오케스트레이션<br>• Vite Dev Server 탈피 ➔ Nginx 1.25 Alpine 리버스 프록시 및 React Multi-stage SPA 고속 정적 서빙<br>• 포트 80 단일 엔드포인트(/, /api/, /ws) 일원화 및 CORS 원천 제거 (포트 5173 하위 호환)<br>• `condition: service_healthy` 의존성 파이프라인 및 원클릭 런처(`prod_stack.sh`) 구축<br>• GCP 실환경 VM(`34.64.79.240`) 배포 및 500 PPS SYN 공격 자율 방어 E2E 실증 완료 | **완료**<br>(Verified) |
 | **Data Plane & 컨트롤러** | • 다이아몬드 토폴로지 구축<br>• 선제적 우회 라우팅<br>• FSM 플래핑 방지 | • S1-S2-S4(기본) 및 S1-S3-S4(우회) 엄격한 포트 핀 고정 구현<br>• Dijkstra 기반 선제적 `OFPFC_ADD` 경로 프로비저닝<br>• 차단 및 우회 전환 시간 **1.4 ~ 2.5 ms** 완료 달성<br>• 공격 중 정상 트래픽 손실 **0.0%** (무유실 라우팅) | **완료**<br>(Verified) |
 | **AI 탐지 & 분류 엔진** | • Isolation Forest 탐지<br>• 6종 공격 세분화 분류<br>• 1초 주기 실측 카운트<br>• 기준선 재학습 제어 | • 실제 OVS 패킷 크기(BPP) 및 증분(ΔPPS) 관측 신호 적용<br>• SYN/UDP/ICMP Flood, Port Scan, Slow HTTP, 내부 확산 정밀 분류<br>• 미완료 요청 추적(`unfinished_requests`)으로 Slow HTTP 탐지 시간 **7.7초** 단축<br>• 1초 단위 실시간 카운트 집계로 탐지 시간 대폭 단축 (1.7~2.5초)<br>• 관리자 승인 기반 EWMA 기준선 재학습(Relearn) 파이프라인 | **완료**<br>(Verified) |
 | **관제탑 웹 백엔드 & UI** | • 비동기 WebSocket Hub<br>• 실시간 토폴로지 시각화<br>• 비상 수동 제어 패널 | • FastAPI-Redis 비동기 브릿지 및 연결 풀 자동 관리<br>• vis-network 기반 실시간 스위치/호스트 상태 및 링크 우회 렌더링<br>• 비상 격리/복구 시 포커스 안정화 및 60초 보호 홀드 장치<br>• UI 렌더링 60 FPS 유지 및 이상 징후 실시간 알림 피드 | **완료**<br>(Verified) |
@@ -84,13 +85,14 @@
 엔지니어링 의존성과 리스크를 최소화하고, 빠른 완성도와 시연 효과를 극대화하기 위해 재정렬된 3단계 실행 로드맵입니다.
 
 ```
-[1단계: 즉시 실행 - 운영 안정화 및 소프트웨어 정의 제로 트러스트 망 분리] (In Progress / Next)
-  ├── [Phase 6-B] 올인원 Docker Compose 패키징 & 프로덕션 서빙
-  │     ├── OVS / Ryu / Redis / FastAPI / AI Worker / UI 무중단 단일 컨테이너 패키징
+[1단계: 즉시 실행 - 운영 안정화 및 소프트웨어 정의 제로 트러스트 망 분리]
+  ├── [Phase 6-B] 올인원 Docker Compose 패키징 & 프로덕션 서빙 ── [완료 (Verified)]
+  │     ├── OVS / Ryu / Redis / FastAPI / AI Worker / UI 무중단 단일 컨테이너 패키징 완료
   │     ├── tmux 수동 백그라운드 세션 의존성 완전 제거 (docker compose up -d 원클릭 자동 복구)
-  │     ├── 웹 프론트엔드 프로덕션 빌드 서빙 (Vite Dev Server 탈피 ➔ Nginx / FastAPI 정적 마운트 최적화)
-  │     └── [상세 실행 계획서](docker_compose_production_plan.md) 기준 5단계 마일스톤 순차 구현
-  └── [Phase 6-B-2] 소프트웨어 정의 동적 망 분리 (Dynamic Micro-segmentation) - [옵션 A 채택]
+  │     ├── 웹 프론트엔드 프로덕션 빌드 서빙 (Vite Dev Server 탈피 ➔ Nginx 1.25 Alpine 리버스 프록시)
+  │     ├── 포트 80 단일 엔드포인트(/, /api/, /ws) 일원화 및 실환경 VM(34.64.79.240) 검증 완료
+  │     └── [상세 실행 계획서](docker_compose_production_plan.md) 기준 5단계 마일스톤 전수 구현/검증 완료
+  └── [Phase 6-B-2] 소프트웨어 정의 동적 망 분리 (Dynamic Micro-segmentation) ── [In Progress / Next]
         ├── 4-Zone 논리 망 모델: USER(업무망), SERVER(서버망), ADMIN(관리망), QUARANTINE(격리망)
         ├── OpenFlow 4-Table 파이프라인 신설: Table 0(카운팅) ➔ Table 1(망정책) ➔ Table 2(미터링) ➔ Table 3(포워딩)
         ├── Default-Deny & Ingress Enforcement: 사용자 간 통신(SMB 445, RDP 3389) 전면 차단

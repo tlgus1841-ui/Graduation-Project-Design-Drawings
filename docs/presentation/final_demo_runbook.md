@@ -24,17 +24,28 @@
 
 ## 2. 시연 전 준비 (발표 30분 전)
 
-| # | 확인 | 명령 / 방법 |
+### 2.1 [권장] 올인원 프로덕션 원클릭 가동 (Phase 6-B All-in-One)
+로컬 또는 원격 VM(`34.64.79.240`)에서 명령어 한 줄로 5대 컨테이너 및 Native OVS 토폴로지를 일괄 가동합니다:
+
+```bash
+# 로컬 시연 시 (전체 스택 + Native OVS 4-스위치 + 백그라운드 핑 자동 기동)
+./scripts/prod_stack.sh up
+./scripts/prod_stack.sh status
+# → 브라우저 접속: http://localhost (표준 포트 80)
+
+# 원격 클라우드 VM 시연 시 (노트북에서 원클릭 원격 제어)
+./scripts/vm_demo_controller.sh restart-all
+./scripts/vm_demo_controller.sh status
+# → 브라우저 접속: http://34.64.79.240 (표준 포트 80)
+```
+
+| # | 확인 항목 | 정상 상태 기준 |
 |:---:|:---|:---|
-| 1 | Redis & Ryu 실행 | `docker compose up -d redis-broker ryu-controller` |
-| 2 | 관제탑 백엔드 (실데이터) | `SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000` |
-| 3 | 관제탑 화면 | `cd ui && npm run dev` → 브라우저 접속 `http://localhost:5173` (배지 `CONNECTED` · `LIVE`) |
-| 4 | AI 추론 워커 | `uv run python -m model.inference_worker --model model/isolation_forest.joblib` |
-| 5 | **Native OVS 토폴로지 기동** | `sudo ./scripts/setup_native_ovs.sh` (Mininet 없이 커널 OVS 및 netns 기동) |
-| 6 | 정상 ping 시작 | `sudo ip netns exec ns_legit ping -i 0.5 10.0.0.4` (터미널 창을 관제탑 옆에 배치) |
-| 7 | 원격 클라우드 VM 제어 시 | `./scripts/vm_demo_controller.sh status` 및 `attack` 명령어 활용 |
-| 8 | 백업 영상 | 바탕화면에 두고 재생 프로그램을 미리 열어 둠 |
-| 9 | 화면 | 알림 끄기, 글자 크기 확대, 마우스 커서 강조 |
+| 1 | All-in-One 도커 서비스 (5개) | `redis-broker`, `ryu-controller`, `control-api`, `ai-worker`, `control-ui` 전원 `Up (healthy)` |
+| 2 | Native OVS 브릿지 (4개) | `s1~s4` 컨트롤러 `tcp:127.0.0.1:6653` 연결 (`is_connected: true`) |
+| 3 | 관제탑 웹 대시보드 (Port 80) | 브라우저 `http://localhost` (또는 `http://34.64.79.240`) 배지 `WS CONNECTED` · `LIVE` 확인 |
+| 4 | 정상 ping 지속성 | `tail -f /tmp/h_legit_ping.log` 에서 `0.07 ms` 무유실 핑 관측 |
+| 5 | 백업 영상 대기 | 만약의 장애를 대비하여 바탕화면에 무편집 시연 영상 준비 |
 
 > 이전 시연 잔여 규칙이 남아 있으면 우회 · 차단이 처음부터 걸려 있을 수 있다. 시작 전 `sudo ./scripts/reset_env.sh` 로 완전 클린업 후 다시 기동한다.
 
@@ -55,7 +66,7 @@ ping 창에서 `icmp_seq` 번호가 건너뛰지 않는 것을 마지막에 짚�
 |:---|:---|:---|
 | 배지 `DISCONNECTED` / `RECONNECTING` | 백엔드 끊김 | 10초 기다려도 안 되면 백업 영상 |
 | 공격 후 20초 넘게 경보 없음 | 통계 · 방어 루프 문제 | 백업 영상으로 전환, 시연 후 원인 설명 |
-| pingall 실패 | 컨트롤러 미연결 | `sudo mn -c` 후 재기동 (1분 이내), 안 되면 백업 영상 |
+| ping 통신 실패 | 컨트롤러/토폴로지 미연결 | `./scripts/prod_stack.sh restart` 후 재기동 (30초 이내), 안 되면 백업 영상 |
 | 화면이 멈춤 | 브라우저 | 새로고침 1회 (WebSocket 자동 재연결) |
 
 **원칙:** 현장 수리는 1분까지만. 넘으면 백업 영상으로 바꾸고 "같은 시나리오를 미리 녹화한 무편집 영상입니다"라고 말한다.

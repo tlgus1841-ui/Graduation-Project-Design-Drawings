@@ -116,15 +116,16 @@
 | 계층 | 컴포넌트 | 확정 버전 | 실행 환경 | 주요 역할 |
 |:---|:---|:---|:---|:---|
 | **OS** | **Ubuntu Linux** | **22.04 LTS** | Native / GCP VM | 시스템 기본 운영체제 |
-| **Data Plane** | **Open vSwitch (OVS)** | **2.17.x** | Host Native | OpenFlow 1.3 가상 스위칭 데이터 플레인 |
+| **Data Plane** | **Open vSwitch (OVS)** | **2.17.x** | Host Native | OpenFlow 1.3 가상 스위칭 데이터 플레인 (Mininet 완전 탈피) |
 | **Control Plane** | **Ryu Controller** | **4.34** | Docker (`python:3.8-slim`) | OpenFlow 1.3 제어 및 선제적 Dijkstra 우회 라우팅 |
 | **IPC Bus** | **Redis** | **7.2-alpine** | Docker 컨테이너 | Ryu-AI-FastAPI 간 4채널 고속 메시지 브로커 |
-| **AI / Model** | **Scikit-learn** | **1.3.2** | Python 3.10 (Host venv) | Isolation Forest 이상 탐지 및 Criteria 분류 엔진 |
+| **AI / Model** | **Scikit-learn** | **1.3.2** | Docker (`python:3.10-slim`) | Isolation Forest 이상 탐지 및 Criteria 분류 엔진 |
 | | **Scapy** | **2.5.0** | Python 3.10 | 공격/정상 트래픽 모의 주입 및 패킷 분석 |
-| **Web Backend**| **FastAPI** | **0.109.2** | Python 3.10 | 비동기 WebSocket Hub 및 REST 관제 API |
+| **Web Backend**| **FastAPI** | **0.109.2** | Docker (`python:3.10-slim`) | 비동기 WebSocket Hub 및 REST 관제 API |
 | | **Uvicorn** | **0.27.1** | Python 3.10 | 고성능 비동기 ASGI 서버 |
 | | **Pydantic** | **2.6.1** | Python 3.10 | IPC 메시지 계약(Contracts) 검증 및 직렬화 |
-| **Web Frontend**| **React** | **18.3.1** | Node.js 20 LTS (Vite) | 관제탑 SPA 프론트엔드 |
+| **Web Frontend**| **Nginx (Reverse Proxy)** | **1.25-alpine** | Docker 컨테이너 | 포트 80 단일 엔드포인트 SPA 서빙 및 API/WS 리버스 프록시 |
+| | **React** | **18.3.1** | Multi-stage 빌드 | 관제탑 SPA 프론트엔드 (dist) |
 | | **vis-network** | **9.1.13** | npm | 동적 네트워크 토폴로지 실시간 렌더링 |
 | | **ApexCharts** | **3.54.1** | npm | BPP / PPS 시계열 트래픽 모니터링 차트 |
 | | **Tailwind CSS**| **3.4.19** | npm | 반응형 관제탑 다크 테마 스타일링 |
@@ -135,7 +136,7 @@
 
 ```text
 Self_Defending_SDN_Tower/
-├── docker-compose.yml                     # Redis 7.2 및 Ryu 4.34 컨테이너 오케스트레이션
+├── docker-compose.yml                     # All-in-One 프로덕션 5대 서비스(Redis, Ryu, API, AI, UI Nginx) 오케스트레이션
 ├── pyproject.toml                         # Python 3.10 (uv) 의존성 및 린트/테스트 설정
 ├── .cursorrules                           # AI 에이전트 개발 수칙 인덱스 및 핵심 수칙
 │
@@ -147,17 +148,18 @@ Self_Defending_SDN_Tower/
 │   ├── specs/                             # 🔍 6종 공격 판단 기준, 방어 시나리오, IPC 통신 규격
 │   ├── verification/                      # ✅ 952k 극한 테스트 실측 검증 보고서 및 데이터셋 (data/)
 │   ├── presentation/                      # 📊 최종 발표 슬라이드, 데모 런북, PPT 프롬프트
-│   └── planning/                          # 📐 종합 로드맵 (ROADMAP.md), 개발 계획서, 프로젝트 기획서
+│   ├── planning/                          # 📐 종합 로드맵 (ROADMAP.md), 동적 망 분리 및 도커 패키징 계획서
+│   └── archive/                           # 📦 완료/아카이브된 초기 기획 및 전환 문서
 │
-├── api/                                   # FastAPI 관제탑 백엔드 (REST / WebSocket / Redis Bridge)
-├── ui/                                    # React 18 + Vite 관제탑 웹 대시보드
+├── api/                                   # FastAPI 관제탑 백엔드 (REST / WebSocket / Redis Bridge, Dockerfile.api)
+├── ui/                                    # React 18 SPA + Nginx 1.25 Alpine 리버스 프록시 (Dockerfile.ui, nginx.conf)
 ├── harness/                               # IPC 계약 스키마(contracts/), 안전 가드레일(safety/)
 ├── ryu/                                   # Ryu 4.34 컨트롤러 앱 및 Dijkstra 우회 엔진
-├── topo/                                  # 4-스위치 다이아몬드 토폴로지 (diamond_topo.py)
 ├── pipeline/                              # 실시간 피처 추출기 및 CSV 로거
-├── model/                                 # Isolation Forest 탐지 모델 및 Criteria 분류 엔진
+├── model/                                 # Isolation Forest 탐지 모델, Criteria 분류 엔진 (Dockerfile.ai)
 ├── traffic/                               # Scapy 정상/공격 트래픽 생성기 (flood, scan, slowhttp, spread)
-├── scripts/                               # E2E 시나리오 데모 러너 및 제어 스크립트
+├── scripts/                               # Native OVS, 올인원 스택(prod_stack.sh), VM 제어 스크립트
+├── archive/                               # 📦 Mininet 레거시 다이아몬드 토폴로지 보관소
 └── tests/                                 # 267개 단위/통합/벤치마크 테스트 스위트
 ```
 
@@ -173,54 +175,50 @@ Self_Defending_SDN_Tower/
 * ✅ **952k PPS 극한 스트레스 실증 보고서:** [`docs/verification/week16_stress_limit_test_report.md`](docs/verification/week16_stress_limit_test_report.md)
 * 📊 **발표 슬라이드 아웃라인 & 시연 런북:** [`docs/presentation/ppt_slide_deck_outline.md`](docs/presentation/ppt_slide_deck_outline.md)
 * 📋 **종합 로드맵 (ROADMAP):** [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md)
-* 🚀 **순수 OVS 단독 구동 전환 계획서:** [`docs/planning/native_ovs_transition_plan.md`](docs/planning/native_ovs_transition_plan.md)
+* 🚀 **올인원 Docker Compose 구현 계획서 (Phase 6-B):** [`docs/planning/docker_compose_production_plan.md`](docs/planning/docker_compose_production_plan.md)
+* 🛡️ **소프트웨어 정의 동적 망 분리 상세 계획서 (Phase 6-B-2):** [`docs/planning/dynamic_segmentation_detailed_plan.md`](docs/planning/dynamic_segmentation_detailed_plan.md)
 
 ---
 
 ## 🚀 7. 빠른 시작 (Getting Started)
 
-### 7.1 환경 준비
-* **Python**: 3.10+ 및 패키지 관리자 `uv` 권장
-* **Node.js**: 20 LTS 이상 (UI 구동용)
-* **Docker & Docker Compose**: Ryu 컨트롤러 및 Redis 브로커 구동용
+### 7.1 [권장] 올인원 프로덕션 원클릭 실행 (Phase 6-B 완결)
+Redis, Ryu 컨트롤러, FastAPI 백엔드, AI 워커, React+Nginx 리버스 프록시까지 **단 한 줄의 명령어로 전체 스택과 커널 OVS 토폴로지를 자동 기동**합니다.
 
-### 7.2 설치 및 테스트
 ```bash
-# 1. 저장소 클론
+# 1. 저장소 클론 및 이동
 git clone https://github.com/tlgus1841-ui/Graduation-Project-Design-Drawings.git
 cd Graduation-Project-Design-Drawings
 
-# 2. Python 가상환경 및 의존성 동기화
+# 2. 전체 스택(Native OVS 4-스위치 + Docker 5개 서비스) 원클릭 기동
+./scripts/prod_stack.sh up
+
+# 3. 상태 확인 (5대 컨테이너 Health & OVS 브릿지 연결 상태)
+./scripts/prod_stack.sh status
+
+# 4. 브라우저 접속
+# → 웹 관제탑 UI (표준 포트 80): http://localhost
+# → 하위 호환 포트: http://localhost:5173
+# → 백엔드 헬스체크: http://localhost/api/health
+
+# 5. 스택 완전 종료 및 클린업
+./scripts/prod_stack.sh down
+```
+
+### 7.2 개발/로컬 개별 실행 모드
+
+```bash
+# Python 가상환경 및 의존성 동기화
 uv sync
 
-# 3. 전체 테스트 스위트 실행 (267개 전수 통과 확인)
+# 267개 전체 테스트 스위트 실행 (100% Pass)
 uv run pytest -v
-```
 
-### 7.3 관제탑 백엔드 & UI 실행
-```bash
-# 터미널 1: 관제탑 백엔드 실행 (Mock 모드: 4단계 시나리오 텔레메트리 자동 송출)
+# 백엔드 개발 실행 (Mock 모드)
 uv run uvicorn api.main:app --reload --port 8000
-# → REST API: http://localhost:8000/api/health
-# → WebSocket: ws://localhost:8000/ws
 
-# 터미널 2: 관제탑 UI 대시보드 실행
-cd ui
-npm install
-npm run dev
-# → 브라우저 접속: http://localhost:5173
-```
-
-### 7.4 실제 SDN 컨트롤러 & Redis 연동 (Live 모드)
-```bash
-# 1. Redis 브로커 및 Ryu 컨트롤러 기동
-docker compose up -d redis-broker ryu-controller
-
-# 2. 백엔드를 Live 모드로 실행
-SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000
-
-# 3. AI 이상 탐지 워커 실행
-uv run python -m model.inference_worker --model model/isolation_forest.joblib
+# UI Vite 개발 서버 실행
+cd ui && npm run dev
 ```
 
 ### 7.5 [Phase 6-A] 순수 커널 OVS 단독 구동 (Mininet 완전 탈피)
