@@ -27,6 +27,8 @@ services:
       - "8080:8080"
     environment:
       - PYTHONPATH=/app:/workspace
+      - REDIS_HOST=sdn-redis
+      - REDIS_PORT=6379
       - REDIS_URL=redis://sdn-redis:6379/0
     volumes:
       - ./ryu/app:/app

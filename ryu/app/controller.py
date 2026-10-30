@@ -206,8 +206,15 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
         # 6주차: 활성 Datapath 맵 및 Redis 텔레메트리 파이프라인 초기화
         self.datapaths = {}
-        self.redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
-        self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(redis_url)
+            self.redis_host = parsed.hostname or "127.0.0.1"
+            self.redis_port = parsed.port or 6379
+        else:
+            self.redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
+            self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
         self.redis_client = None
         self._init_redis()
 
