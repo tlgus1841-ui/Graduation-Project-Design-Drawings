@@ -11,13 +11,31 @@
 
 ## 2. 실행 방법
 
+### 2.1 [권장] 올인원 프로덕션 실행 (Phase 6-B All-in-One Docker Compose)
+모든 백엔드(FastAPI), 메시지 버스(Redis), SDN 컨트롤러(Ryu), AI 탐지 엔진, 프론트엔드 Nginx 리버스 프록시가 단일 Docker Compose로 오케스트레이션됩니다.
+
+```bash
+# 전체 스택(Native OVS 4-스위치 + Docker 5개 서비스) 원클릭 기동
+./scripts/prod_stack.sh up
+
+# 상태 확인 (5개 서비스 Health & OVS 연결 상태)
+./scripts/prod_stack.sh status
+
+# 스택 완전 정지 및 정리
+./scripts/prod_stack.sh down
+```
+* **웹 관제탑 단일 접속 URL**: `http://localhost` (표준 80 포트) 또는 `http://localhost:5173` (하위 호환)
+* **백엔드 헬스체크**: `http://localhost/api/health` 또는 `http://localhost:8000/api/health`
+
+### 2.2 개발/로컬 개별 실행 모드
+
 | 모드 | 용도 | 실행 |
 |:---|:---|:---|
 | 더미(mock) | 시연 연습, 화면 개발 | `uv run uvicorn api.main:app --port 8000` |
-| 실데이터(live) | Mininet·Ryu·Redis 연동 | `SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000` |
+| 실데이터(live) | Mininet/OVS·Ryu·Redis 연동 | `SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000` |
 
-웹 화면은 `cd ui && npm install && npm run dev` 후 브라우저에서 `http://localhost:5173`을 연다.
-수동 제어를 아무나 쓰지 못하게 하려면 백엔드 실행 전에 `export SDN_ADMIN_TOKEN=<비밀값>`을 설정한다.
+웹 화면을 직접 Vite 개발 서버로 띄울 때는 `cd ui && npm install && npm run dev` 후 브라우저에서 `http://localhost:5173`을 엽니다.
+수동 제어를 아무나 쓰지 못하게 하려면 백엔드 실행 전에 `export SDN_ADMIN_TOKEN=<비밀값>`을 설정합니다.
 
 ## 3. 화면 구성
 

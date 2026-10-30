@@ -3,7 +3,15 @@
 export function resolveApiBase() {
   const fromEnv = import.meta.env.VITE_API_URL;
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  return `${window.location.protocol}//${window.location.hostname}:8000`;
+  // Vite 개발 서버(포트 5173)에서는 포트 8000의 API 서버로 직결
+  if (typeof window !== "undefined" && window.location && window.location.port === "5173") {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  // 프로덕션 / Nginx 리버스 프록시 환경에서는 동일 Origin 사용
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    return window.location.origin;
+  }
+  return "http://localhost:8000";
 }
 
 // Week 13: operator emergency ISOLATE / RESTORE. Throws Error(detail) on refusal.
