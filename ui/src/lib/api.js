@@ -44,3 +44,18 @@ export async function sendRelearn({ minutes, dpid = 0, port = 0, reason, operato
   }
   return body;
 }
+
+// Quarantine Release (Human-in-the-loop): operator approves release of a quarantined host.
+export async function sendQuarantineRelease({ target_ip, reason, operator, token }) {
+  const res = await fetch(`${resolveApiBase()}/api/control/quarantine/release`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { "X-Admin-Token": token } : {}) },
+    body: JSON.stringify({ target_ip, reason, operator }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = Array.isArray(body.detail) ? "입력값을 확인해 주세요." : body.detail;
+    throw new Error(detail || `요청 실패 (${res.status})`);
+  }
+  return body;
+}

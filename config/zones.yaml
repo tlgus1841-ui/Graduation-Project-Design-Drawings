@@ -1,0 +1,97 @@
+# =============================================================================
+# SDN Dynamic Network Segmentation Configuration (SSOT)
+# =============================================================================
+
+# 논리 망(Zone) 정의 및 기본 소속 호스트 IP 목록
+zones:
+  USER:
+    - "10.0.0.1"   # H_legit (정상 업무 단말)
+    - "10.0.0.2"   # H_attacker (초기에는 정상 단말로 위장)
+  SERVER:
+    - "10.0.0.4"   # H_server (보호 대상 서비스 웹/DNS 서버)
+  ADMIN:
+    - "10.0.0.254" # 중앙 관제 및 패치/업데이트 서버
+  QUARANTINE: []   # 동적 격리 단말 (이상 징후 발생 시 동적 이동)
+
+# 호스트 하드웨어 바인딩 (IP - MAC - Switch DPID - Port)
+hosts:
+  "10.0.0.1":
+    mac: "00:00:00:00:00:01"
+    dpid: 1
+    port: 1
+  "10.0.0.2":
+    mac: "00:00:00:00:00:02"
+    dpid: 1
+    port: 2
+  "10.0.0.4":
+    mac: "00:00:00:00:00:04"
+    dpid: 4
+    port: 1
+  "10.0.0.254":
+    mac: "00:00:00:00:00:fe"
+    dpid: 4
+    port: 2
+
+# 망간 기본 허용 규칙 (White-list Policies)
+# Default-Deny 원칙: 아래 규칙에 명시되지 않은 통신은 Table 1에서 DROP
+rules:
+  # 1. USER -> SERVER 업무 트래픽
+  - name: "USER_TO_SERVER_WEB"
+    from_zone: "USER"
+    to_zone: "SERVER"
+    proto: "tcp"
+    dst_port: 80
+    bidirectional: true  # SERVER -> USER (tcp_src 80) 자동 허용
+
+  - name: "USER_TO_SERVER_DNS"
+    from_zone: "USER"
+    to_zone: "SERVER"
+    proto: "udp"
+    dst_port: 53
+    bidirectional: true  # SERVER -> USER (udp_src 53) 자동 허용
+
+  - name: "USER_TO_SERVER_ICMP"
+    from_zone: "USER"
+    to_zone: "SERVER"
+    proto: "icmp"
+    bidirectional: true  # Echo Request(8) / Echo Reply(0)
+
+  # 2. QUARANTINE -> ADMIN 및 필수 인프라
+  - name: "QUARANTINE_TO_ADMIN_HTTPS"
+    from_zone: "QUARANTINE"
+    to_zone: "ADMIN"
+    proto: "tcp"
+    dst_port: 443
+    bidirectional: true
+
+  - name: "QUARANTINE_TO_ADMIN_DNS"
+    from_zone: "QUARANTINE"
+    to_zone: "ADMIN"
+    proto: "udp"
+    dst_port: 53
+    bidirectional: true
+
+# OS 백그라운드 멀티캐스트/브로드캐스트 Silent Drop 포트 목록
+# (정상 단말의 오탐 격리를 방지하기 위해 ZONE_DENY 카운트 없이 조용히 폐기)
+silent_drop_udp_ports:
+  - 137   # NetBIOS Name Service
+  - 138   # NetBIOS Datagram Service
+  - 139   # NetBIOS Session Service
+  - 1900  # SSDP
+  - 5353  # mDNS
+  - 5355  # LLMNR
+
+# 내부 확산 전파 차단 및 ZONE_DENY 집계 대상 핵심 포트
+lateral_spread_ports:
+  tcp:
+    - 22    # SSH
+    - 135   # RPC
+    - 445   # SMB
+    - 3389  # RDP
+
+# 상시 허용 (Hard Whitelist): 어떠한 경우에도 차단/격리 불가
+hard_whitelist:
+  probe_ip: "10.0.0.250"
+  protected_ips:
+    - "10.0.0.4"
+    - "10.0.0.254"

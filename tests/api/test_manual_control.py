@@ -123,3 +123,32 @@ def test_live_mode_reports_redis_outage():
     app = create_app(enable_mock=False, start_source=False, redis_factory=broken)
     with TestClient(app) as client:
         assert client.post("/api/control/manual", json=ISOLATE_ATTACKER).status_code == 503
+
+
+def test_quarantine_release_endpoint(mock_client):
+    # Unknown host rejected
+    res_bad = mock_client.post("/api/control/quarantine/release", json={
+        "target_ip": "10.0.0.99",
+        "reason": "Host scan completed",
+    })
+    assert res_bad.status_code == 409
+
+    # Valid release for 10.0.0.2
+    res_ok = mock_client.post("/api/control/quarantine/release", json={
+        "target_ip": "10.0.0.2",
+        "reason": "Host scan and patch completed",
+        "operator": "security_admin",
+    })
+    assert res_ok.status_code == 200
+    body = res_ok.json()
+    assert body["accepted"] is True
+    assert body["command"]["action"] == "RELEASE"
+    assert body["command"]["target_ip"] == "10.0.0.2"
+    assert "[MANUAL] security_admin:" in body["command"]["reason"]
+
+
+def test_quarantine_list_endpoint(mock_client):
+    res = mock_client.get("/api/control/quarantine/list")
+    assert res.status_code == 200
+    assert "count" in res.json()
+    assert "hosts" in res.json()

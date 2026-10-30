@@ -104,6 +104,8 @@ class CriteriaConfig:
     relearn_memory_sec: float = 60.0
     # 내부 확산: 긴 창(5분)에 물어본 없는 내부 주소 수 (Zeek 25개)
     spread_min: float = 25.0
+    # 망 경계 위반(ZONE_DENY): 짧은 창(4초)에 차단된 패킷 수 (SMB 445 등 유니캐스트 침투)
+    zone_deny_min: float = 10.0
     # Slow HTTP: 한 PC의 느린 요청(20초) · 안 끝난 요청(5초) 연결 수 중 큰 쪽. 정상 측정에서는 둘 다 0개
     slow_http_min: float = 10.0
     server_conn_stale_sec: float = 6.0
@@ -159,8 +161,8 @@ class _PortState:
     baselines: Dict[str, Baseline] = field(default_factory=dict)
     cusum: float = 0.0
     streaks: Dict[str, int] = field(default_factory=dict)
-    # (보고 시각, 실패 응답, 도달 불가, 연결 시도, 없는 내부 주소) — 보고 주기마다 개수
-    window: Deque[Tuple[float, float, float, float, float]] = field(default_factory=deque)
+    # (보고 시각, 실패 응답, 도달 불가, 연결 시도, 없는 내부 주소, zone_deny) — 보고 주기마다 개수
+    window: Deque[Tuple[float, float, float, float, float, float]] = field(default_factory=deque)
     stage: RiskStage = RiskStage.NORMAL
     normal_for: float = 0.0  # 연속으로 정상이었던 시간(초)
     relearn_until: float = 0.0  # 관리자가 승인한 재학습이 끝나는 시각 (0 = 재학습 아님)
@@ -295,8 +297,9 @@ class CriteriaEngine:
         # 실패 응답은 이 PC가 보낸 연결 시도에 대한 답이어야 스캔이다: 한 주기에 보낸 시도의 2배까지만 센다.
         # (서버가 이 PC의 오래된 연결을 한꺼번에 끊으며 보낸 RST 묶음 같은 것은 스캔이 아니다)
         probes = (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt
+        zone_deny_cnt = r.get("zone_deny", 0.0) * dt
         st.window.append((now, min(r["fail"] * dt, 2 * probes), min(r.get("unreach_in", 0.0) * dt, 2 * probes),
-                          probes, r.get("arp_fail", 0.0) * dt))
+                          probes, r.get("arp_fail", 0.0) * dt, zone_deny_cnt))
         # 창은 시간으로 자른다 (보고 시각이 조금씩 흔들려도 같은 개수가 들어가게 반 주기 여유)
         while st.window and st.window[0][0] <= now - cfg.scan_long_window_sec + dt / 2:
             st.window.popleft()
@@ -304,6 +307,7 @@ class CriteriaEngine:
         fails = sum(w[1] for w in recent)
         fails_long = sum(w[1] for w in st.window)
         unreach = sum(w[2] for w in recent)
+        recent_zone_deny = sum(w[5] if len(w) > 5 else 0.0 for w in recent)
         scan = []
         if fails >= cfg.scan_min and fails >= cfg.scan_ratio * sum(w[3] for w in recent):
             scan.append(fails / cfg.scan_min)
@@ -313,10 +317,19 @@ class CriteriaEngine:
             scan.append(unreach / cfg.scan_unreach_min)
         if scan:
             candidates[ThreatType.PORT_SCAN.value] = max(scan)
-        # 내부 확산: 없는 내부 주소를 5분에 25개 이상 찾아다녔고, 최근 4초에도 새 주소가 있음
-        spread = sum(w[4] for w in st.window)
-        if spread >= cfg.spread_min and sum(w[4] for w in recent) > 0:
-            candidates[ThreatType.INTERNAL_SPREAD.value] = spread / cfg.spread_min
+        # 내부 확산:
+        # 1) 없는 내부 주소를 5분에 25개 이상 찾아다녔고, 최근 4초에도 새 주소가 있음 (ARP 스캔)
+        # 2) 망 정책 위반(ZONE_DENY, SMB 445 등 타 단말 침투 시도)이 최근 4초에 zone_deny_min 이상 발생
+        spread_arp = sum(w[4] for w in st.window)
+        spread_candidates = []
+        if spread_arp >= cfg.spread_min and sum(w[4] for w in recent) > 0:
+            spread_candidates.append(spread_arp / cfg.spread_min)
+        if recent_zone_deny >= cfg.zone_deny_min:
+            reasons.append(f"zone_deny {recent_zone_deny:.0f} >= {cfg.zone_deny_min:.0f}")
+            spread_candidates.append(recent_zone_deny / cfg.zone_deny_min)
+
+        if spread_candidates:
+            candidates[ThreatType.INTERNAL_SPREAD.value] = max(spread_candidates)
         # SYN Flood: 기준선을 넘는 동안의 초과분 누적. 한 번이라도 기준선 아래로 내려오면 0부터 다시
         if r["gap"] > lines["gap"]:
             st.cusum += (r["gap"] - lines["gap"]) * dt

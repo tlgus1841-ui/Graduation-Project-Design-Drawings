@@ -20,7 +20,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from api.mock_generator import SWITCH_PORTS, is_trunk_port
-from harness.contracts import ControlCommandMessage, DefenseAction
+from harness.contracts import ACCESS_HOST_PORTS, ControlCommandMessage, DefenseAction
 from harness.safety.whitelist_guard import DEFAULT_PROTECTED_ACCESS_PORTS
 
 MANUAL_PRIORITY = 100
@@ -42,6 +42,12 @@ class RelearnRequest(BaseModel):
     dpid: int = Field(0, ge=0, description="0 with port 0 = every watched access port")
     port: int = Field(0, ge=0)
     reason: str = Field(..., min_length=3, max_length=200)
+    operator: str = Field("admin", min_length=1, max_length=40)
+
+
+class QuarantineReleaseRequest(BaseModel):
+    target_ip: str = Field(..., description="Release target host IP (e.g. 10.0.0.2)")
+    reason: str = Field(..., min_length=3, max_length=200, description="Mandatory audit justification")
     operator: str = Field("admin", min_length=1, max_length=40)
 
 
@@ -77,4 +83,22 @@ def build_relearn_command(req: RelearnRequest) -> ControlCommandMessage:
         reason=f"{MANUAL_PREFIX} {req.operator}: {req.reason.strip()} ({req.minutes}분 재학습 승인)",
         priority=0,
         duration_sec=req.minutes * 60.0,
+    )
+
+
+def build_quarantine_release_command(
+    req: QuarantineReleaseRequest, host_ports: Optional[dict] = None
+) -> ControlCommandMessage:
+    hp = host_ports or ACCESS_HOST_PORTS
+    if req.target_ip not in hp:
+        raise ManualControlRejected(f"{req.target_ip} 는 등록된 호스트가 아닙니다.")
+    dpid, port = hp[req.target_ip]
+    return ControlCommandMessage(
+        command_id=f"manual-release-{uuid.uuid4().hex[:8]}",
+        action=DefenseAction.RELEASE.value,
+        target_dpid=dpid,
+        target_port=port,
+        reason=f"{MANUAL_PREFIX} {req.operator}: {req.reason.strip()}",
+        priority=MANUAL_PRIORITY,
+        target_ip=req.target_ip,
     )

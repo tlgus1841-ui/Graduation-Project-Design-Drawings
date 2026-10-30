@@ -7,7 +7,7 @@ import Panel from "./Panel.jsx";
 // Spec §5 colour mapping. Status is also written in the label/tooltip, never colour alone.
 // Exported (alongside toVisNode/toVisEdge/isBypassEdge/SEED below) so the layout and styling
 // rules can be unit-tested without mounting vis-network — see TopologyMap.test.js.
-export const NODE_COLOR = { NORMAL: "#10b981", ATTACKED: "#ef4444", MITIGATED: "#0ea5e9", OFFLINE: "#64748b" };
+export const NODE_COLOR = { NORMAL: "#10b981", ATTACKED: "#ef4444", MITIGATED: "#0ea5e9", OFFLINE: "#64748b", QUARANTINED: "#f97316" };
 export const EDGE_STYLE = {
   ACTIVE: { color: "#10b981", width: 3, dashes: false },
   REROUTED: { color: "#3b82f6", width: 8, dashes: false },
@@ -31,15 +31,16 @@ const PORT_NAMES = { "1:1": "H_legit", "1:2": "H_attacker", "1:3": "→ S2", "1:
 export function toVisNode(n) {
   const color = NODE_COLOR[n.status] ?? NODE_COLOR.NORMAL;
   const isSwitch = n.node_type === "switch";
+  const isQuarantined = n.status === "QUARANTINED";
   const [x, y] = SEED[n.id] ?? [0, 0];
   return {
     id: n.id,
     x,
     y,
-    label: isSwitch ? n.id.toUpperCase() : n.label,
+    label: isSwitch ? n.id.toUpperCase() : (isQuarantined ? `⚠️ ${n.label} (격리)` : n.label),
     title: `${n.label} · ${n.status}${n.ip ? ` · ${n.ip}` : ""}`,
     shape: isSwitch ? "box" : "ellipse",
-    borderWidth: n.status === "ATTACKED" ? 5 : 3,
+    borderWidth: n.status === "ATTACKED" || isQuarantined ? 5 : 3,
     color: { background: "#0f172a", border: color, highlight: { background: "#1e293b", border: color } },
     font: { color: "#e2e8f0", size: 16, face: "ui-sans-serif, system-ui", bold: isSwitch },
     margin: 12,

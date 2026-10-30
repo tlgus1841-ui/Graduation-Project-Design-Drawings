@@ -11,7 +11,7 @@ from model.criteria_engine import (
     save_baselines,
 )
 
-KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in", "arp_fail")
+KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in", "arp_fail", "zone_deny")
 PORT = (1, 2)
 CFG = CriteriaConfig()  # the measured numbers: floors, N = 10, attack floor 50/s, M = 5
 # A user making about one web request per second plus a little DNS and ping
@@ -246,6 +246,18 @@ def test_internal_spread_from_failed_arp_targets():
     assert [s[1] for s in stages(out)[1:]] == [None, None, None, ThreatType.INTERNAL_SPREAD.value]  # 30 ≥ 25
     out = run(engine, c, NORMAL, NORMAL)  # stopped looking for new hosts
     assert stages(out)[-1][1] is None
+
+
+def test_internal_spread_from_zone_deny():
+    """Table 1 망 정책 위반(SMB 445 등)이 누적되면 INTERNAL_SPREAD로 판정하여 DANGER 단계로 진입한다."""
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, {**NORMAL, "zone_deny": 30}, {**NORMAL, "zone_deny": 30})
+    decisions = [d[0] for d in out if d]
+    assert len(decisions) >= 2
+    last_decision = decisions[-1]
+    assert last_decision.stage == RiskStage.DANGER
+    assert last_decision.threat_type == ThreatType.INTERNAL_SPREAD.value
+    assert any("zone_deny" in r for r in last_decision.reasons)
 
 
 def test_a_few_missing_hosts_is_not_spread():

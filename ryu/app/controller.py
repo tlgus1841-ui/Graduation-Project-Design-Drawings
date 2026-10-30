@@ -9,7 +9,7 @@ Phase 2 (Week 5 & Week 6) Milestone
 import json
 import os
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional, Set
 
 import eventlet
 eventlet.monkey_patch()
@@ -73,11 +73,17 @@ except ImportError:
         from reroute import RerouteEngine  # type: ignore[no-redef]
 
 
-# 3단 플로우 테이블: 0 = 종류별로 세기 → 1 = 경고 단계 속도 제한 → 2 = 전달(격리·우회·최단 경로).
+# 4단 플로우 테이블:
+# 0 = 종류별로 세기 (Count)
+# 1 = 망 정책 및 접근 제어 (Zone Policy & Source Guard)
+# 2 = 경고 단계 속도 제한 (Meter & Police)
+# 3 = 전달 (Forward: Dijkstra 최단 경로 / 우회).
 # 세는 규칙이 맨 앞에 있어서 격리 중에도 공격 패킷 수를 계속 셀 수 있다 (공격이 멈췄는지 판단용).
 TABLE_COUNT = 0
-TABLE_POLICE = 1
-TABLE_FORWARD = 2
+TABLE_POLICY = 1
+TABLE_POLICE = 2
+TABLE_METER = 2
+TABLE_FORWARD = 3
 
 # 세는 규칙의 cookie: 상위 16비트 태그 + dpid(24비트) + 포트(16비트) + 종류 번호(8비트)
 COUNT_COOKIE_TAG = 0xC0DE << 48
@@ -247,7 +253,26 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         # Redis 제어/경보 비동기 구독 수신 그린스레드 가동
         self.command_subscriber_thread = hub.spawn(self._command_listener_loop)
 
+        # 동적 망 분리(Segmentation) 설정 및 격리 호스트 집합
+        self.zones_config = self._load_zones_config()
+        self.quarantined_hosts = set()
+
         self.logger.info(">>> Self-Defending Controller Ready (OF1.3)! <<<")
+
+    def _load_zones_config(self):
+        """zones.yaml 설정 안전 로드"""
+        try:
+            import yaml
+            config_path = Path(__file__).resolve().parents[2] / "config" / "zones.yaml"
+            if config_path.exists():
+                with open(config_path, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+        except Exception as e:
+            self.logger.warning(f"[Segmentation] Failed to load zones.yaml: {e}")
+        return {
+            "silent_drop_udp_ports": [137, 138, 139, 1900, 5353, 5355],
+            "hard_whitelist": {"probe_ip": "10.0.0.250", "protected_ips": ["10.0.0.4", "10.0.0.254"]},
+        }
 
     def _init_redis(self):
         """Redis 클라이언트 안전 초기화 (장애 격리)"""
@@ -378,11 +403,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         datapath.send_msg(req)
 
     def _request_count_stats(self, datapath):
-        """0번 테이블의 세는 규칙(cookie 태그)만 골라 플로우 통계 요청"""
+        """0번(카운팅) 및 1번(망 정책 ZONE_DENY) 테이블의 세는 규칙(cookie 태그) 플로우 통계 요청"""
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+        table_all = getattr(ofproto, "OFPTT_ALL", 0xFF)
         req = parser.OFPFlowStatsRequest(
-            datapath, 0, TABLE_COUNT, ofproto.OFPP_ANY, ofproto.OFPG_ANY,
+            datapath, 0, table_all, ofproto.OFPP_ANY, ofproto.OFPG_ANY,
             COUNT_COOKIE_TAG, COUNT_COOKIE_MASK, parser.OFPMatch(),
         )
         datapath.send_msg(req)
@@ -471,29 +497,283 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # 0번(세기)·1번(속도 제한) 테이블: 걸리지 않은 패킷은 다음 테이블로
-        for table_id in (TABLE_COUNT, TABLE_POLICE):
-            self.add_flow(datapath, priority=0, match=parser.OFPMatch(), actions=[], table_id=table_id,
-                          instructions=[parser.OFPInstructionGotoTable(table_id + 1)])
-        # 0번 테이블: 이 스위치에 붙은 호스트의 종류별 세는 규칙
+        # 0번(세기) -> 1번(망 정책) 기본 전달 규칙
+        self.add_flow(datapath, priority=0, match=parser.OFPMatch(), actions=[], table_id=TABLE_COUNT,
+                      instructions=[parser.OFPInstructionGotoTable(TABLE_POLICY)])
+        # 2번(속도 제한) -> 3번(전달) 기본 전달 규칙
+        self.add_flow(datapath, priority=0, match=parser.OFPMatch(), actions=[], table_id=TABLE_POLICE,
+                      instructions=[parser.OFPInstructionGotoTable(TABLE_FORWARD)])
+
+        # 0번 테이블: 이 스위치에 붙은 호스트의 종류별 세는 규칙 (Goto Table 1)
         for dpid, port, kind, priority, match_kwargs in count_rule_specs(self.arp_table):
             if dpid != datapath.id:
                 continue
             self.add_flow(datapath, priority=priority, match=parser.OFPMatch(**match_kwargs), actions=[],
                           table_id=TABLE_COUNT, cookie=count_cookie(dpid, port, kind),
-                          instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)])
+                          instructions=[parser.OFPInstructionGotoTable(TABLE_POLICY)])
 
-        # 전달 테이블 Table-Miss Flow (Priority 0) 등록: 미매칭 패킷은 컨트롤러로 보고
+        # 1번 테이블: 망 정책(Zone Policy & Source Guard) 설치
+        self._install_policy_table(datapath)
+
+        # 3번(전달) 테이블 Table-Miss Flow (Priority 0) 등록: 미매칭 패킷은 컨트롤러로 보고
         match = parser.OFPMatch()
         actions = [
             parser.OFPActionOutput(
                 ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER
             )
         ]
-        self.add_flow(datapath, priority=0, match=match, actions=actions)
+        self.add_flow(datapath, priority=0, match=match, actions=actions, table_id=TABLE_FORWARD)
         self.logger.info(
-            f"Switch S{datapath.id} Connected. Count/Police/Forward tables and Table-Miss Installed."
+            f"Switch S{datapath.id} Connected. Count/Policy/Police/Forward tables and Table-Miss Installed."
         )
+
+    def _install_policy_table(self, datapath):
+        """Table 1 망 정책(Zone Policy) 기본 플로우 주입"""
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        dpid = datapath.id
+
+        # 1. Pri 65535: 스위치 간 트렁크(Trunk) 포트 절대 바이패스 -> Table 2 (TABLE_POLICE)
+        trunk_ports = self.whitelist_guard.trunk_ports.get(dpid, [])
+        for t_port in trunk_ports:
+            self.add_flow(
+                datapath, priority=65535, match=parser.OFPMatch(in_port=t_port),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+
+        # 2. Pri 500: ARP (0x0806) -> Table 2 -> Table 3 (Proxy ARP 처리를 위해 필수 통과)
+        self.add_flow(
+            datapath, priority=500, match=parser.OFPMatch(eth_type=0x0806),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+
+        # 3. Pri 400: 컨트롤러 상태체크 핑 (10.0.0.250) 양방향 무조건 허용
+        self.add_flow(
+            datapath, priority=400,
+            match=parser.OFPMatch(eth_type=0x0800, ipv4_src=SERVICE_PROBE_IP),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+        self.add_flow(
+            datapath, priority=400,
+            match=parser.OFPMatch(eth_type=0x0800, ipv4_dst=SERVICE_PROBE_IP),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+
+        # 4. Pri 350: OS 백그라운드 노이즈 Silent Drop (NetBIOS, mDNS, LLMNR, SSDP)
+        silent_ports = self.zones_config.get("silent_drop_udp_ports", [137, 138, 139, 1900, 5353, 5355])
+        for u_port in silent_ports:
+            self.add_flow(
+                datapath, priority=350,
+                match=parser.OFPMatch(eth_type=0x0800, ip_proto=17, udp_dst=u_port),
+                actions=[], table_id=TABLE_POLICY,
+            )
+
+        # 5. 접속 호스트별 망 정책 설치
+        for ip, host_info in self.arp_table.items():
+            if host_info["dpid"] != dpid:
+                continue
+            h_port = host_info["port"]
+            h_mac = host_info["mac"]
+
+            if ip == "10.0.0.4":
+                # SERVER 호스트 (S4:P1): 역방향 응답 허용 (Pri 100)
+                # Web reply (TCP src 80)
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # DNS reply (UDP src 53)
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=17, udp_src=53),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # ICMP reply (Echo Reply type 0)
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=1, icmpv4_type=0),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+            else:
+                # USER 호스트 (S1:P1, S1:P2): SERVER(10.0.0.4) 향 허용 규칙 (Pri 200)
+                # Web request (TCP dst 80)
+                self.add_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=6, tcp_dst=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # DNS request (UDP dst 53)
+                self.add_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=17, udp_dst=53),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # ICMP request (Echo Request type 8)
+                self.add_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=8),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # ICMP reply (Echo Reply type 0)
+                self.add_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=0),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+
+            # 6. Pri 0: Table-Miss per Access Port -> DROP & Count ZONE_DENY
+            self.add_flow(
+                datapath, priority=0,
+                match=parser.OFPMatch(in_port=h_port),
+                actions=[], table_id=TABLE_POLICY,
+                cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY.value),
+            )
+
+    def quarantine_host(
+        self,
+        target_ip: str,
+        target_mac: Optional[str] = None,
+        dpid: Optional[int] = None,
+        port: Optional[int] = None,
+    ) -> bool:
+        """침해 호스트를 동적 격리망(QUARANTINE)으로 강등"""
+        if not target_ip:
+            return False
+
+        # 하드 화이트리스트 보호 (서버 및 프로브 핑, 관리 서버는 절대 격리 불가)
+        if target_ip in ("10.0.0.4", "10.0.0.250", "10.0.0.254"):
+            self.logger.error(f"[Quarantine] Refusing to quarantine protected target: {target_ip}")
+            return False
+
+        host_info = self.arp_table.get(target_ip)
+        if host_info:
+            target_mac = target_mac or host_info["mac"]
+            dpid = dpid or host_info["dpid"]
+            port = port or host_info["port"]
+
+        if not dpid or not port:
+            self.logger.warning(f"[Quarantine] Unknown target: {target_ip}")
+            return False
+
+        datapath = self.datapaths.get(dpid)
+        if not datapath:
+            self.logger.warning(f"[Quarantine] Datapath S{dpid} not connected")
+            self.quarantined_hosts.add(target_ip)
+            return True
+
+        parser = datapath.ofproto_parser
+
+        # 1. 기존 Pri 200 정상 USER 허용 규칙 삭제
+        self.delete_flow(
+            datapath, priority=200,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=6, tcp_dst=80),
+            table_id=TABLE_POLICY,
+        )
+        self.delete_flow(
+            datapath, priority=200,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=17, udp_dst=53),
+            table_id=TABLE_POLICY,
+        )
+        for icmp_type in (8, 0):
+            self.delete_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=icmp_type),
+                table_id=TABLE_POLICY,
+            )
+
+        # 2. Pri 300 격리 규칙 설치 (관리망 10.0.0.254:443 및 DNS 53만 허용)
+        self.add_flow(
+            datapath, priority=300,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=6, tcp_dst=443),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+        self.add_flow(
+            datapath, priority=300,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=17, udp_dst=53),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+
+        self.quarantined_hosts.add(target_ip)
+        self.logger.info(f"[Quarantine] Host {target_ip} (MAC: {target_mac}) QUARANTINED on S{dpid}:P{port}")
+        return True
+
+    def release_host(
+        self,
+        target_ip: str,
+        target_mac: Optional[str] = None,
+        dpid: Optional[int] = None,
+        port: Optional[int] = None,
+    ) -> bool:
+        """관리자 승인에 의한 격리 해제 및 USER 망 원상 복구"""
+        if not target_ip:
+            return False
+
+        host_info = self.arp_table.get(target_ip)
+        if host_info:
+            target_mac = target_mac or host_info["mac"]
+            dpid = dpid or host_info["dpid"]
+            port = port or host_info["port"]
+
+        if not dpid or not port:
+            return False
+
+        datapath = self.datapaths.get(dpid)
+        if not datapath:
+            self.quarantined_hosts.discard(target_ip)
+            return True
+
+        parser = datapath.ofproto_parser
+
+        # 1. Pri 300 격리 규칙 삭제
+        self.delete_flow(
+            datapath, priority=300,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=6, tcp_dst=443),
+            table_id=TABLE_POLICY,
+        )
+        self.delete_flow(
+            datapath, priority=300,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=17, udp_dst=53),
+            table_id=TABLE_POLICY,
+        )
+
+        # 2. Pri 200 정상 USER 규칙 복원
+        self.add_flow(
+            datapath, priority=200,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=6, tcp_dst=80),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+        self.add_flow(
+            datapath, priority=200,
+            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=17, udp_dst=53),
+            actions=[], table_id=TABLE_POLICY,
+            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+        )
+        for icmp_type in (8, 0):
+            self.add_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=icmp_type),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+
+        self.quarantined_hosts.discard(target_ip)
+        self.logger.info(f"[Release] Host {target_ip} (MAC: {target_mac}) RELEASED on S{dpid}:P{port}")
+        return True
 
     def add_flow(
         self, datapath, priority, match, actions,
@@ -678,25 +958,31 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         mitigated = (phase_name in ("MITIGATED", "COOLDOWN_VERIFY", "COOLDOWN"))
         s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
 
+        h_legit_status = "QUARANTINED" if "10.0.0.1" in self.quarantined_hosts else "NORMAL"
+        h_attacker_status = "QUARANTINED" if "10.0.0.2" in self.quarantined_hosts else s1_status
+
         nodes = [
             TopologyNode(id="s1", label="S1 (Ingress)", node_type="switch", dpid=1, status=s1_status),
             TopologyNode(id="s2", label="S2 (Primary)", node_type="switch", dpid=2),
             TopologyNode(id="s3", label="S3 (Bypass)", node_type="switch", dpid=3),
             TopologyNode(id="s4", label="S4 (Egress)", node_type="switch", dpid=4),
-            TopologyNode(id="h_legit", label="H_legit", node_type="host", ip="10.0.0.1", mac="00:00:00:00:00:01"),
+            TopologyNode(id="h_legit", label="H_legit", node_type="host", ip="10.0.0.1", mac="00:00:00:00:00:01", status=h_legit_status),
             TopologyNode(
                 id="h_attacker", label="H_attacker", node_type="host",
-                ip="10.0.0.2", mac="00:00:00:00:00:02", status=s1_status
+                ip="10.0.0.2", mac="00:00:00:00:00:02", status=h_attacker_status
             ),
             TopologyNode(id="h_server", label="H_server", node_type="host", ip="10.0.0.4", mac="00:00:00:00:00:04"),
         ]
 
         bypass_status = "REROUTED" if mitigated else "ACTIVE"
+        h_legit_link_status = "BLOCKED" if "10.0.0.1" in self.quarantined_hosts else "ACTIVE"
+        h_attacker_link_status = "BLOCKED" if (mitigated or "10.0.0.2" in self.quarantined_hosts) else "ACTIVE"
+
         links = [
-            TopologyLink(source="s1", target="h_legit", src_port=1, dst_port=1),
+            TopologyLink(source="s1", target="h_legit", src_port=1, dst_port=1, status=h_legit_link_status),
             TopologyLink(
                 source="s1", target="h_attacker", src_port=2, dst_port=1,
-                status="BLOCKED" if mitigated else "ACTIVE"
+                status=h_attacker_link_status
             ),
             TopologyLink(source="s1", target="s2", src_port=3, dst_port=1, is_trunk=True),
             TopologyLink(source="s1", target="s3", src_port=4, dst_port=1, is_trunk=True, status=bypass_status),
@@ -717,7 +1003,16 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         except Exception as e:
             self.logger.warning(f"[TopologySync] Failed to publish topology sync: {e}")
 
-    def _publish_control_command(self, action: str, dpid: int, port: int, reason: str, priority: int = 100):
+    def _publish_control_command(
+        self,
+        action: str,
+        dpid: int,
+        port: int,
+        reason: str,
+        priority: int = 100,
+        target_ip: Optional[str] = None,
+        target_mac: Optional[str] = None,
+    ):
         """자율 방어 조치 내역을 sdn:control:command 채널에 발행하여 웹 대시보드 이벤트 타임라인에 기록"""
         cmd = ControlCommandMessage(
             command_id=f"auto-{action.lower()}-{int(time.time()*1000)}",
@@ -727,6 +1022,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             reason=reason,
             priority=priority,
             timestamp=time.time(),
+            target_ip=target_ip,
+            target_mac=target_mac,
         )
         try:
             if not self.redis_client:
@@ -886,27 +1183,46 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                         and target_key in self.fsm.mitigated_targets
                     )
                     if not already_mitigated:
-                        self.isolate_port(alert.dpid, alert.in_port, priority=100)
-                        self._publish_control_command(
-                            action=DefenseAction.ISOLATE.value,
-                            dpid=alert.dpid,
-                            port=alert.in_port,
-                            reason=f"Autonomous In_port Drop: {alert.threat_type} (score {alert.score:.2f})",
-                            priority=100,
-                        )
-                        # 2. 다중 홉 우회 라우팅 선제 설치
-                        self.reroute_traffic(source_dpid=alert.dpid, target_dpid=4, dst_ip="10.0.0.4")
-                        self._publish_control_command(
-                            action=DefenseAction.REROUTE.value,
-                            dpid=alert.dpid,
-                            port=4,
-                            reason="Autonomous Bypass: Proactive S1-S3-S4 Rerouting",
-                            priority=20,
-                        )
-                        # 3. FSM 상태 전이
-                        self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
-                        # 4. 실시간 토폴로지 동기화 발행
-                        self._publish_topology_sync("MITIGATED")
+                        # 타깃 호스트 IP 식별
+                        target_ip = next((ip for ip, host in self.arp_table.items()
+                                          if host["dpid"] == alert.dpid and host["port"] == alert.in_port), None)
+
+                        # 내부 확산 / 망 경계 위반: 포트 전체가 아닌 호스트 단위 QUARANTINE 발동
+                        if target_ip and alert.threat_type == ThreatType.INTERNAL_SPREAD.value:
+                            self.quarantine_host(target_ip, dpid=alert.dpid, port=alert.in_port)
+                            self._publish_control_command(
+                                action=DefenseAction.QUARANTINE.value,
+                                dpid=alert.dpid,
+                                port=alert.in_port,
+                                reason=f"Autonomous Host Quarantine: {alert.threat_type} (score {alert.score:.2f})",
+                                priority=300,
+                                target_ip=target_ip,
+                            )
+                            self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
+                            self._publish_topology_sync("MITIGATED")
+                        else:
+                            # Flood 계열(SYN/UDP/ICMP 등): 기존 인그레스 포트 격리 + 우회 유지
+                            self.isolate_port(alert.dpid, alert.in_port, priority=100)
+                            self._publish_control_command(
+                                action=DefenseAction.ISOLATE.value,
+                                dpid=alert.dpid,
+                                port=alert.in_port,
+                                reason=f"Autonomous In_port Drop: {alert.threat_type} (score {alert.score:.2f})",
+                                priority=100,
+                            )
+                            # 2. 다중 홉 우회 라우팅 선제 설치
+                            self.reroute_traffic(source_dpid=alert.dpid, target_dpid=4, dst_ip="10.0.0.4")
+                            self._publish_control_command(
+                                action=DefenseAction.REROUTE.value,
+                                dpid=alert.dpid,
+                                port=4,
+                                reason="Autonomous Bypass: Proactive S1-S3-S4 Rerouting",
+                                priority=20,
+                            )
+                            # 3. FSM 상태 전이
+                            self.fsm.trigger_anomaly(alert.dpid, alert.in_port, threat_info=alert.model_dump())
+                            # 4. 실시간 토폴로지 동기화 발행
+                            self._publish_topology_sync("MITIGATED")
                     else:
                         # 이미 격리된 타깃: FSM 하트비트(쿨다운 타이머)만 연장하고 중복 명령 기록 발행 생략
                         prev_state = self.fsm.get_state()
@@ -946,6 +1262,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 elif cmd.action == "REROUTE":
                     self.reroute_traffic(source_dpid=cmd.target_dpid, target_dpid=4)
                     self._publish_topology_sync("MITIGATED")
+                elif cmd.action in ("QUARANTINE", DefenseAction.QUARANTINE.value):
+                    self.quarantine_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)
+                    self._publish_topology_sync("MITIGATED")
+                elif cmd.action in ("RELEASE", DefenseAction.RELEASE.value):
+                    self.release_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)
+                    self._publish_topology_sync("NORMAL")
         except Exception as e:
             self.logger.warning(f"[Control Dispatcher] Error processing message on {channel}: {e}")
 

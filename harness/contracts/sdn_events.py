@@ -72,6 +72,16 @@ class DefenseAction(str, Enum):
     RATE_LIMIT = "RATE_LIMIT"
     UNLIMIT = "UNLIMIT"
     RELEARN = "RELEARN"  # 특수 상황 재학습 승인 (관리자 → AI Worker). 컨트롤러는 아무것도 하지 않는다
+    QUARANTINE = "QUARANTINE"  # 감염 호스트 동적 격리망 이동 (IP/MAC 단위)
+    RELEASE = "RELEASE"        # 격리 해제 및 원래 망 복원 (관리자 수동 승인)
+
+
+class ZoneKind(str, Enum):
+    """논리 망 구분 (SSOT)"""
+    USER = "USER"
+    SERVER = "SERVER"
+    ADMIN = "ADMIN"
+    QUARANTINE = "QUARANTINE"
 
 
 class RiskStage(str, Enum):
@@ -93,6 +103,8 @@ class CountKind(str, Enum):
     UNREACH_IN = "unreach_in"  # 이 호스트가 받은 ICMP 도달 불가(type 3)
     # 스위치 규칙이 아니라 컨트롤러가 센다(Proxy ARP): 이 호스트가 ARP로 물어본 '없는 내부 주소'의 누적 개수(서로 다른 주소)
     ARP_FAIL = "arp_fail"
+    # Table 1 망 정책 위반 (USER -> USER 차단 등) 누적 패킷 수
+    ZONE_DENY = "zone_deny"
 
 
 class ThreatType(str, Enum):
@@ -217,12 +229,14 @@ class ControlCommandMessage(BaseModel):
     """Autonomous mitigation or manual intervention command published to Ryu."""
     timestamp: float = Field(default_factory=time.time, description="Unix timestamp")
     command_id: str = Field(..., description="Unique UUID or tracking identifier for this command")
-    action: str = Field(..., description="ISOLATE | RESTORE | REROUTE | RELEARN")
+    action: str = Field(..., description="ISOLATE | RESTORE | REROUTE | RELEARN | QUARANTINE | RELEASE")
     target_dpid: int = Field(..., description="Target switch DPID")
     target_port: int = Field(..., description="Target switch port number")
     reason: str = Field(..., description="Human or AI rationale for mitigation")
     priority: int = Field(100, description="OpenFlow flow rule priority to install/modify")
     duration_sec: Optional[float] = Field(None, description="RELEARN only: approved relearning period (seconds)")
+    target_ip: Optional[str] = Field(None, description="QUARANTINE/RELEASE only: target host IP to isolate/release")
+    target_mac: Optional[str] = Field(None, description="QUARANTINE/RELEASE only: target host MAC to isolate/release")
 
 
 # =====================================================================

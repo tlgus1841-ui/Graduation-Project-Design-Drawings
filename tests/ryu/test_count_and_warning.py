@@ -15,7 +15,12 @@ _module = SelfDefendingSDNController.__init__.__globals__
 count_cookie = _module["count_cookie"]
 decode_count_cookie = _module["decode_count_cookie"]
 count_rule_specs = _module["count_rule_specs"]
-TABLE_COUNT, TABLE_POLICE, TABLE_FORWARD = _module["TABLE_COUNT"], _module["TABLE_POLICE"], _module["TABLE_FORWARD"]
+TABLE_COUNT, TABLE_POLICY, TABLE_POLICE, TABLE_FORWARD = (
+    _module["TABLE_COUNT"],
+    _module["TABLE_POLICY"],
+    _module["TABLE_POLICE"],
+    _module["TABLE_FORWARD"],
+)
 police_matches = _module["police_matches"]
 
 
@@ -63,6 +68,7 @@ def test_switch_features_installs_count_police_and_forward_tables():
     tables = [c.get("table_id", TABLE_FORWARD) for c in calls]
     assert tables.count(TABLE_COUNT) == 1 + 14  # default goto + 7 rules for each of the 2 hosts on S1
     assert tables.count(TABLE_POLICE) == 1
+    assert tables.count(TABLE_POLICY) > 0  # Table 1 segmentation rules installed
     table_miss = [c for c in calls if c.get("table_id", TABLE_FORWARD) == TABLE_FORWARD]
     assert len(table_miss) == 1 and table_miss[0]["priority"] == 0
     assert all(c["cookie"] for c in calls if c.get("table_id") == TABLE_COUNT and c["priority"] > 0)

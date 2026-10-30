@@ -92,28 +92,34 @@
   │     ├── 웹 프론트엔드 프로덕션 빌드 서빙 (Vite Dev Server 탈피 ➔ Nginx 1.25 Alpine 리버스 프록시)
   │     ├── 포트 80 단일 엔드포인트(/, /api/, /ws) 일원화 및 실환경 VM(34.64.79.240) 검증 완료
   │     └── [상세 실행 계획서](docker_compose_production_plan.md) 기준 5단계 마일스톤 전수 구현/검증 완료
-  └── [Phase 6-B-2] 소프트웨어 정의 동적 망 분리 (Dynamic Micro-segmentation) ── [In Progress / Next]
-        ├── 4-Zone 논리 망 모델: USER(업무망), SERVER(서버망), ADMIN(관리망), QUARANTINE(격리망)
-        ├── OpenFlow 4-Table 파이프라인 신설: Table 0(카운팅) ➔ Table 1(망정책) ➔ Table 2(미터링) ➔ Table 3(포워딩)
-        ├── Default-Deny & Ingress Enforcement: 사용자 간 통신(SMB 445, RDP 3389) 전면 차단
-        ├── 무증상 확산 탐지: 차단 패킷 통계를 `ZONE_DENY` 신호로 집계하여 이상 탐지 엔진 연동
-        ├── 호스트(MAC/IP) 단위 동적 격리: 내부 확산/스캔 시 해당 단말만 QUARANTINE으로 즉각 격리 (정상 사용자 무영향)
-        ├── 관리자 통제권 보장: 관제탑 UI 수동 승인 기반 복귀(Release) 및 감사 로그 저장
-        └── [상세 실행 계획서](dynamic_segmentation_detailed_plan.md) 기준 5단계 마일스톤 순차 검증
+  └── [Phase 6-B-2] 소프트웨어 정의 동적 망 분리 (Dynamic Micro-segmentation) ── [완료 (Verified)]
+        ├── 4-Switch 다이아몬드 환경 완성(옵션 A): 4단 OpenFlow 파이프라인(Table 0~3) 개편 및 282개 테스트 전원 통과
+        ├── 4-Zone 논리 망 모델: USER(업무망), SERVER(서버망), ADMIN(관리망 10.0.0.254), QUARANTINE(격리망)
+        ├── OpenFlow 4-Table 파이프라인 신설: Table 0(카운팅) ➔ Table 1(망정책/Source Guard) ➔ Table 2(미터링) ➔ Table 3(포워딩)
+        ├── Default-Deny & Ingress Enforcement: 사용자 간 통신(SMB 445, RDP 3389) 전면 차단 및 OS 멀티캐스트 Silent Drop
+        ├── 무증상 확산 탐지: 차단 패킷 통계를 `ZONE_DENY` 신호로 집계하여 CriteriaEngine 이상 탐지 엔진 연동
+        ├── 호스트(MAC/IP) 단위 동적 격리: 내부 확산 시 해당 단말만 QUARANTINE으로 즉각 격리 (정상 사용자 무영향)
+        ├── 관리자 통제권 일원화: 관제탑 비상 제어와 동일한 최고 관리자(Admin) 권한으로 격리 해제(Release) 일원화 및 필수 사유 감사 로그 보장
+        ├── 관리망·업데이트 서버 전략 확정: 현 4-스위치에서는 정책상의 논리 호스트(10.0.0.254)로 무결성 검증 완료, 물리 컨테이너는 차기 토폴로지 확장에 배정
+        └── [상세 실행 계획서](dynamic_segmentation_detailed_plan.md) 기준 5단계 마일스톤 전수 구현 및 E2E 실증 완료
 
-[2단계: 중기 과제 - 기술적 차별성 & 대외 경쟁력 확보]
-  ├── [Phase 6-C] IPv6 Dual-Stack 지원 및 대규모 주소 스푸핑 방어
+[2단계: 중기 과제 - 기술적 차별성 & 대규모 토폴로지 확장]
+  ├── [Phase 6-C] 대규모 토폴로지 확장 & 물리 관리망 컨테이너 정식 배포
+  │     ├── 스위치 8~10개, 가상 PC 20대 규모로 Native OVS 토폴로지 확장 연계
+  │     ├── 관리망(ADMIN) 전용 물리/컨테이너 업데이트·패치 서버 정식 배포
+  │     └── 다중 인그레스 스위치 간 분산 망 분리 정책 동기화 검증
+  ├── [Phase 6-D] IPv6 Dual-Stack 지원 및 대규모 주소 스푸핑 방어
   │     ├── IPv4 / IPv6 듀얼 스택 지원 (ICMPv6 Neighbor Discovery / Proxy ND 파서 구현)
   │     ├── IPv6 초거대 주소 공간($2^{64}$개) 무작위 변조 공격 시 In_port 단일 룰 방어 실증
   │     ├── IPv6 기본 헤더(40B) 반영 AI BPP(Bytes Per Packet) 임계값 동적 보정
   │     └── 관제탑 UI IPv6 토폴로지 및 트래픽 시각화 확장
-  └── [Phase 6-D] 엔터프라이즈 모니터링 & 프로브 안정화
+  └── [Phase 6-E] 엔터프라이즈 모니터링 & 프로브 안정화
         ├── 프로브 & 텔레메트리 로그 순환(Log Rotation) 및 백그라운드 데몬 생명주기 안정화
         ├── Prometheus / Grafana 메트릭 익스포터 연동
         └── Kubernetes OVS-CNI 연동 환경 검증
 
 [3단계: 장기 과제 - 대규모 엔터프라이즈 확장 및 심층 방어]
-  └── [Phase 6-E] 엔터프라이즈 심층 방어(SFC) 및 고가용성 클러스터링
+  └── [Phase 6-F] 엔터프라이즈 심층 방어(SFC) 및 고가용성 클러스터링
         ├── Service Function Chaining (SFC): 의심 플로우 대상 WAF/IPS(Suricata) 동적 연동
         ├── Kafka / ElasticSearch 기반 엔터프라이즈 SIEM 로깅 파이프라인 구축
         ├── eBPF / XDP 기반 커널 레벨 1차 패킷 필터링 연동 검토 (Tbps 급 방어)

@@ -1,17 +1,21 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { sendManualControl } from "../lib/api.js";
+import { sendManualControl, sendQuarantineRelease } from "../lib/api.js";
 
 // Week 13 review item: operator emergency manual control (spec: whitelist guard, traceable reason).
 // Only access ports are offered; trunk ports are refused by the backend as well.
 // The dialog and notice are portalled to <body>: the sticky header uses backdrop-blur, which makes it
 // the containing block for position:fixed children and would clip them to the header.
 const TARGETS = [
-  { value: "1:2", label: "S1:2 · H_attacker (공격자)", normal: false },
-  { value: "1:1", label: "S1:1 · H_legit (정상 사용자)", normal: true },
-  { value: "4:1", label: "S4:1 · H_server (서버)", normal: true },
+  { value: "1:2", ip: "10.0.0.2", label: "S1:2 · H_attacker (10.0.0.2)", normal: false },
+  { value: "1:1", ip: "10.0.0.1", label: "S1:1 · H_legit (10.0.0.1)", normal: true },
+  { value: "4:1", ip: "10.0.0.4", label: "S4:1 · H_server (10.0.0.4)", normal: true },
 ];
-const ACTIONS = { ISOLATE: "격리 (차단)", RESTORE: "복원 (차단 해제)" };
+const ACTIONS = {
+  ISOLATE: "포트 격리",
+  RESTORE: "포트 복원",
+  RELEASE: "단말 격리 해제 (QUARANTINE Release)",
+};
 
 // memo: no props, so the dashboard's ~2 s live updates never re-render the button or an open dialog.
 function ManualControl() {
@@ -46,7 +50,7 @@ function ManualControl() {
       {notice && createPortal(
         <div role="status" data-testid="manual-control-notice"
           className="fixed bottom-4 left-4 z-30 rounded-lg border border-amber-500 bg-slate-900 px-4 py-3 text-sm text-amber-100 shadow-xl">
-          수동 {ACTIONS[notice.command.action]} 명령 전송 · S{notice.command.target_dpid}:{notice.command.target_port}
+          수동 {ACTIONS[notice.command.action] || notice.command.action} 명령 전송 · {notice.command.target_ip ? notice.command.target_ip : `S${notice.command.target_dpid}:${notice.command.target_port}`}
           {notice.auto_isolation_hold_sec > 0 && ` · ${notice.auto_isolation_hold_sec}초간 자동 재격리 보류`}
           <span className="ml-2 font-mono text-xs text-amber-300">{notice.command.command_id}</span>
         </div>,
@@ -95,7 +99,11 @@ function ManualControlDialog({ onClose }) {
     setBusy(true);
     setError(null);
     try {
-      onClose(await sendManualControl({ action, dpid, port, reason: reason.trim(), operator: operator.trim(), token }));
+      if (action === "RELEASE") {
+        onClose(await sendQuarantineRelease({ target_ip: t?.ip || "10.0.0.2", reason: reason.trim(), operator: operator.trim(), token }));
+      } else {
+        onClose(await sendManualControl({ action, dpid, port, reason: reason.trim(), operator: operator.trim(), token }));
+      }
     } catch (err) {
       setError(err.message);
       setBusy(false);
