@@ -255,6 +255,9 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         self.command_subscriber_thread = hub.spawn(self._command_listener_loop)
 
         # 동적 망 분리(Segmentation) 설정 및 격리 호스트 집합
+        # zones.yaml의 silent_drop_udp_ports만 실제로 쓰인다(_install_policy_table 참고).
+        # zones/hosts/rules/hard_whitelist는 아직 참조용 문서일 뿐, Table 1 플로우와
+        # quarantine_host/release_host의 화이트리스트는 아래 코드에 상수로 박혀 있다.
         self.zones_config = self._load_zones_config()
         self.quarantined_hosts = set()
 
@@ -659,7 +662,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def quarantine_host(
         self,
-        target_ip: str,
+        target_ip: Optional[str],
         target_mac: Optional[str] = None,
         dpid: Optional[int] = None,
         port: Optional[int] = None,
@@ -729,7 +732,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def release_host(
         self,
-        target_ip: str,
+        target_ip: Optional[str],
         target_mac: Optional[str] = None,
         dpid: Optional[int] = None,
         port: Optional[int] = None,

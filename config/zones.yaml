@@ -1,6 +1,15 @@
 # =============================================================================
-# SDN Dynamic Network Segmentation Configuration (SSOT)
+# SDN Dynamic Network Segmentation Configuration
 # =============================================================================
+# NOTE: only `silent_drop_udp_ports` is actually read by the controller
+# (ryu/app/controller.py `_install_policy_table`, via `self.zones_config`).
+# `zones` / `hosts` / `rules` / `hard_whitelist` below are NOT consumed —
+# Table 1's host/zone/rule flows and the quarantine hard-whitelist are
+# hardcoded Python literals in controller.py instead. Treat these sections
+# as a design-reference inventory, not live policy: editing them (adding a
+# host, changing a port) has no effect on actual traffic until
+# `_install_policy_table`/`quarantine_host`/`release_host` are updated to
+# read from this file too.
 
 # 논리 망(Zone) 정의 및 기본 소속 호스트 IP 목록
 zones:

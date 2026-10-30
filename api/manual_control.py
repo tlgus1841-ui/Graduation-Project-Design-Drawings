@@ -15,7 +15,7 @@ period and returns to the pre-learned baseline afterwards; the controller ignore
 from __future__ import annotations
 
 import uuid
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -34,21 +34,21 @@ class ManualControlRequest(BaseModel):
     dpid: int = Field(..., ge=1)
     port: int = Field(..., ge=1)
     reason: str = Field(..., min_length=3, max_length=200)
-    operator: str = Field("admin", min_length=1, max_length=40)
+    operator: str = Field(default="admin", min_length=1, max_length=40)
 
 
 class RelearnRequest(BaseModel):
     minutes: int = Field(..., ge=1, le=RELEARN_MAX_MINUTES, description="Approved relearning period")
-    dpid: int = Field(0, ge=0, description="0 with port 0 = every watched access port")
-    port: int = Field(0, ge=0)
+    dpid: int = Field(default=0, ge=0, description="0 with port 0 = every watched access port")
+    port: int = Field(default=0, ge=0)
     reason: str = Field(..., min_length=3, max_length=200)
-    operator: str = Field("admin", min_length=1, max_length=40)
+    operator: str = Field(default="admin", min_length=1, max_length=40)
 
 
 class QuarantineReleaseRequest(BaseModel):
     target_ip: str = Field(..., description="Release target host IP (e.g. 10.0.0.2)")
     reason: str = Field(..., min_length=3, max_length=200, description="Mandatory audit justification")
-    operator: str = Field("admin", min_length=1, max_length=40)
+    operator: str = Field(default="admin", min_length=1, max_length=40)
 
 
 class ManualControlRejected(ValueError):
