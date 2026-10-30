@@ -262,26 +262,33 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def _load_zones_config(self):
         """zones.yaml 설정 안전 로드 (로컬 개발 환경 및 컨테이너 환경 호환)"""
-        candidate_paths = [
-            Path(__file__).resolve().parents[2] / "config" / "zones.yaml",
-            Path("/workspace/config/zones.yaml"),
-            Path("/app/config/zones.yaml"),
-            Path("config/zones.yaml"),
-        ]
-        try:
-            import yaml
-            for p in candidate_paths:
-                if p.exists():
-                    with open(p, "r", encoding="utf-8") as f:
-                        cfg = yaml.safe_load(f) or {}
-                        self.logger.info(f"[Segmentation] Successfully loaded zones.yaml from {p}")
-                        return cfg
-        except Exception as e:
-            self.logger.warning(f"[Segmentation] Failed to load zones.yaml: {e}")
-        return {
+        default_cfg = {
             "silent_drop_udp_ports": [137, 138, 139, 1900, 5353, 5355],
             "hard_whitelist": {"probe_ip": "10.0.0.250", "protected_ips": ["10.0.0.4", "10.0.0.254"]},
         }
+        try:
+            import yaml
+            candidate_paths = [
+                Path("/workspace/config/zones.yaml"),
+                Path("/app/config/zones.yaml"),
+                Path("config/zones.yaml"),
+            ]
+            cur = Path(__file__).resolve()
+            if len(cur.parents) >= 3:
+                candidate_paths.insert(0, cur.parents[2] / "config" / "zones.yaml")
+
+            for p in candidate_paths:
+                try:
+                    if p.exists():
+                        with open(p, "r", encoding="utf-8") as f:
+                            cfg = yaml.safe_load(f) or {}
+                            self.logger.info(f"[Segmentation] Successfully loaded zones.yaml from {p}")
+                            return cfg
+                except Exception:
+                    continue
+        except Exception as e:
+            self.logger.warning(f"[Segmentation] Failed to load zones.yaml: {e}")
+        return default_cfg
 
     def _init_redis(self):
         """Redis 클라이언트 안전 초기화 (장애 격리)"""
