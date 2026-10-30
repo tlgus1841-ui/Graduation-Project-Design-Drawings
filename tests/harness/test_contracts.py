@@ -79,6 +79,10 @@ def test_control_command_message_quarantine_payload():
 
 
 def test_zones_yaml_structure():
+    """config/zones.yaml의 zones/hosts/rules 모양만 검증한다 — 아직 컨트롤러가 이 값들을
+    실제로 적용하지 않으므로(Table 1 플로우·격리 화이트리스트는 controller.py에 상수로
+    박혀 있음, silent_drop_udp_ports만 예외) 이 테스트가 통과해도 컨트롤러 동작이 YAML과
+    일치함을 보장하지는 않는다."""
     config_path = Path(__file__).resolve().parents[2] / "config" / "zones.yaml"
     assert config_path.exists(), f"Configuration file not found: {config_path}"
 
