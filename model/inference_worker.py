@@ -290,7 +290,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="AI 추론 워커: 종류별 패킷 수 → 판단 기준 → 경보 발행")
     parser.add_argument("--model", type=Path, default=Path(DEFAULT_MODEL_PATH))
     parser.add_argument("--train-csv", type=Path, help="모델 파일이 없을 때 학습할 CSV (csv_logger 형식)")
-    parser.add_argument("--redis-url", default="redis://localhost:6379/0")
+    parser.add_argument("--redis-url", default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     parser.add_argument("--log", type=Path, help="경보·명령 이벤트 기록 (jsonl)")
     parser.add_argument("--baseline", type=Path, default=Path(DEFAULT_BASELINE_PATH),
                         help="사전 학습한 평소값 (없으면 최소값만으로 판단)")

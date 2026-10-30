@@ -75,7 +75,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./model:/workspace/model
-    command: python -m model.inference_worker --model model/isolation_forest.joblib
+    command: python -m model.inference_worker --model model/isolation_forest.joblib --redis-url redis://sdn-redis:6379/0
     depends_on:
       redis-broker:
         condition: service_healthy
