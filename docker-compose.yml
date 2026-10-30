@@ -33,6 +33,7 @@ services:
     volumes:
       - ./ryu/app:/app
       - ./harness:/workspace/harness
+      - ./config:/workspace/config:ro
     command: ryu-manager --ofp-tcp-listen-port 6653 --observe-links /app/controller.py
     depends_on:
       redis-broker:
@@ -77,6 +78,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./model:/workspace/model
+      - ./config:/workspace/config:ro
     command: python -m model.inference_worker --model model/isolation_forest.joblib --redis-url redis://sdn-redis:6379/0
     depends_on:
       redis-broker:

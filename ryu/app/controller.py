@@ -8,6 +8,7 @@ Phase 2 (Week 5 & Week 6) Milestone
 
 import json
 import os
+from pathlib import Path
 import time
 from typing import Dict, List, Optional, Set
 
@@ -260,13 +261,21 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         self.logger.info(">>> Self-Defending Controller Ready (OF1.3)! <<<")
 
     def _load_zones_config(self):
-        """zones.yaml 설정 안전 로드"""
+        """zones.yaml 설정 안전 로드 (로컬 개발 환경 및 컨테이너 환경 호환)"""
+        candidate_paths = [
+            Path(__file__).resolve().parents[2] / "config" / "zones.yaml",
+            Path("/workspace/config/zones.yaml"),
+            Path("/app/config/zones.yaml"),
+            Path("config/zones.yaml"),
+        ]
         try:
             import yaml
-            config_path = Path(__file__).resolve().parents[2] / "config" / "zones.yaml"
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f) or {}
+            for p in candidate_paths:
+                if p.exists():
+                    with open(p, "r", encoding="utf-8") as f:
+                        cfg = yaml.safe_load(f) or {}
+                        self.logger.info(f"[Segmentation] Successfully loaded zones.yaml from {p}")
+                        return cfg
         except Exception as e:
             self.logger.warning(f"[Segmentation] Failed to load zones.yaml: {e}")
         return {
