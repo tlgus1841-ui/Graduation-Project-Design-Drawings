@@ -99,11 +99,17 @@ flowchart TD
 ### 📌 Milestone M2: 노드/엣지 시각적 계층화 및 Zone 클러스터링 카드 강화
 - **작업 내용**:
   - `toVisNode()` 함수 리팩토링:
-    - 노드 타입별 차등 크기 및 아이콘 적용 (Core: 크기 42 + 진한 테두리, Server: 다이아몬드/서버 전용 컬러, Admin: 퍼플 쉴드).
-    - IP 주소 및 상태 뱃지를 라벨 하단에 깔끔한 2줄 서식으로 표현.
+    - vis-network의 라벨 인라인 지원 쉐이프(`box`) 기반 `shapeProperties.borderRadius`를 활용하여 모던 필(Pill) & 라운드 박스 스타일링 적용.
+    - **Core Switch (S1, S2)**: 크기 44px, 볼드 라운드 렉트(`borderRadius: 14`), 고대비 네온 글로우 테두리.
+    - **Edge Switch (S3~S8)**: 크기 34px, 표준 라운드 렉트(`borderRadius: 8`), 존별 고유 테마 컬러.
+    - **Server Host (H5~H8)**: 서버 전용 에메랄드 테마 + 서비스명 태그(`Web`, `API`, `DB`, `Backup`) 표시.
+    - **Client Host (H1~H4)**: 콤팩트 라운드 필(`borderRadius: 18`), 간결한 호스트명.
+    - **Admin & Patch (H_Admin, H_Patch)**: 퍼플 테마, 패치서버 뱃지(`🛠️ H_Patch`).
+    - **Quarantine (H_Sink)**: 앰버 테마 싱크홀 뱃지(`🕳️ H_Sink`).
   - `toVisEdge()` 함수 리팩토링:
-    - Trunk 링크(S1-S2, S1/S2 ↔ Edge)는 굵기 4px의 묵직한 라인으로 표현.
-    - Access 링크(Edge ↔ Host)는 굵기 2px의 정돈된 라인으로 표현.
+    - Trunk 링크(S1-S2, S1/S2 ↔ Edge): 굵기 4px의 묵직한 솔리드 라인으로 백본 강조.
+    - Access 링크(Edge ↔ Host): 굵기 2px의 정돈된 슬림 라인.
+    - L4 치료 채널(Quarantine ➔ Patch): 우아한 오렌지색 하단 곡선(Curved CCW) 점등.
   - `beforeDrawing` Zone 박스 렌더링 개선:
     - 라운드 박스(radius: 16) + 부드러운 그라디언트/틴트 채우기 + 좌측 상단 존 아이콘 태그 뱃지 렌더링.
 
@@ -111,11 +117,12 @@ flowchart TD
 
 ### 📌 Milestone M3: 인터랙티브 Focus & Dimming 엔진 구현
 - **작업 내용**:
-  - `vis-network`의 `hoverNode`, `blurNode`, `selectNode`, `deselectNode` 이벤트 훅 구현.
-  - 특정 노드에 마우스를 올리거나 클릭했을 때:
-    - 선택된 노드 및 직결된 1-Hop 링크, 이웃 노드는 **`opacity: 1.0` (선명)** 유지.
-    - 무관한 모든 노드와 엣지는 **`opacity: 0.15` (Dim/Faded)**로 일괄 투명화하여 복잡한 링크 속에서 패킷 경로를 즉시 식별 가능하도록 구현.
-  - 선택 해제 시 부드럽게 원래 밝기로 전체 복귀.
+  - vis-network의 `network.getConnectedNodes(nodeId)` 및 `network.getConnectedEdges(nodeId)` API를 활용하여 1-Hop 연결망 추적 엔진 구현.
+  - `selectNode`, `deselectNode`, `hoverNode`, `blurNode` 이벤트 바인딩:
+    - 특정 노드 선택 시:
+      - 선택된 노드 + 직결된 1-Hop 링크 + 연결된 이웃 노드만 **`opacity: 1.0` (선명)** 유지.
+      - 무관한 모든 비연관 노드 및 엣지는 **`opacity: 0.15` (Dim/Faded)**로 일괄 투명화하여 복잡한 링크 속에서 특정 호스트의 트래픽 경로를 즉각 가시화.
+    - 선택 해제 시 전체 그래프가 부드럽게 기본 상태로 복귀.
 
 ---
 
@@ -128,12 +135,11 @@ flowchart TD
 
 ---
 
-### 📌 Milestone M5: 프론트엔드 빌드 검증, 테스트 갱신 및 원격 배포 실증
+### 📌 Milestone M5: 빌드 검증, 테스트 갱신 및 VM 실환경 원클릭 배포 실증
 - **작업 내용**:
-  - 프론트엔드 빌드(`npm run build`) 무결성 검증 (Vite 빌드 에러 및 경고 0건).
-  - UI 테스트 스위트(`ui/src/components/TopologyMap.test.js` 등) 갱신 및 로컬 회귀 테스트 298개 이상 All-Pass 유지.
-  - `./scripts/deploy_remote.sh 34.50.17.220`으로 VM에 원클릭 무중단 배포.
-  - 브라우저(`http://34.50.17.220/`)에서 실제 1600px 와이드 화면, 노드 계층화, 호버 딤 처리, 포트 카드 그리드의 가독성 검증.
+  - 로컬 Python 단위/통합 테스트 스위트 298개 100% All-Pass 검증.
+  - `./scripts/deploy_remote.sh 34.50.17.220` 실행을 통해 원격 Docker Multi-stage 빌드(`node:20-alpine`) 환경에서 Vite 빌드 에러/경고 0건 무결성 확인 및 무중단 배포.
+  - 브라우저(`http://34.50.17.220/`)에서 실제 1600px 와이드 화면, 5대 존 분할 배치, 호버 딤 처리, 포트 카드 그리드의 가독성 최종 실증.
 
 ---
 
