@@ -83,11 +83,14 @@ flowchart TD
 
 ## 3. 5단계 세부 구현 마일스톤 (Milestones M1 ~ M5)
 
-### 📌 Milestone M1: 런타임 격리 명세서(`.deployignore`) 정의
+### 📌 Milestone M1: 런타임 격리 명세서(`.deployignore`) 정의 및 빌드 컨텍스트 정제
 
 - **작업 내용**:
   - 프로젝트 루트에 배포 제외 패턴을 정의한 `.deployignore` 파일 생성.
   - rsync의 `--exclude-from` 옵션 및 tar의 `--exclude-vcs-ignores` 규격과 100% 호환되도록 정밀 작성.
+  - **사전 점검 조치 (Critical Edge Case 해소)**:
+    - `model/Dockerfile.ai` 24번 라인에 존재하는 무의미한 `COPY rules /workspace/rules` 제거.
+    - `rules/` 디렉토리는 AI 에이전트 마크다운 가이드로 파이썬 런타임과 무관하므로, 이를 제거하지 않고 `.deployignore`에서 `rules/`를 차단하면 VM 상의 `docker compose build` 시 `COPY failed: file not found in build context: rules` 오류가 발생함. 이를 M1 단계에서 원천 해결.
 - **주요 정의 규칙**:
   ```text
   # 1. 문서 및 기밀 지적 자산
@@ -130,14 +133,15 @@ flowchart TD
   - `--target <IP>`: 대상 VM 주소 지정 (기본값: `34.50.17.220`)
   - `--dest-dir <DIR>`: VM 상의 런타임 디렉토리 지정 (기본값: `~/sdn-tower-runtime`)
   - `--user <USER>`: SSH 접속 사용자 (기본값: `tlgus1841`)
+  - `--project-name <NAME>`: Docker Compose 프로젝트 이름 고정 (기본값: `sdn-tower`, 기존 컨테이너 이름 충돌 원천 방지)
   - `--no-build`: 컨테이너 재빌드 없이 소스만 동기화 및 재시작
   - `--dry-run`: 실제 전송 없이 전송 대상/제외 대상 파일 목록만 시뮬레이션 출력
   - `--check-only`: VM의 OVS 상태 및 Docker 헬스 상태만 원격 점검
 - **파이프라인 실행 시퀀스**:
   1. SSH 연결성 및 필수 도구(`rsync`, `docker`, `ovs-vsctl`) 사전 점검.
-  2. 로컬 `.deployignore`를 적용하여 런타임 파일만 VM의 `~/sdn-tower-runtime`으로 동기화.
-  3. VM 상의 OVS 8-스위치 토폴로지 기동 여부 확인 (미기동 시 안내 또는 자동 기동 옵션).
-  4. VM 런타임 디렉토리에서 `docker compose up -d --build` 무중단 롤링 재기동 수행.
+  2. 로컬 `.deployignore`를 적용하여 런타임 파일만 VM의 `~/sdn-tower-runtime`으로 증분 동기화 (`rsync -avz --delete`).
+  3. VM 상의 OVS 8-스위치 토폴로지 기동 여부 확인 (`ovs-vsctl show | grep -q s1`).
+  4. VM 런타임 디렉토리에서 `docker compose -p sdn-tower up -d --build --remove-orphans` 무중단 롤링 재기동 수행.
   5. 배포 완료 후 `http://<VM_IP>/api/health` 및 `http://<VM_IP>/api/topology` 실시간 헬스체크 검증.
 
 ---
