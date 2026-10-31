@@ -8,7 +8,7 @@
 ![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)
 ![OpenFlow](https://img.shields.io/badge/OpenFlow-1.3-orange)
 ![Redis](https://img.shields.io/badge/Redis-7.2-red?logo=redis)
-![Tests](https://img.shields.io/badge/Tests-289%20Passed%20(100%25)-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-298%20Passed%20(100%25)-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
@@ -41,8 +41,8 @@
 | **데이터 플레인 독립성** | **Mininet 100% 탈피** | 순수 커널 OVS 2.17 + Linux Network Namespace 기반 상용급 구축 |
 | **이상 탐지 확정 시간** | **1.7 ~ 2.5 초** | 1초 주기 실시간 카운트 집계 엔진 기준 |
 | **지원 공격 유형 분류** | **6종 정밀 분류** | SYN/UDP/ICMP Flood, Port Scan, Slow HTTP, 내부 확산 |
-| **테스트 슈트 통과율** | **289 / 289 (100% Pass)** | API, 하네스, 모델, 컨트롤러, 망분리, UI 전수 검증 |
-| **관제탑 웹 대시보드 성능** | **60 FPS 무지연 렌더링** | 5대 존 캔버스 클러스터링, 계층형 3단 뷰 토글, 실시간 ApexCharts |
+| **테스트 슈트 통과율** | **298 / 298 (100% Pass)** | API, 하네스, 모델, 컨트롤러, 망분리, UI 전수 검증 |
+| **관제탑 웹 대시보드 성능** | **60 FPS 무지연 렌더링** | 1600px 와이드스크린, 5대 존 핀 고정, 1-Hop Focus & Dimming, 텔레메트리 카드 그리드 |
 
 ---
 
@@ -53,10 +53,11 @@
 +-----------------------------------------------------------------------------------+
 |                        [Layer 4: 웹 관제탑 (Frontend)]                            |
 |  - React 18.3 (Vite) + Tailwind CSS + Lucide Icons + Nginx 1.25 Alpine            |
-|  - vis-network 9.1: 8-스위치 5-Zone 캔버스 클러스터링, 계층형 뷰 토글, 동적 L4 치료선  |
+|  - vis-network 9.1: 1600px 와이드스크린, 5-Zone 캔버스 클러스터링, 노드 핀 고정,      |
+|    1-Hop Focus & Dimming, 계층형 뷰 토글, 동적 L4 치료선                          |
 |  - ApexCharts 3.54: 실시간 BPP / PPS 시계열 차트 & 이상치 스코어 스트리밍          |
 |  - Event Timeline: 실시간 보안 알림 피드 & 비상 수동 격리/복원 제어 패널           |
-|  - PortStatsPanel: 5대 보안 존(Zone) 필터 탭 바 및 24+ 포트 실시간 관제            |
+|  - PortStatsPanel: 5대 보안 존 필터 탭, 반응형 6열 미니 텔레메트리 카드 그리드 & 상세 토글|
 +-----------------------------------------------------------------------------------+
                                         ▲ WebSocket (실시간 브로드캐스팅)
                                         ▼ REST API (비상 수동 제어 / Relearn 승인)
@@ -88,8 +89,7 @@
 +-----------------------------------------------------------------------------------+
 |                        [Layer 0: Data Plane (Native Linux OVS)]                   |
 |  - Enterprise 8-Switch 5-Zone Topology (S1~S8, Host 11대, 물리 패치서버 1대)        |
-|    (Core S1·S2, User S3·S4, Server S5·S6, Admin S7, Quarantine S8)               |
-|  - Legacy 4-Switch Diamond Topology (하위 호환 듀얼 모드 지원)                      |
+|    (Core S1·S2, User S3·S4, Server S5·S6, Admin S7, Quarantine S8) - 단일 표준망 전환|
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -129,7 +129,7 @@
 | 계층 | 컴포넌트 | 확정 버전 | 실행 환경 | 주요 역할 |
 |:---|:---|:---|:---|:---|
 | **OS** | **Ubuntu Linux** | **22.04 LTS** | Native / GCP VM | 시스템 기본 운영체제 |
-| **Data Plane** | **Open vSwitch (OVS)** | **2.17.x** | Host Native | OpenFlow 1.3 가상 스위칭 (8-Switch 5-Zone 및 4-Switch Dual Mode) |
+| **Data Plane** | **Open vSwitch (OVS)** | **2.17.x** | Host Native | OpenFlow 1.3 가상 스위칭 (엔터프라이즈 8-Switch 5-Zone 표준망) |
 | **Control Plane** | **Ryu Controller** | **4.34** | Docker (`python:3.8-slim`) | OpenFlow 1.3 제어, 4단 테이블 파이프라인 및 선제적 Dijkstra 우회 라우팅 |
 | **IPC Bus** | **Redis** | **7.2-alpine** | Docker 컨테이너 | Ryu-AI-FastAPI 간 4채널 고속 메시지 브로커 |
 | **AI / Model** | **Scikit-learn** | **1.3.2** | Docker (`python:3.10-slim`) | Isolation Forest 이상 탐지 및 Criteria 분류 엔진 |
@@ -176,9 +176,9 @@ Self_Defending_SDN_Tower/
 ├── pipeline/                              # 실시간 피처 추출기 및 CSV 로거
 ├── model/                                 # Isolation Forest 탐지 모델, Criteria 분류 엔진 (Dockerfile.ai)
 ├── traffic/                               # Scapy 정상/공격 트래픽 생성기 (flood, scan, slowhttp, spread)
-├── scripts/                               # Native OVS(setup_large_ovs.sh), 올인원 스택, VM 제어 스크립트
+├── scripts/                               # Native OVS(setup_large_ovs.sh), 원클릭 경량 배포(deploy_remote.sh), VM 제어 도구
 ├── archive/                               # 📦 Mininet 레거시 다이아몬드 토폴로지 보관소
-└── tests/                                 # 289개 단위/통합/벤치마크 테스트 스위트 (100% Pass)
+└── tests/                                 # 298개 단위/통합/벤치마크 테스트 스위트 (100% Pass)
 ```
 
 ---
@@ -193,15 +193,30 @@ Self_Defending_SDN_Tower/
 * ✅ **952k PPS 극한 스트레스 실증 보고서:** [`docs/verification/week16_stress_limit_test_report.md`](docs/verification/week16_stress_limit_test_report.md)
 * 📊 **발표 슬라이드 아웃라인 & 시연 런북:** [`docs/presentation/ppt_slide_deck_outline.md`](docs/presentation/ppt_slide_deck_outline.md)
 * 📋 **종합 로드맵 (ROADMAP):** [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md)
-* 🛡️ **소프트웨어 정의 동적 망 분리 상세 계획서 (Phase 6-B-2):** [`docs/planning/dynamic_segmentation_detailed_plan.md`](docs/planning/dynamic_segmentation_detailed_plan.md)
 * 🏢 **대규모 8-스위치 인프라 확장 계획서 (Phase 6-C):** [`docs/planning/phase_6c_detailed_plan.md`](docs/planning/phase_6c_detailed_plan.md)
 * 🎨 **웹 관제탑 UI 전면 개편 계획서 (Phase 6-C-2):** [`docs/planning/phase_6c_2_detailed_plan.md`](docs/planning/phase_6c_2_detailed_plan.md)
+* 🚀 **원클릭 경량 무중단 배포 파이프라인 계획서 (Phase 6-C-3):** [`docs/planning/phase_6c_3_detailed_plan.md`](docs/planning/phase_6c_3_detailed_plan.md)
+* ⚙️ **8-스위치 운영 안정화 및 도구 정규화 계획서 (Phase 6-C-4):** [`docs/planning/phase_6c_4_detailed_plan.md`](docs/planning/phase_6c_4_detailed_plan.md)
+* 🖥️ **웹 관제탑 가독성 & UI/UX 고도화 계획서 (Phase 6-C-5):** [`docs/planning/phase_6c_5_detailed_plan.md`](docs/planning/phase_6c_5_detailed_plan.md)
 
 ---
 
 ## 🚀 7. 빠른 시작 (Getting Started)
 
-### 7.1 [권장] 8-스위치 엔터프라이즈 프로덕션 원클릭 실행 (Phase 6-C 배포)
+### 7.1 [권장] 원격 클라우드 VM 원클릭 경량 배포 (Phase 6-C-3 & 6-C-5)
+로컬에서 개발 및 테스트를 완료한 자산을 GCP VM에 격리 필터(.deployignore)를 거쳐 **5초 만에 원클릭 무중단 배포**합니다.
+
+```bash
+# 원격 VM으로 경량 패키징 선별 동기화 ➔ 5대 컨테이너 자동 재빌드/기동 ➔ 헬스체크 검증
+./scripts/deploy_remote.sh <원격_VM_외부IP>
+
+# 실시간 관제 및 데모 시나리오 원격 실행
+./scripts/vm_demo_controller.sh status <원격_VM_외부IP>
+./scripts/vm_demo_controller.sh ping_start <원격_VM_외부IP>
+./scripts/vm_demo_controller.sh attack_syn <원격_VM_외부IP>
+```
+
+### 7.2 로컬 Native 8-스위치 프로덕션 실행
 Redis, Ryu 컨트롤러, FastAPI 백엔드, AI 워커, Nginx 프론트엔드까지 **단 한 번의 명령으로 전체 5대 컨테이너와 8-Switch 5-Zone 커널 OVS 토폴로지를 자동 기동**합니다.
 
 ```bash
@@ -225,13 +240,12 @@ docker compose down
 sudo ./scripts/cleanup_large_ovs.sh
 ```
 
-### 7.2 개발/로컬 개별 실행 모드
-
+### 7.3 개발 및 테스트 스위트 실행
 ```bash
 # Python 가상환경 및 의존성 동기화
 uv sync
 
-# 289개 전체 테스트 스위트 실행 (100% Pass)
+# 298개 전체 테스트 스위트 실행 (100% Pass)
 uv run pytest -v
 
 # 백엔드 개발 실행 (Mock 모드)
@@ -239,21 +253,6 @@ uv run uvicorn api.main:app --reload --port 8000
 
 # UI Vite 개발 서버 실행
 cd ui && npm run dev
-```
-
-### 7.3 [Phase 6-A] 4-스위치 다이아몬드 토폴로지 (레거시 하위 호환)
-```bash
-# 1. 4-스위치 다이아몬드 토폴로지 기동 (root 권한 필요)
-sudo ./scripts/setup_native_ovs.sh
-
-# 2. 정상 사용자 배경 Ping 실행 (손실률 관측)
-sudo ip netns exec ns_legit ping -i 0.5 10.0.0.4
-
-# 3. 원클릭 트래픽 주입 (SYN, Port Scan, UDP, ICMP, Slow HTTP, Lateral Spread 등)
-sudo ./scripts/native_attack.sh syn 10 500       # 10초간 500 PPS SYN Flood
-
-# 4. 토폴로지 클린업
-sudo ./scripts/teardown_native_ovs.sh
 ```
 
 ---
