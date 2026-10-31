@@ -73,7 +73,13 @@ export function toVisNode(n, isLarge = false) {
     title: `${n.label} · ${n.status}${n.ip ? ` · ${n.ip}` : ""}`,
     shape: isSwitch ? "box" : (isPatchServer ? "diamond" : "ellipse"),
     borderWidth: n.status === "ATTACKED" || isQuarantined ? 5 : (isCore ? 4 : 3),
-    shapeProperties: isSwitch ? { borderRadius: isCore ? 12 : 8 } : undefined,
+    shapeProperties: {
+      borderDashes: false,
+      borderRadius: isSwitch ? (isCore ? 12 : 8) : 6,
+      interpolation: false,
+      useImageSize: false,
+      useBorderImageSize: false,
+    },
     color: {
       background: isCore ? "#0f172a" : (isSwitch ? "#0b1329" : "#0f172a"),
       border: isPatchServer && !isQuarantined ? "#a855f7" : color,
@@ -165,6 +171,12 @@ function TopologyMap({ topology, ports }) {
         physics: false,
         interaction: { hover: true, tooltipDelay: 150, zoomView: true, dragView: true },
         edges: { smooth: false },
+        nodes: {
+          shapeProperties: {
+            borderDashes: false,
+            borderRadius: 6,
+          },
+        },
       },
     );
 
@@ -269,22 +281,20 @@ function TopologyMap({ topology, ports }) {
       const base = toVisNode(n, isLarge);
       if (connectedNodes.has(n.id)) {
         return {
-          id: n.id,
+          ...base,
           opacity: 1.0,
-          color: base.color,
-          font: base.font,
           borderWidth: n.id === selected ? base.borderWidth + 2 : base.borderWidth,
         };
       }
       return {
-        id: n.id,
+        ...base,
         opacity: 0.18,
         color: {
           background: "#070b14",
           border: "rgba(100,116,139,0.2)",
           highlight: { background: "#0f172a", border: "rgba(100,116,139,0.3)" },
         },
-        font: { color: "rgba(148,163,184,0.25)" },
+        font: { ...base.font, color: "rgba(148,163,184,0.25)" },
       };
     });
 
