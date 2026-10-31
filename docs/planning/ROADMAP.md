@@ -9,10 +9,11 @@
 ```
 +-----------------------------------------------------------------------------------+
 |                        [Layer 4: 웹 관제탑 (Frontend)]                            |
-|  - React 18.3 (Vite) + Tailwind CSS + Lucide Icons                                |
-|  - vis-network 9.1: 실시간 네트워크 토폴로지 (노드 상태, 링크 트래픽, 우회 활성화)   |
+|  - React 18.3 (Vite) + Tailwind CSS + Lucide Icons + Nginx 1.25 Alpine            |
+|  - vis-network 9.1: 8-스위치 5-Zone 캔버스 클러스터링, 계층형 뷰 토글, 동적 L4 치료선  |
 |  - ApexCharts 3.54: 실시간 BPP/PPS 시계열 차트 & 이상치 스코어                      |
 |  - Event Timeline: 실시간 보안 알림 & 비상 수동 격리/복원 제어 패널               |
+|  - PortStatsPanel: 5대 보안 존(Zone) 필터 탭 바 및 24+ 포트 실시간 관제            |
 +-----------------------------------------------------------------------------------+
                                         ▲ WebSocket (실시간 브로드캐스팅)
                                         ▼ REST API (관리자 수동 제어 / Relearn 승인)
@@ -34,33 +35,35 @@
                                         ▲ 텔레메트리 발행 / ▼ 플로우 제어 명령
 +-----------------------------------------------------------------------------------+
 |                        [Layer 1: SDN 컨트롤러 (Ryu 4.34)]                         |
-|  - Docker (Python 3.8 격리), OpenFlow 1.3 표준                                    |
-|  - NetworkX Dijkstra: S1-S2-S4(주 경로) ↔ S1-S3-S4(우회 경로) 선제적 프로비저닝   |
+|  - Docker (Python 3.8 격리), OpenFlow 1.3 표준 4-테이블 파이프라인                 |
+|    (Table 0: Counting ➔ Table 1: Policy ➔ Table 2: Police ➔ Table 3: Forwarding) |
+|  - NetworkX Dijkstra: Core S1-S2 백본 & 엣지 스위치 간 선제적 자율 우회 프로비저닝   |
 |  - FSM 상태머신: Normal → Under Attack → Mitigated → Restoring (플래핑 방지)      |
-|  - Circuit Breaker: AI 장애 시 컨트롤러 보호 및 안전 모드 전환                    |
+|  - Circuit Breaker & Whitelist Guard: AI 장애 보호 및 서버/관리망 영구 보호        |
 +-----------------------------------------------------------------------------------+
                                         ▲ OpenFlow 1.3
 +-----------------------------------------------------------------------------------+
-|                        [Layer 0: Data Plane (OVS 토폴로지)]                       |
-|  - 4-Switch Diamond Topology (S1: Ingress, S2: Primary, S3: Bypass, S4: Egress)   |
-|  - Host: H_legit (10.0.0.1), H_attacker (10.0.0.2), H_server (10.0.0.4)           |
+|                        [Layer 0: Data Plane (Native Linux OVS)]                   |
+|  - Enterprise 8-Switch 5-Zone Topology (S1~S8, Host 11대, 물리 패치서버 1대)        |
+|    (Core S1·S2, User S3·S4, Server S5·S6, Admin S7, Quarantine S8)               |
+|  - Legacy 4-Switch Diamond Topology (하위 호환 듀얼 모드 지원)                      |
 +-----------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. 개발 완료 성과 축약 요약 (Phase 1 ~ Phase 6-A 완결)
+## 2. 개발 완료 성과 축약 요약 (Phase 1 ~ Phase 6-C-2 완결)
 
-16주차에 걸쳐 구현 및 실환경(GCP VM)에서 검증 완료된 핵심 기능 요약입니다. (단위/통합 테스트 **267개 전원 통과**)
+17주차에 걸쳐 구현 및 실환경(GCP VM)에서 검증 완료된 핵심 기능 요약입니다. (단위/통합 테스트 **289개 전원 통과**)
 
 | 영역 | 개발 완료 항목 | 세부 구현 성과 (축약) | 상태 |
 | :--- | :--- | :--- | :---: |
 | **Native Data Plane<br>(Phase 6-A 완결)** | • Mininet 의존성 완전 제거<br>• 리눅스 커널 OVS 2.17 단독 구동<br>• Linux netns 4-스위치 토폴로지 | • 교육용 에뮬레이터 탈피, 순수 커널 OVS 및 `ip netns` 기반 프로덕션 환경 구축<br>• 왕복 지연시간(RTT) **평균 0.07 ms** 달성, 정상 트래픽 손실률 **0.0% (무유실)**<br>• 원클릭 토폴로지 기동/정리 스크립트(`setup_native_ovs.sh`, `teardown_native_ovs.sh`)<br>• 6종 트래픽 주입 및 VM 원격 제어 도구(`native_attack.sh`, `vm_demo_controller.sh`) 구축 | **완료**<br>(Verified) |
 | **All-in-One 배포<br>(Phase 6-B 완결)** | • 5대 서비스 단일 Compose 패키징<br>• 포트 80 Nginx 프로덕션 서빙<br>• tmux 완전 제거 및 원클릭 자율 복구 | • Redis, Ryu, FastAPI, AI Worker, UI Nginx 5개 서비스 단일 `docker-compose.yml` 오케스트레이션<br>• Vite Dev Server 탈피 ➔ Nginx 1.25 Alpine 리버스 프록시 및 React Multi-stage SPA 고속 정적 서빙<br>• 포트 80 단일 엔드포인트(/, /api/, /ws) 일원화 및 CORS 원천 제거 (포트 5173 하위 호환)<br>• `condition: service_healthy` 의존성 파이프라인 및 원클릭 런처(`prod_stack.sh`) 구축<br>• GCP 실환경 VM(`34.64.79.240`) 배포 및 500 PPS SYN 공격 자율 방어 E2E 실증 완료 | **완료**<br>(Verified) |
-| **Data Plane & 컨트롤러** | • 다이아몬드 토폴로지 구축<br>• 선제적 우회 라우팅<br>• FSM 플래핑 방지 | • S1-S2-S4(기본) 및 S1-S3-S4(우회) 엄격한 포트 핀 고정 구현<br>• Dijkstra 기반 선제적 `OFPFC_ADD` 경로 프로비저닝<br>• 차단 및 우회 전환 시간 **1.4 ~ 2.5 ms** 완료 달성<br>• 공격 중 정상 트래픽 손실 **0.0%** (무유실 라우팅) | **완료**<br>(Verified) |
-| **AI 탐지 & 분류 엔진** | • Isolation Forest 탐지<br>• 6종 공격 세분화 분류<br>• 1초 주기 실측 카운트<br>• 기준선 재학습 제어 | • 실제 OVS 패킷 크기(BPP) 및 증분(ΔPPS) 관측 신호 적용<br>• SYN/UDP/ICMP Flood, Port Scan, Slow HTTP, 내부 확산 정밀 분류<br>• 미완료 요청 추적(`unfinished_requests`)으로 Slow HTTP 탐지 시간 **7.7초** 단축<br>• 1초 단위 실시간 카운트 집계로 탐지 시간 대폭 단축 (1.7~2.5초)<br>• 관리자 승인 기반 EWMA 기준선 재학습(Relearn) 파이프라인 | **완료**<br>(Verified) |
-| **관제탑 웹 백엔드 & UI** | • 비동기 WebSocket Hub<br>• 실시간 토폴로지 시각화<br>• 비상 수동 제어 패널 | • FastAPI-Redis 비동기 브릿지 및 연결 풀 자동 관리<br>• vis-network 기반 실시간 스위치/호스트 상태 및 링크 우회 렌더링<br>• 비상 격리/복구 시 포커스 안정화 및 60초 보호 홀드 장치<br>• UI 렌더링 60 FPS 유지 및 이상 징후 실시간 알림 피드 | **완료**<br>(Verified) |
-| **안전성 & 극한 검증** | • 서킷 브레이커<br>• 화이트리스트 가드<br>• 952k PPS 극한 스트레스 | • AI 오작동/메시지 폭주 시 자동 차단하는 3단계 서킷 브레이커<br>• 트렁크 링크 보호 및 서버 IP 영구 보호 화이트리스트<br>• 초당 **95만 패킷(952k PPS)** 폭격 시 858만 개 완벽 차단 실증<br>• **267개 단위/통합 테스트 전수 통과 (100% Pass)** | **완료**<br>(Verified) |
+| **동적 제로트러스트 망 분리<br>(Phase 6-B-2 완결)** | • 4단 OpenFlow 파이프라인 개편<br>• 4-Zone 논리 망 모델 구축<br>• 침해 단말 단위 동적 격리 | • Table 0(카운트) ➔ Table 1(망정책/Source Guard) ➔ Table 2(미터링) ➔ Table 3(포워딩) 신설<br>• USER 간 직접 통신 차단 및 OS 백그라운드 브로드캐스트 Silent Drop<br>• 차단 통계 `ZONE_DENY` 신호화로 무증상 랜섬웨어 확산 조기 감지<br>• 감염 단말(MAC/IP) 단위 동적 격리망(`QUARANTINE`) 강등 및 최고 관리자 승인 해제 체계 | **완료**<br>(Verified) |
+| **8-스위치 엔터프라이즈 인프라<br>(Phase 6-C-1 완결)** | • 8-Switch 5-Zone 백본 확장<br>• 물리 격리 패치 서버 배포<br>• 다중 코어 자율 라우팅 | • 백본 S1·S2, 사용자 S3·S4, 서버 S5·S6, 관리 S7, 격리 S8 Native OVS 토폴로지 구축<br>• 격리망 전용 물리 패치 서버(`10.0.0.253:80`) 및 L4 치료 채널(`clean_agent.sh`) 배포<br>• 하드 화이트리스트 가드 및 프로브 핑(`10.0.0.240`) 격리 예외 보장<br>• 실환경 GCP VM(`34.50.17.220`) 배포 및 8개 스위치 실시간 연동 완료 | **완료**<br>(Verified) |
+| **웹 관제탑 UI 전면 개편<br>(Phase 6-C-2 완결)** | • 8-스위치 듀얼 모드 좌표 엔진<br>• 5대 존 캔버스 클러스터링 페인팅<br>• L4 안전 치료 채널 시각화 | • `topologyLayout.js` 티어드 좌표계 및 8SW/4SW 동적 자동 판별 엔진 구현<br>• vis-network 캔버스 배경 5대 보안 존 라운드 박스 및 헤더 클러스터링 렌더링<br>• 격리 단말 ➔ H_Patch 간 주황 점선 L4 치료 채널 동적 점등 애니메이션<br>• 다중 노드 고속 분석을 위한 계층형(Hierarchical 3단) 레이아웃 모드 토글<br>• PortStatsPanel 존 필터 탭 바 및 ManualControl 동적 타겟 화이트리스트 보호 가드 | **완료**<br>(Verified) |
+| **안전성 & 극한 검증** | • 서킷 브레이커<br>• 화이트리스트 가드<br>• 952k PPS 극한 스트레스 | • AI 오작동/메시지 폭주 시 자동 차단하는 3단계 서킷 브레이커<br>• 트렁크 링크 보호 및 서버 IP 영구 보호 화이트리스트<br>• 초당 **95만 패킷(952k PPS)** 폭격 시 858만 개 완벽 차단 실증<br>• **289개 단위/통합 테스트 전수 통과 (100% Pass)** | **완료**<br>(Verified) |
 
 ---
 
@@ -104,13 +107,13 @@
         └── [상세 실행 계획서](dynamic_segmentation_detailed_plan.md) 기준 5단계 마일스톤 전수 구현 및 E2E 실증 완료
 
 [2단계: 중기 과제 - 기술적 차별성 & 대규모 토폴로지 확장]
-  ├── [Phase 6-C-1] 대규모 토폴로지 확장 & 물리 관리망 컨테이너 정식 배포
-  │     ├── 스위치 8~10개, 가상 PC 10~15대 규모의 존(Zone) 기반 Native OVS 토폴로지 확장
+  ├── [Phase 6-C-1] 대규모 토폴로지 확장 & 물리 관리망 컨테이너 정식 배포 ── [완료 (Verified)]
+  │     ├── 스위치 8~10개, 가상 PC 10~15대 규모의 존(Zone) 기반 Native OVS 토폴로지 확장 완료
   │     │     (백본 S1·S2, 사용자망 S3·S4, 서버망 S5·S6, 관리망 S7, 격리망 S8)
-  │     ├── 관리망(ADMIN) 전용 물리/컨테이너 업데이트·패치 서버(10.0.0.253) 정식 배포
-  │     ├── 다중 인그레스 스위치 간 분산 망 분리 정책 동기화 검증
-  │     └── [상세 실행 계획서](phase_6c_detailed_plan.md) 기준 8-스위치 인프라 배포
-  ├── [Phase 6-C-2] 웹 관제탑 UI 전면 개편 & 존(Zone) 기반 대규모(8-스위치) 시각화
+  │     ├── 관리망(ADMIN) 전용 물리 패치 서버(10.0.0.253:80) 및 L4 치료 스크립트 배포 완료
+  │     ├── 다중 인그레스 스위치 간 분산 망 분리 정책 동기화 및 289개 테스트 통과
+  │     └── [상세 실행 계획서](phase_6c_detailed_plan.md) 기준 GCP VM(34.50.17.220) 배포 검증 완료
+  ├── [Phase 6-C-2] 웹 관제탑 UI 전면 개편 & 존(Zone) 기반 대규모(8-스위치) 시각화 ── [완료 (Verified)]
   │     ├── 8-스위치(S1~S8), 11-호스트(총 19개 노드) 대응 듀얼 모드 레이아웃 엔진 (`topologyLayout.js`)
   │     ├── vis-network 캔버스 `beforeDrawing` 훅을 통한 5대 보안 존 배경 틴트 클러스터링 페인팅
   │     │     (백본-Slate, 사용자망-Blue, 서버망-Emerald, 관리망-Purple, 격리망-Amber)
@@ -118,7 +121,14 @@
   │     ├── 다중 노드(20개 이상) 안정적 렌더링을 위한 계층형(Hierarchical 3단) 레이아웃 모드 토글
   │     ├── 24개 이상 포트 효율 관제를 위한 `PortStatsPanel` 존(Zone)별 필터 탭 바 구현
   │     ├── `ManualControl` 비상 제어 셀렉트박스 동적화 및 최고 관리망(h_admin, h_patch) 격리 보호 가드
-  │     └── [상세 실행 계획서](phase_6c_2_detailed_plan.md) 기준 5단계 마일스톤(M1~M5) 전수 구현
+  │     └── [상세 실행 계획서](phase_6c_2_detailed_plan.md) 기준 5단계 마일스톤(M1~M5) 전수 구현 및 VM 서빙 완료
+  ├── [Phase 6-C-3] 8-스위치 방어 체계 정밀 재측정 & 운영 안정화 ── [현재 진행 중]
+  │     ├── 트래픽 주입 도구 토폴로지 동기화 (`scripts/native_attack.sh`, `demo_scenario.sh` 8-스위치 지원)
+  │     ├── AI 기준선(Baseline) 포트 매핑 동기화 (`criteria_baseline.json` 8-스위치 액세스 포트 확장)
+  │     ├── 실환경(GCP VM) 6종 공격(SYN/UDP/ICMP Flood, Scan, Slow HTTP, Lateral Spread) 실측 재수행
+  │     ├── 방어 KPI 재측정: 탐지 지연 시간 ≤ 2초, 정상 트래픽 손실률 0.0%, L4 격리 패치 다운로드 검증
+  │     ├── OVS 다중 코어 백본(S1-S2) 자율 우회 무결성 실증 및 플로우 테이블 누수 방지
+  │     └── 방어 성능 벤치마크 리포트 및 학술 논문/보고서용 증적 데이터 갱신
   ├── [Phase 6-D] IPv6 Dual-Stack 지원 및 대규모 주소 스푸핑 방어
   │     ├── IPv4 / IPv6 듀얼 스택 지원 (ICMPv6 Neighbor Discovery / Proxy ND 파서 구현)
   │     ├── IPv6 초거대 주소 공간($2^{64}$개) 무작위 변조 공격 시 In_port 단일 룰 방어 실증
@@ -147,9 +157,9 @@
 | **Data Plane** | **Open vSwitch (OVS)** | **2.17.x** | Host OS Native | 고속 OpenFlow 1.3 데이터 플레인 |
 | **Control Plane** | **Ryu Controller** | **4.34** | Docker (`python:3.8-slim`) | OpenFlow 1.3 제어 및 자율 우회 라우팅 |
 | **IPC Bus** | **Redis** | **7.2-alpine** | Docker 컨테이너 | 고속 Pub/Sub 메시지 브로커 (포트 6379) |
-| **AI Engine** | **Scikit-learn / Criteria** | **1.3.2 / Py 3.10** | Host venv | 6종 공격 이상 탐지 및 실시간 분류 |
-| **Web Backend** | **FastAPI** | **0.109.2** | Host venv | 비동기 WebSocket Hub & REST API |
-| **Web Frontend** | **React / Tailwind** | **18.3 / 3.4** | Vite 번들러 | 실시간 관제탑 대시보드 UI |
+| **AI Engine** | **Scikit-learn / Criteria** | **1.3.2 / Py 3.10** | Docker (`sdn-ai-worker`) / Host venv | 6종 공격 이상 탐지 및 실시간 분류 |
+| **Web Backend** | **FastAPI** | **0.109.2** | Docker (`sdn-api:8000`) / Host venv | 비동기 WebSocket Hub & REST API |
+| **Web Frontend** | **React / Tailwind** | **18.3 / 3.4** | Docker (Nginx 1.25 Alpine, Port 80/5173) | 실시간 관제탑 대시보드 UI 프로덕션 서빙 |
 
 ---
 
@@ -161,9 +171,11 @@
 +----------------------------------------------------------------------------------------------------+
 | Phase 6-B-2: 동적 망 분리 (완료)               [  완료  ] (282개 테스트 100% Pass 실증 완료)      |
 +----------------------------------------------------------------------------------------------------+
-| Phase 6-C-1: 대규모 토폴로지 확장 & 물리 관리망 [ 3 ~ 4일 ] (존별 8-스위치 Native OVS & 패치서버)   |
+| Phase 6-C-1: 대규모 토폴로지 확장 & 물리 관리망 [  완료  ] (존별 8-스위치 Native OVS & 패치서버 VM 배포) |
 +----------------------------------------------------------------------------------------------------+
-| Phase 6-C-2: 웹 관제탑 UI 전면 개편             [ 2 ~ 3일 ] (존별 클러스터링 & 동적 맵 시각화 완성)  |
+| Phase 6-C-2: 웹 관제탑 UI 전면 개편             [  완료  ] (존별 클러스터링 & 동적 맵 시각화 완성)  |
++----------------------------------------------------------------------------------------------------+
+| Phase 6-C-3: 8-스위치 방어 체계 재측정 & 안정화 [ 1 ~ 2일 ] (트래픽 도구 정규화, 6종 공격 실측 재수행) |
 +----------------------------------------------------------------------------------------------------+
 | Phase 6-D: IPv6 듀얼스택 지원                  [ 1주 ] (학술/논문 추가 성과용 선택 과제)          |
 +----------------------------------------------------------------------------------------------------+
@@ -175,21 +187,26 @@
 
 ### 5.1 타임라인 상세 소요 분석
 
-1. **Phase 6-C-1 (8-스위치 인프라 확장 & 물리 패치서버 컨테이너 배포): 약 3 ~ 4일 소요**
-   * **1~2일차**: 토폴로지 설정 파일(`topology_profiles.yaml`) 분리 및 컨트롤러 로더 구현 (기존 4-스위치 테스트 100% 보호).
-   * **3~4일차**: Native OVS 8-스위치 배포 스크립트(`setup_large_ovs.sh`) 및 관리망 패치서버 Nginx 컨테이너 배포.
-   * *효과*: 실제 엔터프라이즈 존 분리 인프라 완비.
+1. **Phase 6-C-1 (8-스위치 인프라 확장 & 물리 패치서버 컨테이너 배포): 완료 (Verified)**
+   * 토폴로지 설정 파일(`topology_profiles.yaml`, `topology.yaml`) 및 컨트롤러 로더 구축 완료.
+   * Native OVS 8-스위치 배포 스크립트(`setup_large_ovs.sh`) 및 관리망 패치서버(`ns_patch: 10.0.0.253:80`) 기동.
+   * 실환경 GCP VM(`34.50.17.220`) 배포 및 8개 스위치·11개 호스트 제로트러스트 플로우 제어 검증 완료.
 
-2. **Phase 6-C-2 (웹 관제탑 UI 전면 개편 & 존 기반 8-스위치 시각화): 약 2 ~ 3일 소요**
-   * **1일차 (M1)**: `topologyLayout.js` 신설 (8-스위치/4-스위치 듀얼 모드 좌표 매트릭스 & 포트 동적 명명 규칙).
-   * **2일차 (M2~M3)**: `TopologyMap.jsx` 캔버스 존 배경 페인팅, L4 점선 격리 치료 채널 렌더링, 계층형 3단 뷰 토글.
-   * **3일차 (M4~M5)**: `PortStatsPanel` 존 탭 바, `ManualControl` 동적 호스트 바인딩 & 보호 가드, 단위 테스트(`TopologyMap.test.js`) 갱신.
-   * *효과*: 최종 데모 시연 및 영상/보고서에 들어갈 **가장 완성도 높은 "8-스위치 엔터프라이즈 보안 관제탑 비주얼"** 완성.
+2. **Phase 6-C-2 (웹 관제탑 UI 전면 개편 & 존 기반 8-스위치 시각화): 완료 (Verified)**
+   * `topologyLayout.js` 신설 (8-스위치/4-스위치 듀얼 모드 티어드 좌표 매트릭스 & 포트 동적 명명 규칙).
+   * `TopologyMap.jsx` 캔버스 5대 존 배경 클러스터링 페인팅, L4 주황 점선 치료 채널 동적 점등, 계층형 3단 뷰 토글.
+   * `PortStatsPanel` 존 탭 바, `ManualControl` 동적 호스트 바인딩 & 최고 관리망 보호 가드, 289개 테스트 통과.
+   * 실환경 VM 포트 80 프로덕션 서빙 검증 완료.
 
-3. **Phase 6-D (IPv6 Dual-Stack): 약 5일 소요**
+3. **Phase 6-C-3 (8-스위치 방어 체계 정밀 재측정 & 운영 안정화): 약 1 ~ 2일 소요 (진행 중)**
+   * **1일차**: 트래픽 주입 도구(`scripts/native_attack.sh`) 8-스위치 네임스페이스(`ns_h2`, `10.0.0.11`) 듀얼 모드 정규화, AI 기준선(`model/criteria_baseline.json`) 포트 매핑 확장, 6종 공격 실측 재수행.
+   * **2일차**: 방어 성능 지표(탐지 시간 $\le 2$초, 우회 전환 시간, 정상 트래픽 손실률 0.0%, L4 격리 패치 다운로드) 실측 및 벤치마크 리포트 갱신.
+   * *효과*: 8-스위치 엔터프라이즈 환경에서의 객관적인 방어 체계 성능 입증 및 논문/심사용 정량적 데이터 확보.
+
+4. **Phase 6-D (IPv6 Dual-Stack): 약 5일 소요**
    * Ryu 컨트롤러 내 IPv6 ICMPv6 ND(Neighbor Discovery) 파서 및 L4 플로우 테이블 확장.
    * *효과*: 기술적 깊이와 논문/특허 작성 시 이론적 차별점 확보.
 
-3. **Phase 6-E & 6-F (운영 안정화 & SFC 장기 과제)**
+5. **Phase 6-E & 6-F (운영 안정화 & SFC 장기 과제)**
    * 실제 심사 및 데모 이후 클라우드 상용화 단계에서 진행하는 장기 마일스톤.
 
