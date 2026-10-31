@@ -15,9 +15,13 @@
                   절반 이상이 실패(Jung 2004). 느린 스캔 = 긴 창(5분, Zeek)에 30개 이상이고 지금도 실패가
                   나오는 중(짧은 창에 1개 이상). 긴 창에는 정상 연결도 수백 개 섞이므로 비율은 보지 않는다.
                   UDP 스캔은 대상 서버가 ICMP 도달 불가를 처음 6개 뒤 초당 1개로 제한해서(리눅스 기본값)
-                  응답이 적으므로, 짧은 창에 도달 불가 4개 이상이면 따로 스캔으로 본다
+                  응답이 적으므로, 짧은 창에 도달 불가 4개 이상이면 따로 스캔으로 본다.
+                  망 정책이 입구에서 버리면 실패 응답이 없으므로, 서버 · DMZ의 허용 안 된 포트나 외부에서 막힌
+                  패킷(zone_deny_port_scan · zone_deny_external)이 짧은 창에 15개 이상이어도 스캔으로 본다
+                  (같은 PC가 UDP · ICMP Flood 크기로 보내는 중이면 Flood의 일부로 보고 스캔으로 세지 않는다)
     - 내부 확산 : 이 호스트가 ARP로 물어본 '없는 내부 주소'(컨트롤러가 셈)가 5분에 25개 이상이고 지금도 늘어나는 중
-                  (Zeek: 5분 안에 서로 다른 호스트 25개 연결 실패)
+                  (Zeek: 5분 안에 서로 다른 호스트 25개 연결 실패), 또는 옆 사용자 · 관리망으로 가려다 망 정책에
+                  막힌 패킷(zone_deny_internal)이 짧은 창에 10개 이상
 * 확정된 공격의 세기(값 / 판정선)가 M 이상이면 위험(DANGER, 격리 + 우회), 아니면 경고(WARNING, 속도 제한).
   세기가 M 미만이어도 서비스가 나빠졌으면(컨트롤러의 서비스 상태 확인 ping 손실·지연이 2회 연속 기준 이상) 위험.
 * 평소값: 미리 학습해 저장한 값(criteria_baseline.json)으로 시작하고, 정상일 때만 2초마다 EWMA로
@@ -104,7 +108,11 @@ class CriteriaConfig:
     relearn_memory_sec: float = 60.0
     # 내부 확산: 긴 창(5분)에 물어본 없는 내부 주소 수 (Zeek 25개)
     spread_min: float = 25.0
-    # 망 경계 위반(ZONE_DENY): 짧은 창(4초)에 차단된 패킷 수 (SMB 445 등 유니캐스트 침투)
+    # 망 경계 위반: 짧은 창(4초)에 망 정책(Table 1)이 버린 패킷 수. 컨트롤러가 무엇을 막았는지에 따라 셋으로 나눠 보낸다:
+    #   zone_deny_internal (옆 사용자 · 관리망으로 가려던 것)        → 내부 확산, zone_deny_min개 이상
+    #   zone_deny_port_scan (서버 · DMZ의 허용 안 된 포트)          → 포트 스캔, scan_min개 이상 (Zeek 15개)
+    #   zone_deny_external (외부에서 허용 안 된 곳으로 들어오려던 것) → 포트 스캔, scan_min개 이상
+    # 막힌 서버 포트 패킷은 같은 PC가 UDP · ICMP Flood 크기로 보내는 중이면 Flood의 일부로 본다 (무작위 포트 UDP Flood)
     zone_deny_min: float = 10.0
     # Slow HTTP: 한 PC의 느린 요청(20초) · 안 끝난 요청(5초) 연결 수 중 큰 쪽. 정상 측정에서는 둘 다 0개
     slow_http_min: float = 10.0
@@ -161,8 +169,8 @@ class _PortState:
     baselines: Dict[str, Baseline] = field(default_factory=dict)
     cusum: float = 0.0
     streaks: Dict[str, int] = field(default_factory=dict)
-    # (보고 시각, 실패 응답, 도달 불가, 연결 시도, 없는 내부 주소, zone_deny) — 보고 주기마다 개수
-    window: Deque[Tuple[float, float, float, float, float, float]] = field(default_factory=deque)
+    # (보고 시각, 실패 응답, 도달 불가, 연결 시도, 없는 내부 주소, 막힌 내부 확산, 막힌 서버 · 외부 접근) — 보고 주기마다 개수
+    window: Deque[Tuple[float, float, float, float, float, float, float]] = field(default_factory=deque)
     stage: RiskStage = RiskStage.NORMAL
     normal_for: float = 0.0  # 연속으로 정상이었던 시간(초)
     relearn_until: float = 0.0  # 관리자가 승인한 재학습이 끝나는 시각 (0 = 재학습 아님)
@@ -297,9 +305,11 @@ class CriteriaEngine:
         # 실패 응답은 이 PC가 보낸 연결 시도에 대한 답이어야 스캔이다: 한 주기에 보낸 시도의 2배까지만 센다.
         # (서버가 이 PC의 오래된 연결을 한꺼번에 끊으며 보낸 RST 묶음 같은 것은 스캔이 아니다)
         probes = (r.get("syn", 0.0) + r.get("udp", 0.0)) * dt
-        zone_deny_cnt = r.get("zone_deny", 0.0) * dt
+        # 망 정책이 버린 패킷 (zone_deny는 종류를 나누기 전의 이름, 옆 PC로 가려던 것과 같이 본다)
+        denied_internal = (r.get("zone_deny", 0.0) + r.get("zone_deny_internal", 0.0)) * dt
+        denied_probe = (r.get("zone_deny_port_scan", 0.0) + r.get("zone_deny_external", 0.0)) * dt
         st.window.append((now, min(r["fail"] * dt, 2 * probes), min(r.get("unreach_in", 0.0) * dt, 2 * probes),
-                          probes, r.get("arp_fail", 0.0) * dt, zone_deny_cnt))
+                          probes, r.get("arp_fail", 0.0) * dt, denied_internal, denied_probe))
         # 창은 시간으로 자른다 (보고 시각이 조금씩 흔들려도 같은 개수가 들어가게 반 주기 여유)
         while st.window and st.window[0][0] <= now - cfg.scan_long_window_sec + dt / 2:
             st.window.popleft()
@@ -307,7 +317,10 @@ class CriteriaEngine:
         fails = sum(w[1] for w in recent)
         fails_long = sum(w[1] for w in st.window)
         unreach = sum(w[2] for w in recent)
-        recent_zone_deny = sum(w[5] if len(w) > 5 else 0.0 for w in recent)
+        recent_denied_internal = sum(w[5] for w in recent)
+        recent_denied_probe = sum(w[6] for w in recent)
+        flood_sized = any(r.get(ind, 0.0) >= self.attack_line(key, ind) and r.get(ind, 0.0) > lines[ind]
+                          for ind in ("udp", "icmp"))
         scan = []
         if fails >= cfg.scan_min and fails >= cfg.scan_ratio * sum(w[3] for w in recent):
             scan.append(fails / cfg.scan_min)
@@ -315,6 +328,10 @@ class CriteriaEngine:
             scan.append(fails_long / cfg.scan_long_min)
         if unreach >= cfg.scan_unreach_min:
             scan.append(unreach / cfg.scan_unreach_min)
+        if recent_denied_probe:
+            reasons.append(f"blocked probes {recent_denied_probe:.0f}")
+        if recent_denied_probe >= cfg.scan_min and not flood_sized:
+            scan.append(recent_denied_probe / cfg.scan_min)
         if scan:
             candidates[ThreatType.PORT_SCAN.value] = max(scan)
         # 내부 확산:
@@ -324,9 +341,10 @@ class CriteriaEngine:
         spread_candidates = []
         if spread_arp >= cfg.spread_min and sum(w[4] for w in recent) > 0:
             spread_candidates.append(spread_arp / cfg.spread_min)
-        if recent_zone_deny >= cfg.zone_deny_min:
-            reasons.append(f"zone_deny {recent_zone_deny:.0f} >= {cfg.zone_deny_min:.0f}")
-            spread_candidates.append(recent_zone_deny / cfg.zone_deny_min)
+        if recent_denied_internal:
+            reasons.append(f"zone_deny {recent_denied_internal:.0f}")
+        if recent_denied_internal >= cfg.zone_deny_min:
+            spread_candidates.append(recent_denied_internal / cfg.zone_deny_min)
 
         if spread_candidates:
             candidates[ThreatType.INTERNAL_SPREAD.value] = max(spread_candidates)

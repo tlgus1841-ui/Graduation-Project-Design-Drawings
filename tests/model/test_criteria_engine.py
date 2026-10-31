@@ -11,7 +11,8 @@ from model.criteria_engine import (
     save_baselines,
 )
 
-KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in", "arp_fail", "zone_deny")
+KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in", "arp_fail", "zone_deny",
+         "zone_deny_internal", "zone_deny_port_scan", "zone_deny_external")
 PORT = (3, 2)
 CFG = CriteriaConfig()  # the measured numbers: floors, N = 10, attack floor 50/s, M = 5
 # A user making about one web request per second plus a little DNS and ping
@@ -258,6 +259,31 @@ def test_internal_spread_from_zone_deny():
     assert last_decision.stage == RiskStage.DANGER
     assert last_decision.threat_type == ThreatType.INTERNAL_SPREAD.value
     assert any("zone_deny" in r for r in last_decision.reasons)
+
+
+def test_blocked_lateral_attempts_are_internal_spread():
+    """The controller now names what Table 1 dropped; attempts towards other user PCs are spread."""
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, *[{**NORMAL, "syn": 4, "zone_deny_internal": 3}] * 3)  # 6 per report
+    # 6 in the first 4 s (WATCH), then 12 ≥ 10 twice in a row
+    assert stages(out)[1:] == [(RiskStage.WATCH, None), (RiskStage.WATCH, None),
+                               (RiskStage.WARNING, ThreatType.INTERNAL_SPREAD.value)]
+
+
+@pytest.mark.parametrize("kind", ["zone_deny_port_scan", "zone_deny_external"])
+def test_blocked_server_or_external_probes_are_a_scan(kind):
+    """Dropped at the entrance there are no RSTs to count, so the blocked probes themselves are the scan."""
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, *[{**NORMAL, "syn": 10, kind: 10}] * 2)  # 40 in 4 s ≥ 15
+    assert stages(out)[-1] == (RiskStage.WARNING, ThreatType.PORT_SCAN.value)
+    assert any("blocked probes" in r for r in out[-1][0].reasons)
+
+
+def test_udp_flood_to_random_blocked_ports_stays_a_flood():
+    """A UDP flood to random server ports is mostly dropped by Table 1; it is still a flood, not a scan."""
+    engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
+    out = run(engine, c, NORMAL, *[{**NORMAL, "udp": 500, "zone_deny_port_scan": 499}] * 2)
+    assert stages(out)[-1] == (RiskStage.DANGER, ThreatType.UDP_FLOOD.value)
 
 
 def test_a_few_missing_hosts_is_not_spread():
