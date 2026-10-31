@@ -122,11 +122,12 @@
   │     ├── 24개 이상 포트 효율 관제를 위한 `PortStatsPanel` 존(Zone)별 필터 탭 바 구현
   │     ├── `ManualControl` 비상 제어 셀렉트박스 동적화 및 최고 관리망(h_admin, h_patch) 격리 보호 가드
   │     └── [상세 실행 계획서](phase_6c_2_detailed_plan.md) 기준 5단계 마일스톤(M1~M5) 전수 구현 및 VM 서빙 완료
-  ├── [Phase 6-C-3] 경량 런타임 아티팩트 분리 및 원클릭 배포 파이프라인 구축 (방안 1) ── [현재 진행 중]
+  ├── [Phase 6-C-3] 경량 런타임 아티팩트 분리 및 원클릭 배포 파이프라인 구축 (방안 1) ── [완료 (Verified)]
   │     ├── 문서(`docs/`), 테스트(`tests/`), 개발 설정(`rules/`, `.cursorrules`)을 런타임 VM과 물리적으로 격리
   │     ├── `.deployignore` 기반 런타임 필수 바이너리/소스 선별 패키징 동기화 스크립트 (`scripts/deploy_remote.sh`)
   │     ├── VM 작업 폴더 Git 의존성 제거: 런타임 디렉토리(`/home/tlgus1841/sdn-tower-runtime`) 단독 패키징 및 Git 충돌 원천 차단
-  │     └── 무중단 컨테이너 재빌드/재기동 및 원격 헬스체크(`http://34.50.17.220/api/health`) 자동화
+  │     ├── 무중단 컨테이너 재빌드/재기동 및 원격 헬스체크(`http://34.50.17.220/api/health`) 자동화 검증
+  │     └── 기존 VM 작업 디렉토리(`~/sdn-tower`) 안전 스냅샷 보관 정책 적용 완료 (DoD 6개 전수 충족)
   ├── [Phase 6-C-4] 8-스위치 엔터프라이즈 환경 운영 안정화 및 도구 정규화 ── [대기 중]
   │     ├── 트래픽 주입 도구 듀얼 모드 정규화 (`scripts/native_attack.sh`, `demo_scenario.sh` 8-스위치 지원)
   │     ├── AI 기준선(Baseline) 포트 매핑 동기화 (`criteria_baseline.json` 8-스위치 액세스 포트 확장)
