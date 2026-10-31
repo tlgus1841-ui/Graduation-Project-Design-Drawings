@@ -69,6 +69,8 @@ export function toVisNode(n, isLarge = false) {
     id: n.id,
     x,
     y,
+    fixed: { x: true, y: true },
+    physics: false,
     label,
     title: `${n.label} · ${n.status}${n.ip ? ` · ${n.ip}` : ""}`,
     shape: isSwitch ? "box" : (isPatchServer ? "diamond" : "ellipse"),
@@ -168,10 +170,20 @@ function TopologyMap({ topology, ports }) {
       containerRef.current,
       { nodes: nodesRef.current, edges: edgesRef.current },
       {
-        physics: false,
-        interaction: { hover: true, tooltipDelay: 150, zoomView: true, dragView: true },
+        physics: {
+          enabled: false,
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 150,
+          zoomView: true,
+          dragView: true,
+          dragNodes: false, // Node drag locked to preserve 5-Zone layout
+        },
         edges: { smooth: false },
         nodes: {
+          physics: false,
+          fixed: { x: true, y: true },
           shapeProperties: {
             borderDashes: false,
             borderRadius: 6,
@@ -243,19 +255,16 @@ function TopologyMap({ topology, ports }) {
   useEffect(() => {
     currentNodesRef.current = topology.nodes;
     const isLarge = isLargeTopology(topology.nodes);
-    const hadNodes = nodesRef.current.length > 0;
+    const isFirstLoad = nodesRef.current.length === 0;
 
     const visNodes = topology.nodes.map((n) => toVisNode(n, isLarge));
-    syncDataSet(
-      nodesRef.current,
-      hadNodes && layoutModeRef.current === "cluster"
-        ? visNodes.map(({ x, y, ...rest }) => rest)
-        : visNodes,
-    );
+    syncDataSet(nodesRef.current, visNodes);
 
     const allLinks = getAugmentedLinks(topology);
     syncDataSet(edgesRef.current, allLinks.map(toVisEdge));
-    if (!hadNodes && visNodes.length) networkRef.current?.fit();
+    if (isFirstLoad && visNodes.length) {
+      setTimeout(() => networkRef.current?.fit(), 100);
+    }
   }, [topology]);
 
   // Reactive Focus & Dimming when a node is selected/deselected
@@ -337,11 +346,21 @@ function TopologyMap({ topology, ports }) {
           },
         },
         physics: {
+          enabled: true,
           hierarchicalRepulsion: {
             nodeDistance: 160,
           },
         },
+        interaction: {
+          dragNodes: true,
+        },
       });
+      const updates = topology.nodes.map((n) => ({
+        id: n.id,
+        fixed: { x: false, y: false },
+        physics: true,
+      }));
+      nodesRef.current.update(updates);
     } else {
       networkRef.current.setOptions({
         layout: {
@@ -349,13 +368,24 @@ function TopologyMap({ topology, ports }) {
             enabled: false,
           },
         },
-        physics: false,
+        physics: {
+          enabled: false,
+        },
+        interaction: {
+          dragNodes: false,
+        },
       });
-      // Restore seed positions
+      // Restore seed positions and lock them
       const isLarge = isLargeTopology(topology.nodes);
       const updates = topology.nodes.map((n) => {
         const [x, y] = getSeedCoordinates(n.id, isLarge);
-        return { id: n.id, x, y };
+        return {
+          id: n.id,
+          x,
+          y,
+          fixed: { x: true, y: true },
+          physics: false,
+        };
       });
       nodesRef.current.update(updates);
       networkRef.current.fit();
@@ -375,7 +405,7 @@ function TopologyMap({ topology, ports }) {
   return (
     <Panel
       title="Topology Map"
-      subtitle="엔터프라이즈 8-스위치 5-Zone 망 구조 · 노드 선택 시 연관 경로 포커스"
+      subtitle="엔터프라이즈 8-스위치 5-Zone 망 구조 · 캔버스 드래그로 화면 이동 · 노드 클릭 시 연관 경로 포커스"
       className="h-[580px]"
       headerAction={
         <div className="flex items-center gap-2">
@@ -390,6 +420,14 @@ function TopologyMap({ topology, ports }) {
             </button>
           )}
           <div className="flex items-center gap-1 rounded-md bg-slate-800/80 p-0.5 border border-slate-700">
+            <button
+              type="button"
+              onClick={() => networkRef.current?.fit()}
+              className="rounded px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+              title="캔버스 화면 중앙 맞춤"
+            >
+              화면 맞춤
+            </button>
             <button
               type="button"
               onClick={() => handleLayoutModeChange("cluster")}
