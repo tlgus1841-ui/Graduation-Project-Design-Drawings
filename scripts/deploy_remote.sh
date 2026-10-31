@@ -49,13 +49,13 @@ print_usage() {
   echo -e "  --no-build                 컨테이너 이미지 재빌드를 건너뛰고 컨테이너만 재기동"
   echo -e "  --dry-run                  실제 전송 없이 배포 대상/제외 파일 목록 및 번들 크기만 시뮬레이션"
   echo -e "  --check-only               배포 없이 원격 VM의 OVS 및 Docker 서비스 상태만 점검"
-  echo -e "  --restart-ovs              배포 시 원격 OVS 8-스위치 토폴로지도 재설정"
+  echo -e "  --restart-ovs              배포 시 원격 OVS 10-스위치 토폴로지도 재설정"
   echo -e "  --help, -h                 도움말 출력\n"
   echo -e "${BOLD}예시:${NC}"
-  echo -e "  $0                                   # 기본 VM(${DEFAULT_TARGET})으로 원클릭 배포"
+  echo -e "  $0                                   # 기본 VM으로 원클릭 배포"
   echo -e "  $0 --dry-run                         # 전송 대상 파일 격리 시뮬레이션"
   echo -e "  $0 --check-only                      # 원격 VM 상태 진단"
-  echo -e "  $0 34.50.17.220 --no-build           # 소스 코드만 초고속 갱신 후 재기동"
+  echo -e "  $0 <VM_IP> --no-build                # 소스 코드만 초고속 갱신 후 재기동"
 }
 
 # 인자 파싱
@@ -227,10 +227,10 @@ echo -e "\n${BOLD}[3/5] 원격 OVS 토폴로지 및 네트워크 네임스페이
 
 OVS_STATUS=$(run_ssh "sudo ovs-vsctl show | grep -c 'Bridge s1'" 2>/dev/null || echo "0")
 if [[ "${OVS_STATUS}" -eq 0 || "${RESTART_OVS}" == true ]]; then
-  echo -e "${YELLOW}  - OVS 8-스위치 토폴로지가 미기동 상태이거나 재설정이 요청되었습니다. setup_large_ovs.sh 실행 중...${NC}"
+  echo -e "${YELLOW}  - OVS 10-스위치 토폴로지가 미기동 상태이거나 재설정이 요청되었습니다. setup_large_ovs.sh 실행 중...${NC}"
   run_ssh "cd ${DEST_DIR} && sudo bash scripts/setup_large_ovs.sh"
 else
-  echo -e "${GREEN}  - Native OVS 8-스위치(s1~s8) 및 5-Zone 네임스페이스 정상 유지 중 (커널 자원 보존)${NC}"
+  echo -e "${GREEN}  - Native OVS 10-스위치(s1~s10) 및 6-Zone 네임스페이스 정상 유지 중 (커널 자원 보존)${NC}"
 fi
 
 # ------------------------------------------------------------------------------
@@ -245,6 +245,9 @@ if [[ "${NO_BUILD}" == true ]]; then
 fi
 
 run_ssh "cd ${DEST_DIR} && docker compose -p ${PROJECT_NAME} up -d ${BUILD_ARG} --remove-orphans"
+if [[ "${NO_BUILD}" == true ]]; then
+  run_ssh "cd ${DEST_DIR} && docker compose -p ${PROJECT_NAME} restart ryu-controller control-api ai-worker"
+fi
 echo -e "${GREEN}  - 컨테이너 서비스 기동 완료!${NC}"
 
 # ------------------------------------------------------------------------------

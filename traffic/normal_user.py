@@ -125,7 +125,7 @@ def run(server: str, duration: float, ping_interval: float, web_mean: float, dns
 
 def main() -> None:
     p = argparse.ArgumentParser(description="정상 사용자 시나리오 5종 생성기")
-    p.add_argument("--server", default="10.0.0.4")
+    p.add_argument("--server", default="10.0.0.11")
     p.add_argument("--duration", type=float, default=600)
     p.add_argument("--ping-interval", type=float, default=0.05, help="0이면 ping 없음")
     p.add_argument("--web-mean", type=float, default=1.0, help="웹 요청 평균 간격(초)")

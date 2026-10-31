@@ -25,7 +25,7 @@
 ## 2. 시연 전 준비 (발표 30분 전)
 
 ### 2.1 [권장] 올인원 프로덕션 원클릭 가동 (Phase 6-B All-in-One)
-로컬 또는 원격 VM(`34.64.79.240`)에서 명령어 한 줄로 5대 컨테이너 및 Native OVS 토폴로지를 일괄 가동합니다:
+로컬 또는 원격 VM(`http://<GCP_VM_IP>`)에서 명령어 한 줄로 5대 컨테이너 및 Native OVS 토폴로지를 일괄 가동합니다:
 
 ```bash
 # 로컬 시연 시 (전체 스택 + Native OVS 4-스위치 + 백그라운드 핑 자동 기동)
@@ -36,14 +36,14 @@
 # 원격 클라우드 VM 시연 시 (노트북에서 원클릭 원격 제어)
 ./scripts/vm_demo_controller.sh restart-all
 ./scripts/vm_demo_controller.sh status
-# → 브라우저 접속: http://34.64.79.240 (표준 포트 80)
+# → 브라우저 접속: http://<GCP_VM_IP> (표준 포트 80)
 ```
 
 | # | 확인 항목 | 정상 상태 기준 |
 |:---:|:---|:---|
 | 1 | All-in-One 도커 서비스 (5개) | `redis-broker`, `ryu-controller`, `control-api`, `ai-worker`, `control-ui` 전원 `Up (healthy)` |
 | 2 | Native OVS 브릿지 (4개) | `s1~s4` 컨트롤러 `tcp:127.0.0.1:6653` 연결 (`is_connected: true`) |
-| 3 | 관제탑 웹 대시보드 (Port 80) | 브라우저 `http://localhost` (또는 `http://34.64.79.240`) 배지 `WS CONNECTED` · `LIVE` 확인 |
+| 3 | 관제탑 웹 대시보드 (Port 80) | 브라우저 `http://localhost` (또는 `http://<GCP_VM_IP>`) 배지 `WS CONNECTED` · `LIVE` 확인 |
 | 4 | 정상 ping 지속성 | `tail -f /tmp/h_legit_ping.log` 에서 `0.07 ms` 무유실 핑 관측 |
 | 5 | 백업 영상 대기 | 만약의 장애를 대비하여 바탕화면에 무편집 시연 영상 준비 |
 

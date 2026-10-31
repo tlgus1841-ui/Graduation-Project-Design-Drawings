@@ -203,4 +203,7 @@ def test_anomaly_alert_threat_type_branching():
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, flood_alert.model_dump_json())
     controller.quarantine_host.assert_not_called()
     controller.isolate_port.assert_called_once_with(3, 2, priority=100)
-    controller.reroute_traffic.assert_called_once_with(source_dpid=3, target_dpid=5, dst_ip="10.0.0.11")
+    expected_target_dpid = controller.arp_table.get("10.0.0.11", {}).get("dpid", 10)
+    controller.reroute_traffic.assert_called_once_with(
+        source_dpid=3, target_dpid=expected_target_dpid, dst_ip="10.0.0.11"
+    )

@@ -230,7 +230,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         self.whitelist_guard = WhitelistGuard(
             trunk_ports=self.profile.get("trunk_ports"),
             access_ports=self.profile.get("access_ports"),
-            protected_ips=set(self.profile.get("protected_ips", ["10.0.0.1", "10.0.0.4"])),
+            protected_ips=set(self.profile.get("protected_ips", ["10.0.0.11", "10.0.0.21"])),
             protected_access_ports=self.profile.get("protected_access_ports"),
         )
         self.reroute_engine = RerouteEngine(profile=self.profile)
@@ -272,7 +272,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         """zones.yaml 설정 안전 로드 (로컬 개발 환경 및 컨테이너 환경 호환)"""
         default_cfg = {
             "silent_drop_udp_ports": [137, 138, 139, 1900, 5353, 5355],
-            "hard_whitelist": {"probe_ip": "10.0.0.240", "protected_ips": ["10.0.0.4", "10.0.0.254"]},
+            "hard_whitelist": {"probe_ip": "10.0.0.240", "protected_ips": ["10.0.0.11", "10.0.0.254"]},
         }
         try:
             import yaml
@@ -313,6 +313,14 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             self.logger.info(
                 f"[Redis] Connected to {self.redis_host}:{self.redis_port}"
             )
+            # Redis에 영속화된 격리 호스트 목록 복원
+            try:
+                saved_quarantined = self.redis_client.smembers("sdn:quarantined_hosts")
+                if saved_quarantined:
+                    self.quarantined_hosts.update(saved_quarantined)
+                    self.logger.info(f"[Redis] Restored quarantined hosts: {self.quarantined_hosts}")
+            except Exception as q_err:
+                self.logger.warning(f"[Redis] Quarantine state load error: {q_err}")
         except Exception as e:
             self.logger.warning(
                 f"[Redis] Connection failed: {e}. Will retry on next cycle."
@@ -400,7 +408,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             return
         parser = datapath.ofproto_parser
         actions = [parser.OFPActionOutput(out_port)]
-        self.add_flow(datapath, priority=10, match=parser.OFPMatch(eth_type=0x0800, ipv4_dst=SERVICE_PROBE_IP),
+        self.add_flow(datapath, priority=10, match=parser.OFPMatch(eth_type=0x0800, ip_proto=1, ipv4_dst=SERVICE_PROBE_IP),
                       actions=actions, idle_timeout=60)
         datapath.send_msg(parser.OFPPacketOut(datapath=datapath, buffer_id=datapath.ofproto.OFP_NO_BUFFER,
                                               in_port=in_port, actions=actions, data=data))
@@ -602,35 +610,73 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 continue
             h_port = host_info["port"]
             h_mac = host_info["mac"]
-            h_zone = host_info.get("zone", "SERVER" if ip == "10.0.0.4" else "USER")
+            h_zone = host_info.get("zone", "USER")
 
-            if h_zone == "SERVER" or ip in ("10.0.0.4", "10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"):
-                # SERVER 호스트: 역방향 응답 허용 (Pri 100)
-                # Web reply (TCP src 80)
+            # [Zero-Trust 격리 영속성] 스위치 재연결 시 격리 상태인 호스트는 정상 규칙 대신 격리 규칙 주입
+            if ip in self.quarantined_hosts or h_zone == "QUARANTINE":
+                # QUARANTINE 호스트 (침해 호스트 또는 h_sink):
+                # Pri 300: 관리 포털 (10.0.0.254:443, 53) 및 보안 패치 서버 (10.0.0.253:80) 허용
                 self.add_flow(
-                    datapath, priority=100,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=80),
+                    datapath, priority=300,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=6, tcp_dst=443),
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
-                # API reply (TCP src 8080)
                 self.add_flow(
-                    datapath, priority=100,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=8080),
+                    datapath, priority=300,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=17, udp_dst=53),
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
-                # DB reply (TCP src 3306)
+                if "10.0.0.253" in self.arp_table:
+                    self.add_flow(
+                        datapath, priority=300,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.253", ip_proto=6, tcp_dst=80),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
+                # Pri 0: 격리 호스트의 미인가 시도 Drop -> ZONE_DENY_INTERNAL 카운트
+                self.add_flow(
+                    datapath, priority=0,
+                    match=parser.OFPMatch(in_port=h_port),
+                    actions=[], table_id=TABLE_POLICY,
+                    cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY_INTERNAL.value),
+                )
+                continue
+
+            if h_zone in ("SERVER", "DMZ"):
+                # SERVER / DMZ 호스트: 사용자 대역(10.0.0.0/24) 및 외부 대역(192.168.100.0/24) 향 역방향 응답만 허용 (Pri 100)
+                # Web reply (TCP src 80) -> USER / EXTERNAL
                 self.add_flow(
                     datapath, priority=100,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=3306),
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.0/24", ip_proto=6, tcp_src=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="192.168.100.0/24", ip_proto=6, tcp_src=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # API / WAS reply (TCP src 8080)
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.0/24", ip_proto=6, tcp_src=8080),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # DB reply (TCP src 3306) -> 내부 대역만 허용
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.0/24", ip_proto=6, tcp_src=3306),
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
                 # DNS reply (UDP src 53)
                 self.add_flow(
                     datapath, priority=100,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=17, udp_src=53),
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.0/24", ip_proto=17, udp_src=53),
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
@@ -640,6 +686,34 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=1, icmpv4_type=0),
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # Pri 0: Table-Miss per SERVER/DMZ -> DROP & Count ZONE_DENY_PORT_SCAN
+                self.add_flow(
+                    datapath, priority=0,
+                    match=parser.OFPMatch(in_port=h_port),
+                    actions=[], table_id=TABLE_POLICY,
+                    cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY_PORT_SCAN.value),
+                )
+            elif h_zone == "EXTERNAL":
+                # EXTERNAL 호스트 (S9: ext_h1): DMZ 공개 서비스(10.0.0.11:80, 10.0.0.12:8080)만 허용 (Pri 200)
+                self.add_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.11", ip_proto=6, tcp_dst=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                self.add_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.12", ip_proto=6, tcp_dst=8080),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # Pri 0: Table-Miss per EXTERNAL -> DROP & Count ZONE_DENY_EXTERNAL
+                self.add_flow(
+                    datapath, priority=0,
+                    match=parser.OFPMatch(in_port=h_port),
+                    actions=[], table_id=TABLE_POLICY,
+                    cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY_EXTERNAL.value),
                 )
             elif h_zone == "ADMIN":
                 # ADMIN 호스트 (H_Admin / H_Patch): 관리 서비스 응답 허용
@@ -661,36 +735,34 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
-            elif h_zone == "QUARANTINE":
-                # QUARANTINE 호스트 (h_sink 및 정적 격리망):
-                # Pri 300: 관리 포털 (10.0.0.254:443, 53) 및 보안 패치 서버 (10.0.0.253:80) 허용
                 self.add_flow(
-                    datapath, priority=300,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=6, tcp_dst=443),
+                    datapath, priority=0,
+                    match=parser.OFPMatch(in_port=h_port),
                     actions=[], table_id=TABLE_POLICY,
-                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY_INTERNAL.value),
                 )
-                self.add_flow(
-                    datapath, priority=300,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=17, udp_dst=53),
-                    actions=[], table_id=TABLE_POLICY,
-                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-                )
-                if "10.0.0.253" in self.arp_table:
-                    self.add_flow(
-                        datapath, priority=300,
-                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.253", ip_proto=6, tcp_dst=80),
-                        actions=[], table_id=TABLE_POLICY,
-                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-                    )
             else:
-                # USER 호스트: SERVER 향 허용 규칙 (Pri 200)
+                # USER 호스트: DMZ 웹/WAS 및 내부 서버 허용 규칙 (Pri 200)
                 target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"]
                 for s_ip in target_servers:
                     # Web request (TCP dst 80)
                     self.add_flow(
                         datapath, priority=200,
                         match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=80),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
+                    # WAS request (TCP dst 8080)
+                    self.add_flow(
+                        datapath, priority=200,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=8080),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
+                    # DB request (TCP dst 3306)
+                    self.add_flow(
+                        datapath, priority=200,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=3306),
                         actions=[], table_id=TABLE_POLICY,
                         instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                     )
@@ -716,13 +788,13 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                         instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                     )
 
-            # 6. Pri 0: Table-Miss per Access Port -> DROP & Count ZONE_DENY
-            self.add_flow(
-                datapath, priority=0,
-                match=parser.OFPMatch(in_port=h_port),
-                actions=[], table_id=TABLE_POLICY,
-                cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY.value),
-            )
+                # Pri 0: Table-Miss per USER -> 다른 USER나 ADMIN으로의 비인가 접근 (내부 확산 차단)
+                self.add_flow(
+                    datapath, priority=0,
+                    match=parser.OFPMatch(in_port=h_port),
+                    actions=[], table_id=TABLE_POLICY,
+                    cookie=count_cookie(dpid, h_port, CountKind.ZONE_DENY_INTERNAL.value),
+                )
 
     def quarantine_host(
         self,
@@ -736,7 +808,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             return False
 
         # 하드 화이트리스트 보호 (서버 및 프로브 핑, 관리 서버는 절대 격리 불가)
-        protected = {"10.0.0.4", "10.0.0.250", "10.0.0.254", "10.0.0.253", "10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"} | set(self.whitelist_guard.protected_ips)
+        protected = {"10.0.0.240", "10.0.0.250", "10.0.0.254", "10.0.0.253", "10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"} | set(self.whitelist_guard.protected_ips)
         if target_ip in protected:
             self.logger.error(f"[Quarantine] Refusing to quarantine protected target: {target_ip}")
             return False
@@ -755,6 +827,11 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         if not datapath:
             self.logger.warning(f"[Quarantine] Datapath S{dpid} not connected")
             self.quarantined_hosts.add(target_ip)
+            if self.redis_client:
+                try:
+                    self.redis_client.sadd("sdn:quarantined_hosts", target_ip)
+                except Exception as e:
+                    self.logger.warning(f"[Redis] Quarantine persist error: {e}")
             return True
 
         parser = datapath.ofproto_parser
@@ -765,6 +842,16 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             self.delete_flow(
                 datapath, priority=200,
                 match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=80),
+                table_id=TABLE_POLICY,
+            )
+            self.delete_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=8080),
+                table_id=TABLE_POLICY,
+            )
+            self.delete_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=3306),
                 table_id=TABLE_POLICY,
             )
             self.delete_flow(
@@ -802,6 +889,11 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             )
 
         self.quarantined_hosts.add(target_ip)
+        if self.redis_client:
+            try:
+                self.redis_client.sadd("sdn:quarantined_hosts", target_ip)
+            except Exception as e:
+                self.logger.warning(f"[Redis] Quarantine persist error: {e}")
         self.logger.info(f"[Quarantine] Host {target_ip} (MAC: {target_mac}) QUARANTINED on S{dpid}:P{port}")
         return True
 
@@ -828,6 +920,11 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         datapath = self.datapaths.get(dpid)
         if not datapath:
             self.quarantined_hosts.discard(target_ip)
+            if self.redis_client:
+                try:
+                    self.redis_client.srem("sdn:quarantined_hosts", target_ip)
+                except Exception as e:
+                    self.logger.warning(f"[Redis] Quarantine srem error: {e}")
             return True
 
         parser = datapath.ofproto_parser
@@ -861,6 +958,18 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             )
             self.add_flow(
                 datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=8080),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+            self.add_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=3306),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+            self.add_flow(
+                datapath, priority=200,
                 match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=17, udp_dst=53),
                 actions=[], table_id=TABLE_POLICY,
                 instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
@@ -879,6 +988,11 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             )
 
         self.quarantined_hosts.discard(target_ip)
+        if self.redis_client:
+            try:
+                self.redis_client.srem("sdn:quarantined_hosts", target_ip)
+            except Exception as e:
+                self.logger.warning(f"[Redis] Quarantine srem error: {e}")
         self.logger.info(f"[Release] Host {target_ip} (MAC: {target_mac}) RELEASED on S{dpid}:P{port}")
         return True
 
@@ -1322,8 +1436,14 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                         target_ip = next((ip for ip, host in self.arp_table.items()
                                           if host["dpid"] == alert.dpid and host["port"] == alert.in_port), None)
 
-                        # 내부 확산 / 망 경계 위반: 포트 전체가 아닌 호스트 단위 QUARANTINE 발동
-                        if target_ip and alert.threat_type == ThreatType.INTERNAL_SPREAD.value:
+                        # 내부 확산 / 포트 스캔: USER 호스트의 경우 포트 차단 대신 호스트 단위 QUARANTINE 발동
+                        is_quarantine_threat = (
+                            target_ip and (
+                                alert.threat_type == ThreatType.INTERNAL_SPREAD.value
+                                or (alert.threat_type == ThreatType.PORT_SCAN.value and self.arp_table.get(target_ip, {}).get("zone") == "USER")
+                            )
+                        )
+                        if is_quarantine_threat and target_ip:
                             self.quarantine_host(target_ip, dpid=alert.dpid, port=alert.in_port)
                             self._publish_control_command(
                                 action=DefenseAction.QUARANTINE.value,
@@ -1346,7 +1466,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                                 priority=100,
                             )
                             # 2. 다중 홉 우회 라우팅 선제 설치
-                            self.reroute_traffic(source_dpid=alert.dpid, target_dpid=5, dst_ip="10.0.0.11")
+                            target_server_dpid = self.profile.get("hosts", {}).get("10.0.0.11", {}).get("dpid", 5)
+                            self.reroute_traffic(source_dpid=alert.dpid, target_dpid=target_server_dpid, dst_ip="10.0.0.11")
                             self._publish_control_command(
                                 action=DefenseAction.REROUTE.value,
                                 dpid=alert.dpid,
@@ -1429,7 +1550,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         # [방어 3] IPv4 패킷 유니캐스트 최단 경로 포워딩
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         if ip_pkt:
-            if ip_pkt.dst == SERVICE_PROBE_IP:
+            if ip_pkt.dst == SERVICE_PROBE_IP and ip_pkt.proto == 1:
                 self._handle_probe_reply(datapath, in_port, pkt, msg.data)
                 return
             self.handle_ipv4(datapath, in_port, eth, ip_pkt, msg.data)

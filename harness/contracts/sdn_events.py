@@ -47,19 +47,21 @@ SERVICE_PROBE_TIMEOUT_SEC = 1.0
 
 # 서버 연결 수집기(pipeline/server_conn_agent.py) -> AI Worker: 접속한 PC마다 열린 HTTP 연결·느린 요청 수 (Slow HTTP)
 REDIS_CHANNEL_SERVER_CONNS = "sdn:stats:serverconn"
-# 8-스위치 접속 호스트 IP → (dpid, 포트). 컨트롤러의 arp_table과 같아야 한다.
+# 10-스위치 접속 호스트 IP → (dpid, 포트). 컨트롤러의 arp_table과 같아야 한다.
 ACCESS_HOST_PORTS = {
     "10.0.0.1": (3, 1),
     "10.0.0.2": (3, 2),
     "10.0.0.3": (4, 1),
     "10.0.0.4": (4, 2),
-    "10.0.0.11": (5, 1),
-    "10.0.0.12": (5, 2),
-    "10.0.0.21": (6, 1),
-    "10.0.0.22": (6, 2),
+    "10.0.0.11": (10, 1),
+    "10.0.0.12": (10, 2),
+    "10.0.0.21": (5, 1),
+    "10.0.0.22": (6, 1),
     "10.0.0.254": (7, 1),
     "10.0.0.253": (7, 2),
+    "10.0.0.240": (8, 1),
     "10.0.0.250": (8, 1),
+    "192.168.100.100": (9, 1),
 }
 
 # 수동 RESTORE(command_id "manual-…") 직후 같은 포트의 자동 재격리를 보류하는 시간(초).
@@ -117,6 +119,9 @@ class CountKind(str, Enum):
     ARP_FAIL = "arp_fail"
     # Table 1 망 정책 위반 (USER -> USER 차단 등) 누적 패킷 수
     ZONE_DENY = "zone_deny"
+    ZONE_DENY_INTERNAL = "zone_deny_internal"    # 내부 확산 차단 (USER -> USER/ADMIN)
+    ZONE_DENY_PORT_SCAN = "zone_deny_port_scan"  # 서버/DMZ 미허용 포트 접근 차단
+    ZONE_DENY_EXTERNAL = "zone_deny_external"    # 외부 인터넷 미허용 인바운드 차단
 
 
 class ThreatType(str, Enum):

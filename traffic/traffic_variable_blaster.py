@@ -115,7 +115,7 @@ def _worker_blast(
 def main() -> None:
     parser = argparse.ArgumentParser(description="가변 BPP & 고속 PPS 트래픽 발생기")
     parser.add_argument("--iface", default="h_attacker-eth1", help="전송 네트워크 인터페이스")
-    parser.add_argument("--dst", default="10.0.0.4", help="목적지 IP (H_server)")
+    parser.add_argument("--dst", default="10.0.0.11", help="목적지 IP (H_server)")
     parser.add_argument("--dport", type=int, default=80, help="목적지 포트")
     parser.add_argument("--duration", type=float, default=10.0, help="전송 지속 시간(초)")
     parser.add_argument("--target-pps", type=int, default=800000, help="목표 최대 초당 패킷수 (PPS)")

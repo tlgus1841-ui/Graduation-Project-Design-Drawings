@@ -111,28 +111,28 @@ def test_arp_table_and_topo_consistency():
     assert controller.arp_table["10.0.0.2"]["port"] == 2
 
     assert controller.arp_table["10.0.0.11"]["mac"] == "00:00:00:00:00:11"
-    assert controller.arp_table["10.0.0.11"]["dpid"] == 5
+    assert controller.arp_table["10.0.0.11"]["dpid"] == 10
     assert controller.arp_table["10.0.0.11"]["port"] == 1
 
-    # Total 11 enterprise hosts
-    assert len(controller.arp_table) == 11
+    # Total 13 enterprise hosts (including DMZ, External & Legacy Sinkhole)
+    assert len(controller.arp_table) == 13
 
 
 def test_routing_table_shortest_path_continuity():
-    """Verify end-to-end shortest path forwarding (S3 <-> S1 <-> S5)."""
+    """Verify end-to-end shortest path forwarding (S3 <-> S1 <-> S10)."""
     controller = SelfDefendingSDNController()
 
-    # Forward direction: h1 (10.0.0.1) -> h5 Web (10.0.0.11)
-    # S3 forwards 10.0.0.11 out port 99 (to S1)
-    assert controller.routing_table[3]["10.0.0.11"] == 99
-    # S1 forwards 10.0.0.11 out port 3 (to S5)
-    assert controller.routing_table[1]["10.0.0.11"] == 3
-    # S5 forwards 10.0.0.11 out port 1 (to local host h5)
-    assert controller.routing_table[5]["10.0.0.11"] == 1
+    # Forward direction: h1 (10.0.0.1) -> web1 (10.0.0.11)
+    # S3 forwards 10.0.0.11 out port 98 (to S1)
+    assert controller.routing_table[3]["10.0.0.11"] == 98
+    # S1 forwards 10.0.0.11 out port 7 (to S10)
+    assert controller.routing_table[1]["10.0.0.11"] == 7
+    # S10 forwards 10.0.0.11 out port 1 (to local host web1)
+    assert controller.routing_table[10]["10.0.0.11"] == 1
 
-    # Reverse direction: h5 Web (10.0.0.11) -> h1 (10.0.0.1)
-    # S5 forwards 10.0.0.1 out port 99 (to S1)
-    assert controller.routing_table[5]["10.0.0.1"] == 99
+    # Reverse direction: web1 (10.0.0.11) -> h1 (10.0.0.1)
+    # S10 forwards 10.0.0.1 out port 98 (to S1)
+    assert controller.routing_table[10]["10.0.0.1"] == 98
     # S1 forwards 10.0.0.1 out port 2 (to S3)
     assert controller.routing_table[1]["10.0.0.1"] == 2
     # S3 forwards 10.0.0.1 out port 1 (to local host h1)

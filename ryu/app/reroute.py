@@ -1,11 +1,11 @@
 """
 Self-Defending SDN Tower: Multi-hop Dynamic Rerouting Engine.
 Author: Sihyeon Park (22101489 / Tech Lead)
-Phase 4 (Week 10) Milestone
+Phase 6-C Enterprise Milestone
 
 NetworkX Dijkstra-based alternative path computation and proactive multi-hop
 flow rule provisioning (OFPFC_ADD) across intermediate switches to guarantee
-zero packet loss during mitigation.
+zero packet loss during mitigation. Supports Enterprise Dual-Homing Topology.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,7 +15,7 @@ import networkx as nx
 class RerouteEngine:
     """
     OpenFlow 1.3 다중 홉 우회 경로 계산 및 플로우 프로비저닝 엔진.
-    엔터프라이즈 8-스위치(S1~S8) 5-Zone 토폴로지 지원.
+    엔터프라이즈 8-스위치(S1~S8) 및 10-스위치(S1~S10) 토폴로지 지원.
     """
 
     def __init__(self, profile: Optional[Dict[str, Any]] = None):
@@ -101,11 +101,6 @@ class RerouteEngine:
         """
         우회 경로 [S1, ..., Sn] 상의 각 스위치별 선제적 OFPFC_ADD 설치 명세 생성.
         중간 스위치(Intermediate)부터 Egress, Ingress 순으로 설치할 수 있도록 반환.
-        반환 예시:
-        [
-          {"dpid": 3, "out_port": 2, "dst_ip": "10.0.0.4", "is_intermediate": True},
-          {"dpid": 1, "out_port": 4, "dst_ip": "10.0.0.4", "is_intermediate": False}
-        ]
         """
         if len(path) < 2:
             return []
@@ -127,6 +122,5 @@ class RerouteEngine:
             })
 
         # 중간 경유 스위치들을 먼저 프로비저닝한 뒤 출발지(Ingress)를 변경하는 안전 순서 정렬
-        # (중간 스위치 우선 설치 -> 마지막에 Ingress 스위치 스위칭)
         specs.sort(key=lambda s: 0 if s["is_intermediate"] else 1)
         return specs

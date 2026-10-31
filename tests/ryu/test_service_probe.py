@@ -70,7 +70,7 @@ def test_reply_is_sent_back_towards_s1_then_recorded_there():
     s5.id = 5
     controller._handle_probe_reply(s5, in_port=1, pkt=_reply_packet(1), data=b"x")
     assert controller.add_flow.call_args.kwargs["actions"][0] is not None
-    s5.ofproto_parser.OFPActionOutput.assert_called_with(99)  # S5 → S1 trunk port towards probe source S3
+    s5.ofproto_parser.OFPActionOutput.assert_called_with(controller.routing_table[5][controller.probe_route_ip])
     s5.send_msg.assert_called_once()
 
     seq = controller.probe.next_seq(time.time())

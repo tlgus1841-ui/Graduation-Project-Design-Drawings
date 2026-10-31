@@ -49,9 +49,9 @@ def test_full_4_stage_autonomous_defense_scenario():
 
     # [Stage 1: Normal Baseline]
     assert controller.fsm.get_state() == DefenseState.NORMAL
-    # Primary routing for 10.0.0.11 on S3 points to S1 (Port 99) and on S1 points to S5 (Port 3)
-    assert controller.routing_table[3]["10.0.0.11"] == 99
-    assert controller.routing_table[1]["10.0.0.11"] == 3
+    # Primary routing for 10.0.0.11 on S3 points to S1 (Port 98) and on S1 points to S10 (Port 7)
+    assert controller.routing_table[3]["10.0.0.11"] == 98
+    assert controller.routing_table[1]["10.0.0.11"] == 7
 
     # [Stage 2 & 3: Attack Detection & Autonomous Defense]
     alert = AnomalyAlertMessage(

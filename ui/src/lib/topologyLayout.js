@@ -1,5 +1,5 @@
-// Topology Layout Engine & Dual-Mode Coordinates (Phase 6-C-2)
-// Provides 8-Switch 5-Zone layout, 4-Switch legacy fallback, and zone clustering helpers.
+// Topology Layout Engine & Dual-Mode Coordinates (Phase 6-C Enterprise Standard)
+// Provides 10-Switch 6-Zone layout, 8-Switch & 4-Switch legacy fallback, and zone clustering helpers.
 
 export const SEED_4SW = {
   h_legit: [-330, -110],
@@ -27,10 +27,10 @@ export const SEED_8SW = {
   // 3. Server Zone (Right Wing: S5 & S6 at y = -60, Hosts at y = 80)
   s5: [240, -60],
   s6: [440, -60],
-  h5: [190, 80], // Web Server (10.0.0.11)
-  h6: [290, 80], // API Server (10.0.0.12)
-  h7: [390, 80], // DB Server (10.0.0.21)
-  h8: [490, 80], // Storage Server (10.0.0.22)
+  h5: [190, 80], // DB Server (10.0.0.21)
+  h6: [290, 80], // App Server (10.0.0.22)
+  db1: [190, 80],
+  app1: [290, 80],
 
   // 4. Admin Zone (Bottom Left: S7 at y = 240, Hosts at y = 360)
   s7: [-200, 240],
@@ -39,16 +39,44 @@ export const SEED_8SW = {
 
   // 5. Quarantine Zone (Bottom Right: S8 at y = 240, Host at y = 360)
   s8: [200, 240],
-  h_sink: [200, 360],   // Malware Analysis Sinkhole (10.0.0.250)
+  h_sink: [200, 360],   // Malware Analysis Sinkhole & Probe (10.0.0.240)
+
+  // 6. External Zone (Border Gateway S9 & ext_h1)
+  s9: [0, -380],
+  ext_h1: [0, -500],
+  ns_ext: [0, -500],
+
+  // 7. DMZ Zone (S10 & Web Servers)
+  s10: [500, -220],
+  web1: [450, -340],
+  web2: [550, -340],
+  ns_web1: [450, -340],
+  ns_web2: [550, -340],
 };
 
+export const SEED_10SW = SEED_8SW;
+
 export const ZONE_CONFIG = {
+  EXTERNAL_ZONE: {
+    id: "EXTERNAL_ZONE",
+    label: "외부 인터넷 (Border Gateway)",
+    color: "#ef4444",
+    bg: "rgba(239, 68, 68, 0.08)",
+    border: "rgba(239, 68, 68, 0.35)",
+  },
   BACKBONE_ZONE: {
     id: "BACKBONE_ZONE",
     label: "중앙 백본망 (Core Backbone)",
     color: "#64748b",
     bg: "rgba(100, 116, 139, 0.08)",
     border: "rgba(100, 116, 139, 0.35)",
+  },
+  DMZ_ZONE: {
+    id: "DMZ_ZONE",
+    label: "공개 서버망 (DMZ Zone)",
+    color: "#06b6d4",
+    bg: "rgba(6, 182, 212, 0.08)",
+    border: "rgba(6, 182, 212, 0.35)",
   },
   USER_ZONE: {
     id: "USER_ZONE",
@@ -59,7 +87,7 @@ export const ZONE_CONFIG = {
   },
   SERVER_ZONE: {
     id: "SERVER_ZONE",
-    label: "서버망 (Server Zone)",
+    label: "내부 서버망 (Internal Server Zone)",
     color: "#10b981",
     bg: "rgba(16, 185, 129, 0.08)",
     border: "rgba(16, 185, 129, 0.35)",
@@ -84,6 +112,8 @@ export function getNodeZone(node) {
   if (!node) return "USER_ZONE";
   if (typeof node === "object" && node.zone) {
     const z = String(node.zone).toUpperCase();
+    if (z.includes("EXTERNAL")) return "EXTERNAL_ZONE";
+    if (z.includes("DMZ")) return "DMZ_ZONE";
     if (z.includes("BACKBONE") || z.includes("CORE")) return "BACKBONE_ZONE";
     if (z.includes("USER")) return "USER_ZONE";
     if (z.includes("SERVER")) return "SERVER_ZONE";
@@ -92,9 +122,11 @@ export function getNodeZone(node) {
   }
 
   const id = String(typeof node === "object" ? node.id : node).toLowerCase();
+  if (id === "s9" || id === "ext_h1" || id === "ns_ext") return "EXTERNAL_ZONE";
+  if (id === "s10" || id === "web1" || id === "web2" || id === "ns_web1" || id === "ns_web2") return "DMZ_ZONE";
   if (id === "s1" || id === "s2") return "BACKBONE_ZONE";
   if (["s3", "s4", "h1", "h2", "h3", "h4", "h_legit", "h_attacker"].includes(id)) return "USER_ZONE";
-  if (["s5", "s6", "h5", "h6", "h7", "h8", "h_server"].includes(id)) return "SERVER_ZONE";
+  if (["s5", "s6", "h5", "h6", "db1", "app1", "h_server"].includes(id)) return "SERVER_ZONE";
   if (["s7", "h_admin", "h_patch"].includes(id)) return "ADMIN_ZONE";
   if (["s8", "h_sink"].includes(id)) return "QUARANTINE_ZONE";
 
@@ -108,8 +140,8 @@ export function isLargeTopology(nodes = []) {
 }
 
 export function getSeedCoordinates(nodeId, isLarge = true) {
-  const primarySeed = isLarge ? SEED_8SW : SEED_4SW;
-  const fallbackSeed = isLarge ? SEED_4SW : SEED_8SW;
+  const primarySeed = isLarge ? SEED_10SW : SEED_4SW;
+  const fallbackSeed = isLarge ? SEED_4SW : SEED_10SW;
   return primarySeed[nodeId] ?? fallbackSeed[nodeId] ?? [0, 0];
 }
 
