@@ -27,19 +27,19 @@ _spec.loader.exec_module(_mod)
 RerouteEngine = _mod.RerouteEngine
 
 
-def test_profile_loader_diamond_4sw():
-    profile = get_topology_profile("diamond_4sw")
-    assert profile["name"] == "diamond_4sw"
-    assert profile["switches"] == [1, 2, 3, 4]
+def test_profile_loader_default_ssot():
+    profile = get_topology_profile()
+    assert profile["name"] == "zone_8sw"
+    assert profile["switches"] == [1, 2, 3, 4, 5, 6, 7, 8]
     assert "10.0.0.1" in profile["hosts"]
     assert "10.0.0.2" in profile["hosts"]
-    assert "10.0.0.4" in profile["hosts"]
-    assert profile["hosts"]["10.0.0.1"]["dpid"] == 1
-    assert profile["hosts"]["10.0.0.4"]["dpid"] == 4
+    assert "10.0.0.11" in profile["hosts"]
+    assert profile["hosts"]["10.0.0.1"]["dpid"] == 3
+    assert profile["hosts"]["10.0.0.11"]["dpid"] == 5
 
     routing = profile["routing_table"]
-    assert routing[1]["10.0.0.4"] == 3
-    assert routing[4]["10.0.0.1"] == 2
+    assert routing[3]["10.0.0.11"] == 99
+    assert routing[1]["10.0.0.11"] == 3
 
 
 def test_profile_loader_zone_8sw():

@@ -45,12 +45,12 @@ def test_arp_for_the_probe_address_is_answered_by_the_controller():
     controller = SelfDefendingSDNController()
     controller.send_arp_reply = MagicMock()
     datapath, eth, arp_pkt = MagicMock(), MagicMock(), MagicMock()
-    datapath.id = 4
-    eth.src = "00:00:00:00:00:04"
-    arp_pkt.opcode, arp_pkt.dst_ip, arp_pkt.src_ip = 1, SERVICE_PROBE_IP, "10.0.0.4"
+    datapath.id = 5
+    eth.src = "00:00:00:00:00:11"
+    arp_pkt.opcode, arp_pkt.dst_ip, arp_pkt.src_ip = 1, SERVICE_PROBE_IP, "10.0.0.11"
     controller.handle_arp(datapath, in_port=1, eth=eth, arp_pkt=arp_pkt)
     controller.send_arp_reply.assert_called_once_with(
-        datapath, SERVICE_PROBE_MAC, SERVICE_PROBE_IP, "00:00:00:00:00:04", "10.0.0.4", 1)
+        datapath, SERVICE_PROBE_MAC, SERVICE_PROBE_IP, "00:00:00:00:00:11", "10.0.0.11", 1)
 
 
 def _reply_packet(seq, icmp_id=PROBE_ICMP_ID):
@@ -66,21 +66,21 @@ def _reply_packet(seq, icmp_id=PROBE_ICMP_ID):
 def test_reply_is_sent_back_towards_s1_then_recorded_there():
     controller = SelfDefendingSDNController()
     controller.add_flow = MagicMock()
-    s4 = MagicMock()
-    s4.id = 4
-    controller._handle_probe_reply(s4, in_port=1, pkt=_reply_packet(1), data=b"x")
+    s5 = MagicMock()
+    s5.id = 5
+    controller._handle_probe_reply(s5, in_port=1, pkt=_reply_packet(1), data=b"x")
     assert controller.add_flow.call_args.kwargs["actions"][0] is not None
-    s4.ofproto_parser.OFPActionOutput.assert_called_with(2)  # S4 → S2 → S1, the users' side
-    s4.send_msg.assert_called_once()
+    s5.ofproto_parser.OFPActionOutput.assert_called_with(99)  # S5 → S1 trunk port towards probe source S3
+    s5.send_msg.assert_called_once()
 
     seq = controller.probe.next_seq(time.time())
-    s1 = MagicMock()
-    s1.id = 1
-    controller._handle_probe_reply(s1, in_port=3, pkt=_reply_packet(seq, icmp_id=0x1234), data=b"x")
+    s3 = MagicMock()
+    s3.id = 3
+    controller._handle_probe_reply(s3, in_port=99, pkt=_reply_packet(seq, icmp_id=0x1234), data=b"x")
     assert controller.probe.rtt_ms == {}  # someone else's ping
-    controller._handle_probe_reply(s1, in_port=3, pkt=_reply_packet(seq), data=b"x")
+    controller._handle_probe_reply(s3, in_port=99, pkt=_reply_packet(seq), data=b"x")
     assert seq in controller.probe.rtt_ms
-    s1.send_msg.assert_not_called()
+    s3.send_msg.assert_not_called()
 
 
 def test_health_is_published_every_report():

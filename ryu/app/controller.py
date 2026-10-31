@@ -203,27 +203,14 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(SelfDefendingSDNController, self).__init__(*args, **kwargs)
-        # 토폴로지 프로파일 로드 (환경변수 SDN_TOPOLOGY_PROFILE 또는 기본 diamond_4sw)
+        # 8-스위치 5-Zone 엔터프라이즈 토폴로지 프로파일 로드 (SSOT)
         self.profile = get_topology_profile()
-        self.profile_name = self.profile.get("name", "diamond_4sw")
+        self.profile_name = self.profile.get("name", "zone_8sw")
 
-        # 호스트 정적 매핑 테이블
-        self.arp_table = self.profile.get("hosts", {
-            "10.0.0.1": {"mac": "00:00:00:00:00:01", "dpid": 1, "port": 1},
-            "10.0.0.2": {"mac": "00:00:00:00:00:02", "dpid": 1, "port": 2},
-            "10.0.0.4": {"mac": "00:00:00:00:00:04", "dpid": 4, "port": 1},
-        })
+        # 호스트 정적 매핑 테이블 (11개 호스트)
+        self.arp_table = self.profile.get("hosts", {})
         # 기본 최단 경로 라우팅 맵: {dpid: {dst_ip: out_port}}
-        self.routing_table = self.profile.get("routing_table", {
-            # S1 -> S4: Port 3 (S2행)
-            1: {"10.0.0.1": 1, "10.0.0.2": 2, "10.0.0.4": 3},
-            # S2 -> S4: Port 2, -> S1: Port 1
-            2: {"10.0.0.1": 1, "10.0.0.2": 1, "10.0.0.4": 2},
-            # S3 (우회용)
-            3: {"10.0.0.1": 1, "10.0.0.2": 1, "10.0.0.4": 2},
-            # S4 -> S1: Port 2 (S2행), -> H_server: Port 1
-            4: {"10.0.0.1": 2, "10.0.0.2": 2, "10.0.0.4": 1},
-        })
+        self.routing_table = self.profile.get("routing_table", {})
 
         # 6주차: 활성 Datapath 맵 및 Redis 텔레메트리 파이프라인 초기화
         self.datapaths = {}
@@ -676,7 +663,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 )
             else:
                 # USER 호스트: SERVER 향 허용 규칙 (Pri 200)
-                target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"] if self.profile_name == "zone_8sw" else ["10.0.0.4"]
+                target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"]
                 for s_ip in target_servers:
                     # Web request (TCP dst 80)
                     self.add_flow(
@@ -751,7 +738,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         parser = datapath.ofproto_parser
 
         # 1. 기존 Pri 200 정상 USER 허용 규칙 삭제
-        target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"] if self.profile_name == "zone_8sw" else ["10.0.0.4"]
+        target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"]
         for s_ip in target_servers:
             self.delete_flow(
                 datapath, priority=200,
@@ -842,7 +829,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             )
 
         # 2. Pri 200 정상 USER 규칙 복원
-        target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"] if self.profile_name == "zone_8sw" else ["10.0.0.4"]
+        target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"]
         for s_ip in target_servers:
             self.add_flow(
                 datapath, priority=200,
@@ -991,12 +978,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         )
         return True
 
-    def reroute_traffic(self, source_dpid: int = 1, target_dpid: int = 4, dst_ip: str = "10.0.0.4"):
+    def reroute_traffic(self, source_dpid: int = 3, target_dpid: int = 5, dst_ip: str = "10.0.0.11"):
         """
         10주차: NetworkX Dijkstra 기반 다중 홉 선제적 OFPFC_ADD 우회 라우팅 주입.
-        중간 스위치(예: S3)에 먼저 규칙을 설치한 후 Ingress 스위치(S1)를 전환하여 무유실 보장.
+        중간 스위치에 먼저 규칙을 설치한 후 Ingress 스위치를 전환하여 무유실 보장.
         """
-        path = self.reroute_engine.compute_reroute_path(source_dpid, target_dpid, congested_intermediate_dpid=2)
+        path = self.reroute_engine.compute_reroute_path(source_dpid, target_dpid, congested_intermediate_dpid=1)
         if not path:
             self.logger.warning(f"[Reroute] No path found between S{source_dpid} and S{target_dpid}")
             return False
@@ -1020,17 +1007,17 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def restore_reroute_traffic(
         self,
-        source_dpid: int = 1,
-        target_dpid: int = 4,
-        dst_ip: str = "10.0.0.4",
+        source_dpid: int = 3,
+        target_dpid: int = 5,
+        dst_ip: str = "10.0.0.11",
         priority: int = 20,
     ):
         """
         11주차: 복구 시 우회 경로(Priority 20) 플로우 규칙 명시적 삭제.
-        Ingress 스위치(S1)부터 역순으로 우회 규칙을 제거하여 즉시 주 경로(S1-S2-S4)로 복귀.
+        Ingress 스위치부터 역순으로 우회 규칙을 제거하여 즉시 주 경로로 복귀.
         """
         path = self.reroute_engine.compute_reroute_path(
-            source_dpid, target_dpid, congested_intermediate_dpid=2
+            source_dpid, target_dpid, congested_intermediate_dpid=1
         )
         if not path:
             return False
@@ -1051,95 +1038,71 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         return True
 
     def _publish_topology_sync(self, phase_name: str = "NORMAL"):
-        """Redis sdn:topology:sync 채널로 실시간 토폴로지 링크/노드 상태 브로드캐스트"""
+        """Redis sdn:topology:sync 채널로 실시간 8-스위치 5-Zone 토폴로지 링크/노드 상태 브로드캐스트"""
         attacked = (phase_name == "ATTACK_DETECTED")
         mitigated = (phase_name in ("MITIGATED", "COOLDOWN_VERIFY", "COOLDOWN"))
 
-        if self.profile_name == "zone_8sw":
-            s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
-            nodes = [
-                # 8 Switches
-                TopologyNode(id="s1", label="S1 (Core 1)", node_type="switch", dpid=1, status=s1_status),
-                TopologyNode(id="s2", label="S2 (Core 2)", node_type="switch", dpid=2),
-                TopologyNode(id="s3", label="S3 (User A)", node_type="switch", dpid=3),
-                TopologyNode(id="s4", label="S4 (User B)", node_type="switch", dpid=4),
-                TopologyNode(id="s5", label="S5 (Server A)", node_type="switch", dpid=5),
-                TopologyNode(id="s6", label="S6 (Server B)", node_type="switch", dpid=6),
-                TopologyNode(id="s7", label="S7 (Admin)", node_type="switch", dpid=7),
-                TopologyNode(id="s8", label="S8 (Quarantine)", node_type="switch", dpid=8),
-            ]
-            # 11 Hosts
-            for ip, h in self.arp_table.items():
-                lbl = h.get("label", ip)
-                h_status = "QUARANTINED" if ip in self.quarantined_hosts else "NORMAL"
-                nodes.append(
-                    TopologyNode(
-                        id=lbl, label=lbl, node_type="host",
-                        ip=ip, mac=h.get("mac", ""), status=h_status
-                    )
-                )
-
-            # Links
-            links = [
-                # Core Inter-switch
-                TopologyLink(source="s1", target="s2", src_port=1, dst_port=1, is_trunk=True),
-                # S1 Edges
-                TopologyLink(source="s1", target="s3", src_port=2, dst_port=99, is_trunk=True),
-                TopologyLink(source="s1", target="s5", src_port=3, dst_port=99, is_trunk=True),
-                TopologyLink(source="s1", target="s7", src_port=4, dst_port=98, is_trunk=True),
-                TopologyLink(source="s1", target="s8", src_port=5, dst_port=98, is_trunk=True),
-                # S2 Edges
-                TopologyLink(source="s2", target="s4", src_port=2, dst_port=99, is_trunk=True),
-                TopologyLink(source="s2", target="s6", src_port=3, dst_port=99, is_trunk=True),
-                TopologyLink(source="s2", target="s7", src_port=4, dst_port=99, is_trunk=True),
-                TopologyLink(source="s2", target="s8", src_port=5, dst_port=99, is_trunk=True),
-            ]
-            # Host access links
-            for ip, h in self.arp_table.items():
-                lbl = h.get("label", ip)
-                l_status = "BLOCKED" if ip in self.quarantined_hosts else "ACTIVE"
-                sw_id = f"s{h['dpid']}"
-                links.append(
-                    TopologyLink(
-                        source=sw_id, target=lbl,
-                        src_port=h["port"], dst_port=1, status=l_status
-                    )
-                )
-        else:
-            s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
-
-            h_legit_status = "QUARANTINED" if "10.0.0.1" in self.quarantined_hosts else "NORMAL"
-            h_attacker_status = "QUARANTINED" if "10.0.0.2" in self.quarantined_hosts else s1_status
-
-            nodes = [
-                TopologyNode(id="s1", label="S1 (Ingress)", node_type="switch", dpid=1, status=s1_status),
-                TopologyNode(id="s2", label="S2 (Primary)", node_type="switch", dpid=2),
-                TopologyNode(id="s3", label="S3 (Bypass)", node_type="switch", dpid=3),
-                TopologyNode(id="s4", label="S4 (Egress)", node_type="switch", dpid=4),
-                TopologyNode(id="h_legit", label="H_legit", node_type="host", ip="10.0.0.1", mac="00:00:00:00:00:01", status=h_legit_status),
+        s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
+        nodes = [
+            # 8 Switches (S1~S8)
+            TopologyNode(id="s1", label="S1 (Core 1)", node_type="switch", dpid=1, status=s1_status),
+            TopologyNode(id="s2", label="S2 (Core 2)", node_type="switch", dpid=2),
+            TopologyNode(id="s3", label="S3 (User A)", node_type="switch", dpid=3),
+            TopologyNode(id="s4", label="S4 (User B)", node_type="switch", dpid=4),
+            TopologyNode(id="s5", label="S5 (Server A)", node_type="switch", dpid=5),
+            TopologyNode(id="s6", label="S6 (Server B)", node_type="switch", dpid=6),
+            TopologyNode(id="s7", label="S7 (Admin)", node_type="switch", dpid=7),
+            TopologyNode(id="s8", label="S8 (Quarantine)", node_type="switch", dpid=8),
+        ]
+        # 11 Hosts
+        for ip, h in self.arp_table.items():
+            lbl = h.get("label", ip)
+            h_status = "QUARANTINED" if ip in self.quarantined_hosts else "NORMAL"
+            nodes.append(
                 TopologyNode(
-                    id="h_attacker", label="H_attacker", node_type="host",
-                    ip="10.0.0.2", mac="00:00:00:00:00:02", status=h_attacker_status
-                ),
-                TopologyNode(id="h_server", label="H_server", node_type="host", ip="10.0.0.4", mac="00:00:00:00:00:04"),
-            ]
+                    id=lbl, label=lbl, node_type="host",
+                    ip=ip, mac=h.get("mac", ""), status=h_status
+                )
+            )
 
-            bypass_status = "REROUTED" if mitigated else "ACTIVE"
-            h_legit_link_status = "BLOCKED" if "10.0.0.1" in self.quarantined_hosts else "ACTIVE"
-            h_attacker_link_status = "BLOCKED" if (mitigated or "10.0.0.2" in self.quarantined_hosts) else "ACTIVE"
-
-            links = [
-                TopologyLink(source="s1", target="h_legit", src_port=1, dst_port=1, status=h_legit_link_status),
+        # Trunk Links
+        links = [
+            # Core Inter-switch
+            TopologyLink(source="s1", target="s2", src_port=1, dst_port=1, is_trunk=True),
+            # S1 to Edges
+            TopologyLink(source="s1", target="s3", src_port=2, dst_port=99, is_trunk=True),
+            TopologyLink(source="s1", target="s5", src_port=3, dst_port=99, is_trunk=True),
+            TopologyLink(source="s1", target="s7", src_port=4, dst_port=98, is_trunk=True),
+            TopologyLink(source="s1", target="s8", src_port=5, dst_port=98, is_trunk=True),
+            # S2 to Edges
+            TopologyLink(source="s2", target="s4", src_port=2, dst_port=99, is_trunk=True),
+            TopologyLink(source="s2", target="s6", src_port=3, dst_port=99, is_trunk=True),
+            TopologyLink(source="s2", target="s7", src_port=4, dst_port=99, is_trunk=True),
+            TopologyLink(source="s2", target="s8", src_port=5, dst_port=99, is_trunk=True),
+        ]
+        # Host access links
+        for ip, h in self.arp_table.items():
+            lbl = h.get("label", ip)
+            l_status = "BLOCKED" if ip in self.quarantined_hosts else "ACTIVE"
+            sw_id = f"s{h['dpid']}"
+            links.append(
                 TopologyLink(
-                    source="s1", target="h_attacker", src_port=2, dst_port=1,
-                    status=h_attacker_link_status
-                ),
-                TopologyLink(source="s1", target="s2", src_port=3, dst_port=1, is_trunk=True),
-                TopologyLink(source="s1", target="s3", src_port=4, dst_port=1, is_trunk=True, status=bypass_status),
-                TopologyLink(source="s2", target="s4", src_port=2, dst_port=2, is_trunk=True),
-                TopologyLink(source="s3", target="s4", src_port=2, dst_port=3, is_trunk=True, status=bypass_status),
-                TopologyLink(source="s4", target="h_server", src_port=1, dst_port=1),
-            ]
+                    source=sw_id, target=lbl,
+                    src_port=h["port"], dst_port=1, status=l_status
+                )
+            )
+
+        sync_msg = TopologySyncMessage(
+            timestamp=time.time(), phase=phase_name, nodes=nodes, links=links
+        )
+        try:
+            if not self.redis_client:
+                self._init_redis()
+            if self.redis_client:
+                self.redis_client.publish(REDIS_CHANNEL_TOPOLOGY_SYNC, sync_msg.model_dump_json())
+                self.logger.debug(f"[TopologySync] Broadcasted {phase_name} topology to Redis")
+        except Exception as e:
+            self.logger.warning(f"[TopologySync] Failed to publish topology sync: {e}")
 
         sync_msg = TopologySyncMessage(
             timestamp=time.time(), phase=phase_name, nodes=nodes, links=links
@@ -1196,7 +1159,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 self.restore_port(info["dpid"], info["in_port"])
                 if info["dpid"] not in restored_sources:
                     self.restore_reroute_traffic(
-                        source_dpid=info["dpid"], target_dpid=4, dst_ip="10.0.0.4"
+                        source_dpid=info["dpid"], target_dpid=5, dst_ip="10.0.0.11"
                     )
                     restored_sources.add(info["dpid"])
                 self._publish_control_command(
@@ -1361,12 +1324,12 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                                 priority=100,
                             )
                             # 2. 다중 홉 우회 라우팅 선제 설치
-                            self.reroute_traffic(source_dpid=alert.dpid, target_dpid=4, dst_ip="10.0.0.4")
+                            self.reroute_traffic(source_dpid=alert.dpid, target_dpid=5, dst_ip="10.0.0.11")
                             self._publish_control_command(
                                 action=DefenseAction.REROUTE.value,
                                 dpid=alert.dpid,
-                                port=4,
-                                reason="Autonomous Bypass: Proactive S1-S3-S4 Rerouting",
+                                port=99,
+                                reason="Autonomous Bypass: Proactive Core Backbone Rerouting",
                                 priority=20,
                             )
                             # 3. FSM 상태 전이
@@ -1402,7 +1365,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                         self.unrate_limit_port(cmd.target_dpid, cmd.target_port)
                     self.restore_port(cmd.target_dpid, cmd.target_port, priority=cmd.priority)
                     self.restore_reroute_traffic(
-                        source_dpid=cmd.target_dpid, target_dpid=4, dst_ip="10.0.0.4"
+                        source_dpid=cmd.target_dpid, target_dpid=5, dst_ip="10.0.0.11"
                     )
                     self.fsm.force_restore()
                     if is_manual:
@@ -1410,7 +1373,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                         self.manual_holds[target_key] = time.time() + MANUAL_RESTORE_HOLD_SEC
                     self._publish_topology_sync("NORMAL")
                 elif cmd.action == "REROUTE":
-                    self.reroute_traffic(source_dpid=cmd.target_dpid, target_dpid=4)
+                    self.reroute_traffic(source_dpid=cmd.target_dpid, target_dpid=5, dst_ip="10.0.0.11")
                     self._publish_topology_sync("MITIGATED")
                 elif cmd.action in ("QUARANTINE", DefenseAction.QUARANTINE.value):
                     self.quarantine_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)

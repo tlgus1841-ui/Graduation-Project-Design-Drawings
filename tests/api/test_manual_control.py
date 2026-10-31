@@ -19,7 +19,7 @@ from api.main import create_app
 from api.manual_control import ManualControlRejected, ManualControlRequest, build_manual_command
 from harness.contracts import MANUAL_RESTORE_HOLD_SEC, REDIS_CHANNEL_CONTROL_COMMAND
 
-ISOLATE_ATTACKER = {"action": "ISOLATE", "dpid": 1, "port": 2, "reason": "AI 오탐 의심, 수동 격리"}
+ISOLATE_ATTACKER = {"action": "ISOLATE", "dpid": 3, "port": 2, "reason": "AI 오탐 의심, 수동 격리"}
 
 
 @pytest.fixture
@@ -30,26 +30,26 @@ def mock_client():
 
 def test_build_manual_command_marks_it_manual():
     cmd = build_manual_command(ManualControlRequest(**ISOLATE_ATTACKER, operator="김관우"))
-    assert cmd.action == "ISOLATE" and (cmd.target_dpid, cmd.target_port) == (1, 2)
+    assert cmd.action == "ISOLATE" and (cmd.target_dpid, cmd.target_port) == (3, 2)
     assert cmd.reason.startswith("[MANUAL] 김관우:")
     assert cmd.command_id.startswith("manual-isolate-")
     assert cmd.priority == 100
 
 
-@pytest.mark.parametrize("dpid,port", [(1, 3), (2, 1), (4, 2)])
+@pytest.mark.parametrize("dpid,port", [(1, 1), (1, 2), (3, 99)])
 def test_trunk_ports_are_never_manually_controllable(dpid, port):
     with pytest.raises(ManualControlRejected):
         build_manual_command(ManualControlRequest(action="ISOLATE", dpid=dpid, port=port, reason="test"))
 
 
-@pytest.mark.parametrize("dpid,port", [(1, 1), (4, 1)])  # H_legit, H_server
+@pytest.mark.parametrize("dpid,port", [(5, 1), (7, 1)])  # h5 Web, h_admin
 def test_protected_host_ports_cannot_be_manually_isolated(dpid, port):
-    """관리자가 포트 번호를 잘못 입력해도 H_legit/H_server는 수동으로 격리할 수 없다."""
+    """관리자가 포트 번호를 잘못 입력해도 h5 Web/h_admin은 수동으로 격리할 수 없다."""
     with pytest.raises(ManualControlRejected):
         build_manual_command(ManualControlRequest(action="ISOLATE", dpid=dpid, port=port, reason="test"))
 
 
-@pytest.mark.parametrize("dpid,port", [(1, 1), (4, 1)])
+@pytest.mark.parametrize("dpid,port", [(5, 1), (7, 1)])
 def test_protected_host_ports_can_still_be_manually_restored(dpid, port):
     """RESTORE는 격리가 아니므로 보호 포트 체크 대상이 아니다."""
     cmd = build_manual_command(ManualControlRequest(action="RESTORE", dpid=dpid, port=port, reason="test"))

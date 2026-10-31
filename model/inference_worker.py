@@ -57,7 +57,10 @@ from harness.contracts import (  # noqa: E402
     ServerConnMessage,
     ServiceHealthMessage,
 )
-from harness.safety.whitelist_guard import DEFAULT_ACCESS_PORTS  # noqa: E402
+from harness.safety.whitelist_guard import (  # noqa: E402
+    DEFAULT_ACCESS_PORTS,
+    DEFAULT_PROTECTED_ACCESS_PORTS,
+)
 from model.attack_classifier import (  # noqa: E402
     CATEGORY_TO_THREAT_TYPE,
     AttackCategory,
@@ -77,8 +80,12 @@ from pipeline.feature_extractor import FeatureExtractor  # noqa: E402
 
 PortKey = Tuple[int, int]
 
-# 보호 호스트가 붙은 접속 포트: S1:1 = H_legit(10.0.0.1), S4:1 = H_server(10.0.0.4)
-PROTECTED_HOST_PORTS = {(1, 1), (4, 1)}
+# 보호 호스트가 붙은 접속 포트 (서버 및 관리자 포트 화이트리스트)
+PROTECTED_HOST_PORTS: set[PortKey] = {
+    (dpid, port)
+    for dpid, ports in DEFAULT_PROTECTED_ACCESS_PORTS.items()
+    for port in ports
+}
 # 초당 100패킷 미만은 공격 규모가 아니다 (명세 §6 ATTACK_CEASE_PPS = 정상 PPS 상한).
 MIN_ATTACK_PPS = 100.0
 # 테스트베드 어느 링크보다도 큰 값. 이보다 크면 카운터 리셋으로 생긴 가짜 델타다.

@@ -1,0 +1,137 @@
+# =============================================================================
+# SDN Topology Configuration (SSOT)
+# Enterprise 8-Switch 5-Zone Topology (Phase 6-C Standard)
+# =============================================================================
+
+topology:
+  name: "zone_8sw"
+  description: "Enterprise 8-Switch 5-Zone Topology with Physical Remediation Patch Server"
+  switches: [1, 2, 3, 4, 5, 6, 7, 8]
+
+  # 호스트 정적 바인딩: ip -> {mac, dpid, port, zone, label}
+  hosts:
+    # [USER_ZONE] S3 & S4
+    "10.0.0.1":
+      mac: "00:00:00:00:00:01"
+      dpid: 3
+      port: 1
+      zone: "USER"
+      label: "h1"
+    "10.0.0.2":
+      mac: "00:00:00:00:00:02"
+      dpid: 3
+      port: 2
+      zone: "USER"
+      label: "h2"
+    "10.0.0.3":
+      mac: "00:00:00:00:00:03"
+      dpid: 4
+      port: 1
+      zone: "USER"
+      label: "h3"
+    "10.0.0.4":
+      mac: "00:00:00:00:00:04"
+      dpid: 4
+      port: 2
+      zone: "USER"
+      label: "h4"
+
+    # [SERVER_ZONE] S5 & S6
+    "10.0.0.11":
+      mac: "00:00:00:00:00:11"
+      dpid: 5
+      port: 1
+      zone: "SERVER"
+      label: "h5"
+    "10.0.0.12":
+      mac: "00:00:00:00:00:12"
+      dpid: 5
+      port: 2
+      zone: "SERVER"
+      label: "h6"
+    "10.0.0.21":
+      mac: "00:00:00:00:00:21"
+      dpid: 6
+      port: 1
+      zone: "SERVER"
+      label: "h7"
+    "10.0.0.22":
+      mac: "00:00:00:00:00:22"
+      dpid: 6
+      port: 2
+      zone: "SERVER"
+      label: "h8"
+
+    # [ADMIN_ZONE] S7
+    "10.0.0.254":
+      mac: "00:00:00:00:00:fe"
+      dpid: 7
+      port: 1
+      zone: "ADMIN"
+      label: "h_admin"
+    "10.0.0.253":
+      mac: "00:00:00:00:00:fd"
+      dpid: 7
+      port: 2
+      zone: "ADMIN"
+      label: "h_patch"
+
+    # [QUARANTINE_ZONE] S8
+    "10.0.0.250":
+      mac: "00:00:00:00:00:fa"
+      dpid: 8
+      port: 1
+      zone: "QUARANTINE"
+      label: "h_sink"
+
+  # 스위치 간 트렁크 링크 목록: [(u, v, u_port, v_port, weight)]
+  links:
+    # S1 - S2 (Core Backbone Inter-link)
+    - [1, 2, 1, 1, 1.0]
+    # S1 (Core 1) to Edges
+    - [1, 3, 2, 99, 1.0]
+    - [1, 5, 3, 99, 1.0]
+    - [1, 7, 4, 98, 1.0]
+    - [1, 8, 5, 98, 1.0]
+    # S2 (Core 2) to Edges
+    - [2, 4, 2, 99, 1.0]
+    - [2, 6, 3, 99, 1.0]
+    - [2, 7, 4, 99, 1.0]
+    - [2, 8, 5, 99, 1.0]
+
+  # Whitelist Guard 설정
+  trunk_ports:
+    1: [1, 2, 3, 4, 5]
+    2: [1, 2, 3, 4, 5]
+    3: [99]
+    4: [99]
+    5: [99]
+    6: [99]
+    7: [98, 99]
+    8: [98, 99]
+  access_ports:
+    1: []
+    2: []
+    3: [1, 2]
+    4: [1, 2]
+    5: [1, 2]
+    6: [1, 2]
+    7: [1, 2]
+    8: [1]
+  protected_access_ports:
+    5: [1, 2]  # h5, h6 (Web, API)
+    6: [1, 2]  # h7, h8 (DB, Backup)
+    7: [1, 2]  # h_admin, h_patch (Admin, Patch)
+  protected_ips:
+    - "10.0.0.11"
+    - "10.0.0.12"
+    - "10.0.0.21"
+    - "10.0.0.22"
+    - "10.0.0.253"
+    - "10.0.0.254"
+
+  probe:
+    dpid: 3
+    ip: "10.0.0.250"
+    mac: "00:00:00:00:00:fa"
+    target_ip: "10.0.0.11"

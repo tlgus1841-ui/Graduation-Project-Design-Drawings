@@ -99,48 +99,45 @@ from topo.diamond_topo import DiamondTopo  # noqa: E402
 
 
 def test_arp_table_and_topo_consistency():
-    """Verify ARP table mappings match the DiamondTopo hardware
-    definitions."""
+    """Verify ARP table mappings match 8-Switch 5-Zone hardware definitions."""
     controller = SelfDefendingSDNController()
-    topo = DiamondTopo()
 
-    # Verify IP and MAC mappings for all 3 key hosts
+    # Verify IP and MAC mappings for key hosts in User & Server zones
     assert controller.arp_table["10.0.0.1"]["mac"] == "00:00:00:00:00:01"
-    assert controller.arp_table["10.0.0.1"]["dpid"] == 1
+    assert controller.arp_table["10.0.0.1"]["dpid"] == 3
     assert controller.arp_table["10.0.0.1"]["port"] == 1
 
     assert controller.arp_table["10.0.0.2"]["mac"] == "00:00:00:00:00:02"
-    assert controller.arp_table["10.0.0.2"]["dpid"] == 1
+    assert controller.arp_table["10.0.0.2"]["dpid"] == 3
     assert controller.arp_table["10.0.0.2"]["port"] == 2
 
-    assert controller.arp_table["10.0.0.4"]["mac"] == "00:00:00:00:00:04"
-    assert controller.arp_table["10.0.0.4"]["dpid"] == 4
-    assert controller.arp_table["10.0.0.4"]["port"] == 1
+    assert controller.arp_table["10.0.0.11"]["mac"] == "00:00:00:00:00:11"
+    assert controller.arp_table["10.0.0.11"]["dpid"] == 5
+    assert controller.arp_table["10.0.0.11"]["port"] == 1
 
-    # Verify switch count in topology
-    assert len(topo.switches()) == 4
-    assert len(topo.hosts()) == 3
+    # Total 11 enterprise hosts
+    assert len(controller.arp_table) == 11
 
 
 def test_routing_table_shortest_path_continuity():
-    """Verify end-to-end shortest path forwarding (S1 <-> S2 <-> S4)."""
+    """Verify end-to-end shortest path forwarding (S3 <-> S1 <-> S5)."""
     controller = SelfDefendingSDNController()
 
-    # Forward direction: H_legit (10.0.0.1) -> H_server (10.0.0.4)
-    # S1 forwards 10.0.0.4 out port 3 (to S2)
-    assert controller.routing_table[1]["10.0.0.4"] == 3
-    # S2 forwards 10.0.0.4 out port 2 (to S4)
-    assert controller.routing_table[2]["10.0.0.4"] == 2
-    # S4 forwards 10.0.0.4 out port 1 (to H_server)
-    assert controller.routing_table[4]["10.0.0.4"] == 1
+    # Forward direction: h1 (10.0.0.1) -> h5 Web (10.0.0.11)
+    # S3 forwards 10.0.0.11 out port 99 (to S1)
+    assert controller.routing_table[3]["10.0.0.11"] == 99
+    # S1 forwards 10.0.0.11 out port 3 (to S5)
+    assert controller.routing_table[1]["10.0.0.11"] == 3
+    # S5 forwards 10.0.0.11 out port 1 (to local host h5)
+    assert controller.routing_table[5]["10.0.0.11"] == 1
 
-    # Reverse direction: H_server (10.0.0.4) -> H_legit (10.0.0.1)
-    # S4 forwards 10.0.0.1 out port 2 (to S2)
-    assert controller.routing_table[4]["10.0.0.1"] == 2
-    # S2 forwards 10.0.0.1 out port 1 (to S1)
-    assert controller.routing_table[2]["10.0.0.1"] == 1
-    # S1 forwards 10.0.0.1 out port 1 (to H_legit)
-    assert controller.routing_table[1]["10.0.0.1"] == 1
+    # Reverse direction: h5 Web (10.0.0.11) -> h1 (10.0.0.1)
+    # S5 forwards 10.0.0.1 out port 99 (to S1)
+    assert controller.routing_table[5]["10.0.0.1"] == 99
+    # S1 forwards 10.0.0.1 out port 2 (to S3)
+    assert controller.routing_table[1]["10.0.0.1"] == 2
+    # S3 forwards 10.0.0.1 out port 1 (to local host h1)
+    assert controller.routing_table[3]["10.0.0.1"] == 1
 
 
 def test_proxy_arp_known_host():
@@ -200,13 +197,13 @@ def test_ipv4_forwarding_installs_flow_and_packet_out():
     controller.add_flow = MagicMock()
 
     datapath = MagicMock()
-    datapath.id = 1
+    datapath.id = 3  # User edge S3
     datapath.ofproto_parser = MagicMock()
     datapath.ofproto = MagicMock()
 
     eth = MagicMock()
     ip_pkt = MagicMock()
-    ip_pkt.dst = "10.0.0.4"
+    ip_pkt.dst = "10.0.0.11"  # h5 Web server
 
     raw_data = b"\x00" * 64
 
@@ -223,7 +220,7 @@ def test_ipv4_forwarding_installs_flow_and_packet_out():
     # Verify parser.OFPMatch called with eth_type=0x0800
     datapath.ofproto_parser.OFPMatch.assert_called_once_with(
         eth_type=0x0800,
-        ipv4_dst="10.0.0.4",
+        ipv4_dst="10.0.0.11",
     )
 
     # Verify PacketOut sent for first packet zero-loss
@@ -237,11 +234,11 @@ def test_ipv4_loopback_guard():
     controller.add_flow = MagicMock()
 
     datapath = MagicMock()
-    datapath.id = 1
+    datapath.id = 3
 
     eth = MagicMock()
     ip_pkt = MagicMock()
-    # Routing table maps 10.0.0.1 -> out_port 1 on S1
+    # Routing table maps 10.0.0.1 -> out_port 1 on S3
     ip_pkt.dst = "10.0.0.1"
 
     raw_data = b"\x00" * 64
@@ -262,11 +259,11 @@ def test_ipv4_unknown_destination_dropped():
     controller.add_flow = MagicMock()
 
     datapath = MagicMock()
-    datapath.id = 1
+    datapath.id = 3
 
     eth = MagicMock()
     ip_pkt = MagicMock()
-    ip_pkt.dst = "172.16.0.50"  # Not in routing_table[1]
+    ip_pkt.dst = "172.16.0.50"  # Not in routing_table[3]
 
     raw_data = b"\x00" * 64
 
@@ -299,11 +296,11 @@ def _defense_controller():
 
 
 def _attack_alert():
-    return AnomalyAlertMessage(dpid=1, in_port=2, score=-0.3, pps=1500.0, bps=650000.0, bpp=54.0).model_dump_json()
+    return AnomalyAlertMessage(dpid=3, in_port=2, score=-0.3, pps=1500.0, bps=650000.0, bpp=54.0).model_dump_json()
 
 
 def _command(command_id, action):
-    return ControlCommandMessage(command_id=command_id, action=action, target_dpid=1, target_port=2,
+    return ControlCommandMessage(command_id=command_id, action=action, target_dpid=3, target_port=2,
                                  reason="[MANUAL] admin: AI 오탐 의심").model_dump_json()
 
 
@@ -315,7 +312,7 @@ def test_manual_restore_holds_auto_isolation_while_attack_continues():
 
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-restore-1", "RESTORE"))
     controller.restore_port.assert_called_once()
-    assert "1:2" in controller.manual_holds
+    assert "3:2" in controller.manual_holds
 
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _attack_alert())
     assert controller.isolate_port.call_count == 1  # not re-isolated during the hold
@@ -324,18 +321,18 @@ def test_manual_restore_holds_auto_isolation_while_attack_continues():
 def test_auto_isolation_resumes_after_manual_hold_expires():
     controller = _defense_controller()
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-restore-1", "RESTORE"))
-    controller.manual_holds["1:2"] -= MANUAL_RESTORE_HOLD_SEC + 1  # hold already over
+    controller.manual_holds["3:2"] -= MANUAL_RESTORE_HOLD_SEC + 1  # hold already over
 
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, _attack_alert())
     controller.isolate_port.assert_called_once()
-    assert "1:2" not in controller.manual_holds
+    assert "3:2" not in controller.manual_holds
 
 
 def test_manual_isolate_ends_the_hold_and_auto_restore_sets_none():
     controller = _defense_controller()
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-restore-1", "RESTORE"))
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("manual-isolate-2", "ISOLATE"))
-    assert "1:2" not in controller.manual_holds
+    assert "3:2" not in controller.manual_holds
 
     # Only operator commands create a hold.
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, _command("standin-restore-3", "RESTORE"))

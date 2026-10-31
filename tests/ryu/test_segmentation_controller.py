@@ -27,7 +27,7 @@ TABLE_POLICE = _globals["TABLE_POLICE"]
 TABLE_FORWARD = _globals["TABLE_FORWARD"]
 
 
-def _make_controller_with_dp(dpid=1):
+def _make_controller_with_dp(dpid=3):
     controller = SelfDefendingSDNController()
     dp = MagicMock()
     dp.id = dpid
@@ -42,11 +42,11 @@ def _make_controller_with_dp(dpid=1):
 
 
 def test_switch_features_installs_segmentation_rules():
-    controller, dp = _make_controller_with_dp(dpid=1)
+    controller, dp = _make_controller_with_dp(dpid=3)
     controller.add_flow = MagicMock()
     ev = MagicMock()
     ev.msg.datapath = dp
-    dp.id = 1
+    dp.id = 3
 
     controller.switch_features_handler(ev)
 
@@ -57,7 +57,7 @@ def test_switch_features_installs_segmentation_rules():
     assert len(policy_calls) > 0
 
     priorities = [c["priority"] for c in policy_calls]
-    # Trunk bypass
+    # Trunk bypass (Port 99)
     assert 65535 in priorities
     # ARP pass
     assert 500 in priorities
@@ -72,27 +72,28 @@ def test_switch_features_installs_segmentation_rules():
 
     # Check ZONE_DENY cookie on priority 0
     zone_deny_calls = [c for c in policy_calls if c["priority"] == 0]
-    assert len(zone_deny_calls) >= 2  # S1 has Port 1 and Port 2
+    assert len(zone_deny_calls) >= 2  # S3 has Port 1 and Port 2
     for call in zone_deny_calls:
         assert call["cookie"] is not None
         assert call["actions"] == []
 
 
 def test_quarantine_hard_whitelist_protection():
-    controller, _ = _make_controller_with_dp(dpid=1)
+    controller, _ = _make_controller_with_dp(dpid=3)
     # Server and probe IP cannot be quarantined
-    assert controller.quarantine_host("10.0.0.4") is False
+    assert controller.quarantine_host("10.0.0.11") is False
     assert controller.quarantine_host("10.0.0.250") is False
     assert controller.quarantine_host("10.0.0.254") is False
+    assert controller.quarantine_host("10.0.0.253") is False
     assert len(controller.quarantined_hosts) == 0
 
 
 def test_quarantine_and_release_host_flows():
-    controller, dp = _make_controller_with_dp(dpid=1)
+    controller, dp = _make_controller_with_dp(dpid=3)
     controller.delete_flow = MagicMock()
     controller.add_flow = MagicMock()
 
-    # 1. Quarantine H_attacker (10.0.0.2 on S1:P2)
+    # 1. Quarantine H_attacker (10.0.0.2 on S3:P2)
     ok = controller.quarantine_host("10.0.0.2")
     assert ok is True
     assert "10.0.0.2" in controller.quarantined_hosts
@@ -104,12 +105,12 @@ def test_quarantine_and_release_host_flows():
     ]
     assert len(deleted) >= 3  # Web, DNS, ICMP
 
-    # Verify Pri 300 quarantine rules added to TABLE_POLICY
+    # Verify Pri 300 quarantine rules added to TABLE_POLICY (HTTPS, DNS, HTTP Patch)
     added_quarantine = [
         c.kwargs for c in controller.add_flow.call_args_list
         if c.kwargs.get("table_id") == TABLE_POLICY and c.kwargs.get("priority") == 300
     ]
-    assert len(added_quarantine) == 2  # HTTPS 443, DNS 53 to ADMIN
+    assert len(added_quarantine) == 3
 
     # 2. Release H_attacker
     controller.delete_flow.reset_mock()
@@ -124,7 +125,7 @@ def test_quarantine_and_release_host_flows():
         c.kwargs for c in controller.delete_flow.call_args_list
         if c.kwargs.get("table_id") == TABLE_POLICY and c.kwargs.get("priority") == 300
     ]
-    assert len(deleted_q) == 2
+    assert len(deleted_q) == 3
 
     # Verify Pri 200 normal USER rules restored
     restored = [
@@ -135,7 +136,7 @@ def test_quarantine_and_release_host_flows():
 
 
 def test_redis_control_command_quarantine_and_release():
-    controller, _ = _make_controller_with_dp(dpid=1)
+    controller, _ = _make_controller_with_dp(dpid=3)
     controller.quarantine_host = MagicMock()
     controller.release_host = MagicMock()
     controller._publish_topology_sync = MagicMock()
@@ -144,7 +145,7 @@ def test_redis_control_command_quarantine_and_release():
     q_cmd = ControlCommandMessage(
         command_id="manual-q-1",
         action=DefenseAction.QUARANTINE.value,
-        target_dpid=1,
+        target_dpid=3,
         target_port=2,
         reason="Lateral spread detected",
         target_ip="10.0.0.2",
@@ -152,14 +153,14 @@ def test_redis_control_command_quarantine_and_release():
     )
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, q_cmd.model_dump_json())
     controller.quarantine_host.assert_called_once_with(
-        "10.0.0.2", "00:00:00:00:00:02", 1, 2
+        "10.0.0.2", "00:00:00:00:00:02", 3, 2
     )
 
     # RELEASE command
     r_cmd = ControlCommandMessage(
         command_id="manual-r-1",
         action=DefenseAction.RELEASE.value,
-        target_dpid=1,
+        target_dpid=3,
         target_port=2,
         reason="Host cleaned and verified",
         target_ip="10.0.0.2",
@@ -167,14 +168,14 @@ def test_redis_control_command_quarantine_and_release():
     )
     controller._handle_redis_message(REDIS_CHANNEL_CONTROL_COMMAND, r_cmd.model_dump_json())
     controller.release_host.assert_called_once_with(
-        "10.0.0.2", "00:00:00:00:00:02", 1, 2
+        "10.0.0.2", "00:00:00:00:00:02", 3, 2
     )
 
 
 def test_anomaly_alert_threat_type_branching():
     from harness.contracts.sdn_events import REDIS_CHANNEL_ANOMALY_ALERT, AnomalyAlertMessage, RiskStage, ThreatType
 
-    controller, _ = _make_controller_with_dp(dpid=1)
+    controller, _ = _make_controller_with_dp(dpid=3)
     controller.quarantine_host = MagicMock()
     controller.isolate_port = MagicMock()
     controller.reroute_traffic = MagicMock()
@@ -183,11 +184,11 @@ def test_anomaly_alert_threat_type_branching():
 
     # 1. INTERNAL_SPREAD alert -> triggers quarantine_host only, NOT isolate_port
     spread_alert = AnomalyAlertMessage(
-        dpid=1, in_port=2, threat_type=ThreatType.INTERNAL_SPREAD.value,
+        dpid=3, in_port=2, threat_type=ThreatType.INTERNAL_SPREAD.value,
         stage=RiskStage.DANGER.value, score=-2.5, pps=50.0, bps=1000.0, bpp=64.0
     )
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, spread_alert.model_dump_json())
-    controller.quarantine_host.assert_called_once_with("10.0.0.2", dpid=1, port=2)
+    controller.quarantine_host.assert_called_once_with("10.0.0.2", dpid=3, port=2)
     controller.isolate_port.assert_not_called()
     controller.reroute_traffic.assert_not_called()
 
@@ -198,10 +199,10 @@ def test_anomaly_alert_threat_type_branching():
     controller.fsm.force_restore()
 
     flood_alert = AnomalyAlertMessage(
-        dpid=1, in_port=2, threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
+        dpid=3, in_port=2, threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
         stage=RiskStage.DANGER.value, score=-5.0, pps=500.0, bps=10000.0, bpp=64.0
     )
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, flood_alert.model_dump_json())
     controller.quarantine_host.assert_not_called()
-    controller.isolate_port.assert_called_once_with(1, 2, priority=100)
-    controller.reroute_traffic.assert_called_once_with(source_dpid=1, target_dpid=4, dst_ip="10.0.0.4")
+    controller.isolate_port.assert_called_once_with(3, 2, priority=100)
+    controller.reroute_traffic.assert_called_once_with(source_dpid=3, target_dpid=5, dst_ip="10.0.0.11")

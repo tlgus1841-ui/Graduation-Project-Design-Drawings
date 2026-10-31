@@ -10,13 +10,17 @@ import networkx as nx
 import yaml
 
 
-DEFAULT_PROFILE_NAME = "diamond_4sw"
+DEFAULT_PROFILE_NAME = "zone_8sw"
 
 
 def find_profiles_yaml_path() -> Optional[Path]:
-    """topology_profiles.yaml 파일 위치를 환경별로 자동 탐색"""
+    """topology.yaml 또는 topology_profiles.yaml 파일 위치를 환경별로 자동 탐색"""
     candidates = [
-        Path(os.environ.get("SDN_PROFILES_PATH", "")),
+        Path(os.environ.get("SDN_TOPOLOGY_PATH", "")),
+        Path("/workspace/config/topology.yaml"),
+        Path("/app/config/topology.yaml"),
+        Path("config/topology.yaml"),
+        Path(__file__).resolve().parents[2] / "config" / "topology.yaml",
         Path("/workspace/config/topology_profiles.yaml"),
         Path("/app/config/topology_profiles.yaml"),
         Path("config/topology_profiles.yaml"),
@@ -30,27 +34,28 @@ def find_profiles_yaml_path() -> Optional[Path]:
 
 def get_topology_profile(profile_name: Optional[str] = None) -> Dict[str, Any]:
     """
-    지정된 또는 환경 변수(SDN_TOPOLOGY_PROFILE)에 따른 토폴로지 프로파일 로드.
-    미설정 시 기본값 'diamond_4sw'로 안전 폴백.
+    엔터프라이즈 8-스위치 토폴로지 프로파일 로드 (SSOT).
     """
-    target = profile_name or os.environ.get("SDN_TOPOLOGY_PROFILE") or DEFAULT_PROFILE_NAME
     p_path = find_profiles_yaml_path()
 
-    loaded_profiles = {}
+    profile = {}
     if p_path and p_path.exists():
         try:
             with open(p_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-                loaded_profiles = data.get("profiles", {})
+                if "topology" in data:
+                    profile = data["topology"]
+                elif "profiles" in data:
+                    profiles = data["profiles"]
+                    target = profile_name or "zone_8sw"
+                    profile = profiles.get(target) or profiles.get("default") or {}
         except Exception:
-            loaded_profiles = {}
+            profile = {}
 
-    profile = loaded_profiles.get(target)
-    if not profile:
-        # Fallback to diamond_4sw hardcoded defaults if YAML loading fails
-        profile = _get_builtin_diamond_4sw()
+    if not profile or not profile.get("switches"):
+        profile = _get_builtin_zone_8sw()
 
-    # routing_table이 명시되어 있지 않은 경우 자동 계산 (예: zone_8sw)
+    # routing_table이 명시되어 있지 않은 경우 자동 계산
     if "routing_table" not in profile or not profile["routing_table"]:
         profile["routing_table"] = compute_routing_table(profile)
 
@@ -99,37 +104,54 @@ def compute_routing_table(profile: Dict[str, Any]) -> Dict[int, Dict[str, int]]:
     return routing
 
 
-def _get_builtin_diamond_4sw() -> Dict[str, Any]:
-    """기본 diamond_4sw 빌트인 설정"""
+def _get_builtin_zone_8sw() -> Dict[str, Any]:
+    """엔터프라이즈 8-스위치 빌트인 표준 설정"""
     return {
-        "name": "diamond_4sw",
-        "description": "Builtin diamond 4-switch fallback profile",
-        "switches": [1, 2, 3, 4],
+        "name": "zone_8sw",
+        "description": "Enterprise 8-Switch 5-Zone Topology (Builtin SSOT)",
+        "switches": [1, 2, 3, 4, 5, 6, 7, 8],
         "hosts": {
-            "10.0.0.1": {"mac": "00:00:00:00:00:01", "dpid": 1, "port": 1, "zone": "USER", "label": "h_legit"},
-            "10.0.0.2": {"mac": "00:00:00:00:00:02", "dpid": 1, "port": 2, "zone": "USER", "label": "h_attacker"},
-            "10.0.0.4": {"mac": "00:00:00:00:00:04", "dpid": 4, "port": 1, "zone": "SERVER", "label": "h_server"},
-        },
-        "routing_table": {
-            1: {"10.0.0.1": 1, "10.0.0.2": 2, "10.0.0.4": 3, "10.0.0.254": 3},
-            2: {"10.0.0.1": 1, "10.0.0.2": 1, "10.0.0.4": 2, "10.0.0.254": 2},
-            3: {"10.0.0.1": 1, "10.0.0.2": 1, "10.0.0.4": 2, "10.0.0.254": 2},
-            4: {"10.0.0.1": 2, "10.0.0.2": 2, "10.0.0.4": 1, "10.0.0.254": 2},
+            "10.0.0.1": {"mac": "00:00:00:00:00:01", "dpid": 3, "port": 1, "zone": "USER", "label": "h1"},
+            "10.0.0.2": {"mac": "00:00:00:00:00:02", "dpid": 3, "port": 2, "zone": "USER", "label": "h2"},
+            "10.0.0.3": {"mac": "00:00:00:00:00:03", "dpid": 4, "port": 1, "zone": "USER", "label": "h3"},
+            "10.0.0.4": {"mac": "00:00:00:00:00:04", "dpid": 4, "port": 2, "zone": "USER", "label": "h4"},
+            "10.0.0.11": {"mac": "00:00:00:00:00:11", "dpid": 5, "port": 1, "zone": "SERVER", "label": "h5"},
+            "10.0.0.12": {"mac": "00:00:00:00:00:12", "dpid": 5, "port": 2, "zone": "SERVER", "label": "h6"},
+            "10.0.0.21": {"mac": "00:00:00:00:00:21", "dpid": 6, "port": 1, "zone": "SERVER", "label": "h7"},
+            "10.0.0.22": {"mac": "00:00:00:00:00:22", "dpid": 6, "port": 2, "zone": "SERVER", "label": "h8"},
+            "10.0.0.254": {"mac": "00:00:00:00:00:fe", "dpid": 7, "port": 1, "zone": "ADMIN", "label": "h_admin"},
+            "10.0.0.253": {"mac": "00:00:00:00:00:fd", "dpid": 7, "port": 2, "zone": "ADMIN", "label": "h_patch"},
+            "10.0.0.250": {"mac": "00:00:00:00:00:fa", "dpid": 8, "port": 1, "zone": "QUARANTINE", "label": "h_sink"},
         },
         "links": [
-            [1, 2, 3, 1, 1.0],
-            [1, 3, 4, 1, 2.0],
-            [2, 4, 2, 2, 1.0],
-            [3, 4, 2, 3, 2.0],
+            [1, 2, 1, 1, 1.0],
+            [1, 3, 2, 99, 1.0],
+            [1, 5, 3, 99, 1.0],
+            [1, 7, 4, 98, 1.0],
+            [1, 8, 5, 98, 1.0],
+            [2, 4, 2, 99, 1.0],
+            [2, 6, 3, 99, 1.0],
+            [2, 7, 4, 99, 1.0],
+            [2, 8, 5, 99, 1.0],
         ],
-        "trunk_ports": {1: [3, 4], 2: [1, 2], 3: [1, 2], 4: [2, 3]},
-        "access_ports": {1: [1, 2], 2: [], 3: [], 4: [1, 2]},
-        "protected_access_ports": {1: [1], 4: [1, 2]},
-        "protected_ips": ["10.0.0.1", "10.0.0.4", "10.0.0.254"],
+        "trunk_ports": {
+            1: [1, 2, 3, 4, 5], 2: [1, 2, 3, 4, 5],
+            3: [99], 4: [99], 5: [99], 6: [99],
+            7: [98, 99], 8: [98, 99],
+        },
+        "access_ports": {
+            1: [], 2: [],
+            3: [1, 2], 4: [1, 2], 5: [1, 2], 6: [1, 2],
+            7: [1, 2], 8: [1],
+        },
+        "protected_access_ports": {5: [1, 2], 6: [1, 2], 7: [1, 2]},
+        "protected_ips": [
+            "10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22", "10.0.0.253", "10.0.0.254"
+        ],
         "probe": {
-            "dpid": 1,
+            "dpid": 3,
             "ip": "10.0.0.250",
             "mac": "00:00:00:00:00:fa",
-            "target_ip": "10.0.0.4",
+            "target_ip": "10.0.0.11",
         },
     }

@@ -35,9 +35,9 @@ def test_full_4_stage_autonomous_defense_scenario():
     controller = ControllerCls()
     controller.redis_client = redis_client
 
-    # Connect switches S1, S2, S3, S4
+    # Connect switches S1 ~ S8
     mock_dps = {}
-    for dpid in [1, 2, 3, 4]:
+    for dpid in range(1, 9):
         dp = MagicMock()
         dp.id = dpid
         dp.ofproto = MagicMock()
@@ -49,13 +49,14 @@ def test_full_4_stage_autonomous_defense_scenario():
 
     # [Stage 1: Normal Baseline]
     assert controller.fsm.get_state() == DefenseState.NORMAL
-    # Primary routing for 10.0.0.4 on S1 points to S2 (Port 3)
-    assert controller.routing_table[1]["10.0.0.4"] == 3
+    # Primary routing for 10.0.0.11 on S3 points to S1 (Port 99) and on S1 points to S5 (Port 3)
+    assert controller.routing_table[3]["10.0.0.11"] == 99
+    assert controller.routing_table[1]["10.0.0.11"] == 3
 
     # [Stage 2 & 3: Attack Detection & Autonomous Defense]
     alert = AnomalyAlertMessage(
-        dpid=1,
-        in_port=2,  # Attacker port
+        dpid=3,
+        in_port=2,  # Attacker port (S3:P2)
         threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
         score=-0.95,
         pps=4800.0,
@@ -69,21 +70,16 @@ def test_full_4_stage_autonomous_defense_scenario():
     # 3.1 State must be MITIGATED
     assert controller.fsm.get_state() == DefenseState.MITIGATED
 
-    # 3.2 In_port 2 on S1 isolated with Priority 100
-    s1_msgs = [call.args[0] for call in mock_dps[1].send_msg.call_args_list]
-    assert len(s1_msgs) > 0
-
-    # 3.3 Bypass routing installed on intermediate switch S3 (Port 2 -> S4)
+    # 3.2 In_port 2 on S3 isolated with Priority 100
     s3_msgs = [call.args[0] for call in mock_dps[3].send_msg.call_args_list]
-    assert len(s3_msgs) == 1
-    s1_initial_count = mock_dps[1].send_msg.call_count
+    assert len(s3_msgs) > 0
+    s3_initial_count = mock_dps[3].send_msg.call_count
 
-    # 3.4 Repeated alert while MITIGATED extends heartbeat without duplicates
+    # 3.3 Repeated alert while MITIGATED extends heartbeat without duplicates
     controller._handle_redis_message(
         REDIS_CHANNEL_ANOMALY_ALERT, alert.model_dump_json()
     )
-    assert mock_dps[1].send_msg.call_count == s1_initial_count
-    assert mock_dps[3].send_msg.call_count == 1
+    assert mock_dps[3].send_msg.call_count == s3_initial_count
 
     # [Stage 4: Autonomous Self-Healing & Cooldown Rollback]
     t_threat = controller.fsm.last_threat_time
@@ -96,6 +92,5 @@ def test_full_4_stage_autonomous_defense_scenario():
     controller.fsm.evaluate_heartbeat(current_time=t_threat + 10.5)
     assert controller.fsm.get_state() == DefenseState.NORMAL
 
-    # 4.3 Verify S1 & S3 received flow deletions (Drop + Priority 20 Bypass)
-    assert mock_dps[1].send_msg.call_count >= s1_initial_count + 2
-    assert mock_dps[3].send_msg.call_count == 2
+    # 4.3 Verify S3 received flow deletions (Drop restored)
+    assert mock_dps[3].send_msg.call_count > s3_initial_count

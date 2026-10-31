@@ -15,7 +15,7 @@ import networkx as nx
 class RerouteEngine:
     """
     OpenFlow 1.3 다중 홉 우회 경로 계산 및 플로우 프로비저닝 엔진.
-    다이아몬드 토폴로지(S1, S2, S3, S4) 및 일반 메쉬 토폴로지 지원.
+    엔터프라이즈 8-스위치(S1~S8) 5-Zone 토폴로지 지원.
     """
 
     def __init__(self, profile: Optional[Dict[str, Any]] = None):
@@ -25,7 +25,7 @@ class RerouteEngine:
         if profile and profile.get("links"):
             self._build_topology_from_links(profile["links"])
         else:
-            self._build_diamond_topology()
+            self._build_default_8sw_topology()
 
     def _build_topology_from_links(self, links: List[Any]):
         """프로파일 링크 명세로부터 그래프 및 포트 매핑 초기화"""
@@ -36,17 +36,21 @@ class RerouteEngine:
             self.port_map[(u, v)] = (u_p, v_p)
             self.port_map[(v, u)] = (v_p, u_p)
 
-    def _build_diamond_topology(self):
-        """다이아몬드 기본 토폴로지 링크 및 포트 매핑 초기화"""
-        # S1: P3 <-> S2: P1
-        # S1: P4 <-> S3: P1
-        # S2: P2 <-> S4: P2
-        # S3: P2 <-> S4: P3
+    def _build_default_8sw_topology(self):
+        """엔터프라이즈 8-스위치 기본 토폴로지 링크 및 포트 매핑 초기화"""
         links = [
-            (1, 2, 3, 1, 1.0),  # (u, v, u_port, v_port, weight)
-            (1, 3, 4, 1, 2.0),  # Backup route has slightly higher initial weight
-            (2, 4, 2, 2, 1.0),
-            (3, 4, 2, 3, 2.0),
+            # Core S1 <-> S2
+            (1, 2, 1, 1, 1.0),
+            # S1 to Edges
+            (1, 3, 2, 99, 1.0),
+            (1, 5, 3, 99, 1.0),
+            (1, 7, 4, 98, 1.0),
+            (1, 8, 5, 98, 1.0),
+            # S2 to Edges
+            (2, 4, 2, 99, 1.0),
+            (2, 6, 3, 99, 1.0),
+            (2, 7, 4, 99, 1.0),
+            (2, 8, 5, 99, 1.0),
         ]
         for u, v, u_p, v_p, w in links:
             self.graph.add_edge(u, v, weight=w)

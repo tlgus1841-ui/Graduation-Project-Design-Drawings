@@ -52,19 +52,36 @@ SCORE_THRESHOLD = 0.0
 PRIORITY_DROP = 100
 PRIORITY_REROUTE = 20
 
-ATTACKER_DPID = 1
+ATTACKER_DPID = 3
 ATTACKER_PORT = 2
-BYPASS_EGRESS_PORT = 4
+BYPASS_EGRESS_PORT = 99
 
-# Trunk ports are never isolatable (whitelist guard, spec §1)
-TRUNK_PORTS = {(1, 3), (1, 4), (2, 1), (2, 2), (3, 1), (3, 2), (4, 2), (4, 3)}
-SWITCH_PORTS: Dict[int, List[int]] = {1: [1, 2, 3, 4], 2: [1, 2], 3: [1, 2], 4: [1, 2, 3]}
+# Enterprise 8-Switch Trunk ports
+TRUNK_PORTS = {
+    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
+    (2, 1), (2, 2), (2, 3), (2, 4), (2, 5),
+    (3, 99), (4, 99), (5, 99), (6, 99),
+    (7, 98), (7, 99), (8, 98), (8, 99),
+}
+SWITCH_PORTS: Dict[int, List[int]] = {
+    1: [1, 2, 3, 4, 5],
+    2: [1, 2, 3, 4, 5],
+    3: [1, 2, 99],
+    4: [1, 2, 99],
+    5: [1, 2, 99],
+    6: [1, 2, 99],
+    7: [1, 2, 98, 99],
+    8: [1, 98, 99],
+}
 
 # Forward hops as (dpid, in_port, out_port)
 Hop = Tuple[int, int, int]
-PRIMARY_PATH: List[Hop] = [(1, 1, 3), (2, 1, 2), (4, 2, 1)]
-BYPASS_PATH: List[Hop] = [(1, 1, 4), (3, 1, 2), (4, 3, 1)]
-ATTACK_PATH: List[Hop] = [(1, 2, 3), (2, 1, 2), (4, 2, 1)]
+# Primary: h1(S3:1) -> S3:99 -> S1:2 -> S1:3 -> S5:99 -> S5:1 (h5 Web)
+PRIMARY_PATH: List[Hop] = [(3, 1, 99), (1, 2, 3), (5, 99, 1)]
+# Bypass: h1(S3:1) -> S3:99 -> S1:2 -> S1:1 -> S2:1 -> S2:3 -> S6:99 -> S6:1 (h7 DB/API)
+BYPASS_PATH: List[Hop] = [(3, 1, 99), (1, 2, 1), (2, 1, 3), (6, 99, 1)]
+# Attack: h2 attacker(S3:2) -> S3:99 -> S1:2 -> S1:3 -> S5:99 -> S5:1
+ATTACK_PATH: List[Hop] = [(3, 2, 99), (1, 2, 3), (5, 99, 1)]
 
 
 class Phase(str, Enum):
@@ -233,24 +250,57 @@ class MockTelemetryGenerator:
         mitigated = phase in (Phase.MITIGATED, Phase.COOLDOWN_VERIFY)
 
         s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
+        h2_status = "QUARANTINED" if mitigated else s1_status
+
         nodes = [
-            _switch("s1", "S1 (Ingress)", 1, s1_status),
-            _switch("s2", "S2 (Primary)", 2),
-            _switch("s3", "S3 (Bypass)", 3),
-            _switch("s4", "S4 (Egress)", 4),
-            _host("h_legit", "H_legit", "10.0.0.1", "00:00:00:00:00:01"),
-            _host("h_attacker", "H_attacker", "10.0.0.2", "00:00:00:00:00:02", s1_status),
-            _host("h_server", "H_server", "10.0.0.4", "00:00:00:00:00:04"),
+            _switch("s1", "S1 (Core 1)", 1, s1_status),
+            _switch("s2", "S2 (Core 2)", 2),
+            _switch("s3", "S3 (User A)", 3),
+            _switch("s4", "S4 (User B)", 4),
+            _switch("s5", "S5 (Server A)", 5),
+            _switch("s6", "S6 (Server B)", 6),
+            _switch("s7", "S7 (Admin)", 7),
+            _switch("s8", "S8 (Quarantine)", 8),
+            _host("h1", "h1", "10.0.0.1", "00:00:00:00:00:01"),
+            _host("h2", "h2", "10.0.0.2", "00:00:00:00:00:02", h2_status),
+            _host("h3", "h3", "10.0.0.3", "00:00:00:00:00:03"),
+            _host("h4", "h4", "10.0.0.4", "00:00:00:00:00:04"),
+            _host("h5", "h5", "10.0.0.11", "00:00:00:00:00:11"),
+            _host("h6", "h6", "10.0.0.12", "00:00:00:00:00:12"),
+            _host("h7", "h7", "10.0.0.21", "00:00:00:00:00:21"),
+            _host("h8", "h8", "10.0.0.22", "00:00:00:00:00:22"),
+            _host("h_admin", "h_admin", "10.0.0.254", "00:00:00:00:00:fe"),
+            _host("h_patch", "h_patch", "10.0.0.253", "00:00:00:00:00:fd"),
+            _host("h_sink", "h_sink", "10.0.0.250", "00:00:00:00:00:fa"),
         ]
         bypass_status = "REROUTED" if mitigated else "ACTIVE"
+        h2_link_status = "BLOCKED" if mitigated else "ACTIVE"
+
         links = [
-            _link("s1", "h_legit", 1, 1),
-            _link("s1", "h_attacker", 2, 1, status="BLOCKED" if mitigated else "ACTIVE"),
-            _link("s1", "s2", 3, 1, is_trunk=True),
-            _link("s1", "s3", 4, 1, is_trunk=True, status=bypass_status),
-            _link("s2", "s4", 2, 2, is_trunk=True),
-            _link("s3", "s4", 2, 3, is_trunk=True, status=bypass_status),
-            _link("s4", "h_server", 1, 1),
+            # Core Trunk
+            _link("s1", "s2", 1, 1, is_trunk=True),
+            # S1 Edges
+            _link("s1", "s3", 2, 99, is_trunk=True),
+            _link("s1", "s5", 3, 99, is_trunk=True),
+            _link("s1", "s7", 4, 98, is_trunk=True),
+            _link("s1", "s8", 5, 98, is_trunk=True),
+            # S2 Edges
+            _link("s2", "s4", 2, 99, is_trunk=True),
+            _link("s2", "s6", 3, 99, is_trunk=True),
+            _link("s2", "s7", 4, 99, is_trunk=True),
+            _link("s2", "s8", 5, 99, is_trunk=True),
+            # Host Access links
+            _link("s3", "h1", 1, 1),
+            _link("s3", "h2", 2, 1, status=h2_link_status),
+            _link("s4", "h3", 1, 1),
+            _link("s4", "h4", 2, 1),
+            _link("s5", "h5", 1, 1),
+            _link("s5", "h6", 2, 1),
+            _link("s6", "h7", 1, 1),
+            _link("s6", "h8", 2, 1),
+            _link("s7", "h_admin", 1, 1),
+            _link("s7", "h_patch", 2, 1),
+            _link("s8", "h_sink", 1, 1),
         ]
         return TopologySyncMessage(nodes=nodes, links=links)
 

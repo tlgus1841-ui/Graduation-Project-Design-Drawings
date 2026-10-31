@@ -1,50 +1,44 @@
 # =============================================================================
 # SDN Dynamic Network Segmentation Configuration (SSOT)
+# Enterprise 8-Switch 5-Zone Topology (Phase 6-C Standard)
 # =============================================================================
 
 # 논리 망(Zone) 정의 및 기본 소속 호스트 IP 목록
 zones:
   USER:
-    - "10.0.0.1"   # H_legit (정상 업무 단말 / h1)
-    - "10.0.0.2"   # H_attacker (초기 정상 위장 / h2)
-    - "10.0.0.3"   # 영업 단말 (h3)
+    - "10.0.0.1"   # h1 (사용자 PC 1 on S3:P1)
+    - "10.0.0.2"   # h2 (사용자 PC 2 on S3:P2)
+    - "10.0.0.3"   # h3 (사용자 PC 3 on S4:P1)
+    - "10.0.0.4"   # h4 (사용자 PC 4 on S4:P2)
   SERVER:
-    - "10.0.0.4"   # H_server (보호 대상 서비스 웹/DNS 서버 / 4-Switch 호환)
-    - "10.0.0.11"  # Web Server 1 (h5)
-    - "10.0.0.12"  # API Server 2 (h6)
-    - "10.0.0.21"  # DB Server 1 (h7)
-    - "10.0.0.22"  # Backup Server (h8)
+    - "10.0.0.11"  # h5 (Web Server 1 on S5:P1)
+    - "10.0.0.12"  # h6 (API Server 2 on S5:P2)
+    - "10.0.0.21"  # h7 (DB Server 1 on S6:P1)
+    - "10.0.0.22"  # h8 (Backup Storage Server on S6:P2)
   ADMIN:
-    - "10.0.0.254" # 중앙 관제 보안관제탑 호스트 (h_admin)
-    - "10.0.0.253" # 보안 업데이트 물리 패치 서버 (h_patch)
+    - "10.0.0.254" # h_admin (중앙 관제 보안관제탑 호스트 on S7:P1)
+    - "10.0.0.253" # h_patch (보안 업데이트 물리 패치 서버 on S7:P2)
   QUARANTINE:
-    - "10.0.0.250" # 악성 패킷 분석 싱크홀 (h_sink)
+    - "10.0.0.250" # h_sink (악성 패킷 분석 싱크홀 on S8:P1)
 
 # 호스트 하드웨어 바인딩 (IP - MAC - Switch DPID - Port)
 hosts:
-  # 4-Switch Default & Ingress Edges
   "10.0.0.1":
     mac: "00:00:00:00:00:01"
-    dpid: 1
+    dpid: 3
     port: 1
   "10.0.0.2":
     mac: "00:00:00:00:00:02"
-    dpid: 1
+    dpid: 3
     port: 2
-  "10.0.0.4":
-    mac: "00:00:00:00:00:04"
-    dpid: 4
-    port: 1
-  "10.0.0.254":
-    mac: "00:00:00:00:00:fe"
-    dpid: 4
-    port: 2
-
-  # 8-Switch Zone Extensions
   "10.0.0.3":
     mac: "00:00:00:00:00:03"
     dpid: 4
     port: 1
+  "10.0.0.4":
+    mac: "00:00:00:00:00:04"
+    dpid: 4
+    port: 2
   "10.0.0.11":
     mac: "00:00:00:00:00:11"
     dpid: 5
@@ -61,6 +55,10 @@ hosts:
     mac: "00:00:00:00:00:22"
     dpid: 6
     port: 2
+  "10.0.0.254":
+    mac: "00:00:00:00:00:fe"
+    dpid: 7
+    port: 1
   "10.0.0.253":
     mac: "00:00:00:00:00:fd"
     dpid: 7
@@ -145,7 +143,6 @@ lateral_spread_ports:
 hard_whitelist:
   probe_ip: "10.0.0.250"
   protected_ips:
-    - "10.0.0.4"
     - "10.0.0.11"
     - "10.0.0.12"
     - "10.0.0.21"

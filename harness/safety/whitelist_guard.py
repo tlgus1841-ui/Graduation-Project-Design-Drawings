@@ -10,37 +10,48 @@ Only Access ports connecting end-hosts (e.g. H_attacker on S1:P2) can be isolate
 from typing import Dict, List, Optional, Set
 
 
-# Diamond Topology Trunk Port Mapping: {dpid: [trunk_ports]}
-# S1: P3 (to S2), P4 (to S3)
-# S2: P1 (to S1), P2 (to S4)
-# S3: P1 (to S1), P2 (to S4)
-# S4: P2 (to S2), P3 (to S3)
+# Enterprise 8-Switch 5-Zone Trunk Port Mapping: {dpid: [trunk_ports]}
+# S1 (Core 1): P1(to S2), P2(to S3), P3(to S5), P4(to S7), P5(to S8)
+# S2 (Core 2): P1(to S1), P2(to S4), P3(to S6), P4(to S7), P5(to S8)
+# S3: P99(to S1), S4: P99(to S2), S5: P99(to S1), S6: P99(to S2)
+# S7: P98(to S1), P99(to S2), S8: P98(to S1), P99(to S2)
 DEFAULT_TRUNK_PORTS: Dict[int, List[int]] = {
-    1: [3, 4],
-    2: [1, 2],
-    3: [1, 2],
-    4: [2, 3],
+    1: [1, 2, 3, 4, 5],
+    2: [1, 2, 3, 4, 5],
+    3: [99],
+    4: [99],
+    5: [99],
+    6: [99],
+    7: [98, 99],
+    8: [98, 99],
 }
 
-# Dedicated Access ports for Diamond Topology: {dpid: [access_ports]}
-# S1: P1 (H_legit), P2 (H_attacker)
-# S4: P1 (H_server)
+# Dedicated Access ports for 8-Switch Topology: {dpid: [access_ports]}
 DEFAULT_ACCESS_PORTS: Dict[int, List[int]] = {
-    1: [1, 2],
+    1: [],
     2: [],
-    3: [],
-    4: [1],
+    3: [1, 2],  # h1, h2
+    4: [1, 2],  # h3, h4
+    5: [1, 2],  # h5, h6
+    6: [1, 2],  # h7, h8
+    7: [1, 2],  # h_admin, h_patch
+    8: [1],     # h_sink
 }
 
-# Protected end-host ports that must never be isolated, regardless of trunk
-# status: S1:1 (H_legit), S4:1 (H_server). Previously only `is_ip_protected()`
-# existed for this and it was never called anywhere, so nothing actually
-# stopped an ISOLATE on these ports except the AI worker's own port filter
-# (model/inference_worker.py) upstream. This makes the guarantee authoritative
-# at the safety-gate layer itself.
+# Protected end-host ports that must never be isolated (Servers, Admin, Patch)
 DEFAULT_PROTECTED_ACCESS_PORTS: Dict[int, List[int]] = {
-    1: [1],
-    4: [1],
+    5: [1, 2],
+    6: [1, 2],
+    7: [1, 2],
+}
+
+DEFAULT_PROTECTED_IPS: Set[str] = {
+    "10.0.0.11",
+    "10.0.0.12",
+    "10.0.0.21",
+    "10.0.0.22",
+    "10.0.0.253",
+    "10.0.0.254",
 }
 
 
@@ -56,9 +67,7 @@ class WhitelistGuard:
     ):
         self.trunk_ports = trunk_ports if trunk_ports is not None else DEFAULT_TRUNK_PORTS
         self.access_ports = access_ports if access_ports is not None else DEFAULT_ACCESS_PORTS
-        # H_legit (10.0.0.1), H_server (10.0.0.4) 등 주요 호스트 보호 IP 목록
-        self.protected_ips = protected_ips if protected_ips is not None else {"10.0.0.1", "10.0.0.4"}
-        # 포트 기준 보호 목록 (can_isolate()가 실제로 참조하는 값)
+        self.protected_ips = protected_ips if protected_ips is not None else DEFAULT_PROTECTED_IPS
         self.protected_access_ports = (
             protected_access_ports if protected_access_ports is not None else DEFAULT_PROTECTED_ACCESS_PORTS
         )

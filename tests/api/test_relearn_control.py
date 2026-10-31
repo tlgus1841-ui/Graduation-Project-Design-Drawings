@@ -18,10 +18,10 @@ def test_relearn_command_for_every_port_or_one_access_port():
     cmd = build_relearn_command(RelearnRequest(**APPROVE_ALL, operator="kim"))
     assert (cmd.action, cmd.target_dpid, cmd.target_port, cmd.duration_sec) == ("RELEARN", 0, 0, 1800.0)
     assert cmd.command_id.startswith("manual-relearn-") and cmd.reason.startswith("[MANUAL] kim:")
-    one = build_relearn_command(RelearnRequest(**APPROVE_ALL, dpid=1, port=2))
-    assert (one.target_dpid, one.target_port) == (1, 2)
+    one = build_relearn_command(RelearnRequest(**APPROVE_ALL, dpid=3, port=2))
+    assert (one.target_dpid, one.target_port) == (3, 2)
     with pytest.raises(ManualControlRejected):
-        build_relearn_command(RelearnRequest(**APPROVE_ALL, dpid=1, port=3))  # S1:3 is a trunk port
+        build_relearn_command(RelearnRequest(**APPROVE_ALL, dpid=3, port=99))  # S3:99 is a trunk port
 
 
 @pytest.mark.parametrize("payload", [
