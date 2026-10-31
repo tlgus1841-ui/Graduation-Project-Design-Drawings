@@ -61,7 +61,7 @@ def run(kind: str, dst: str, pps: int, duration: float) -> dict:
 def main() -> None:
     p = argparse.ArgumentParser(description="UDP·ICMP Flood 공격기")
     p.add_argument("--kind", choices=KINDS, required=True)
-    p.add_argument("--dst", default="10.0.0.4")
+    p.add_argument("--dst", default="10.0.0.11")
     p.add_argument("--pps", type=int, default=1000, help="초당 목표 패킷 수")
     p.add_argument("--duration", type=float, default=20.0)
     a = p.parse_args()

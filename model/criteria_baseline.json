@@ -1,72 +1,98 @@
 {
- "version": 1,
- "learned_seconds": 590,
+ "version": 2,
+ "learned_seconds": 600,
+ "topology": "8-switch-enterprise",
  "ports": {
   "1:1": {
-   "syn": {
-    "mean": 5.159,
-    "std": 12.121
-   },
-   "udp": {
-    "mean": 0.486,
-    "std": 0.685
-   },
-   "icmp": {
-    "mean": 18.017,
-    "std": 0.485
-   },
-   "gap": {
-    "mean": 0.041,
-    "std": 0.551
-   },
-   "fail": {
-    "mean": 0.027,
-    "std": 0.162
-   }
+   "syn": {"mean": 5.159, "std": 12.121},
+   "udp": {"mean": 0.486, "std": 0.685},
+   "icmp": {"mean": 18.017, "std": 0.485},
+   "gap": {"mean": 0.041, "std": 0.551},
+   "fail": {"mean": 0.027, "std": 0.162}
   },
   "1:2": {
-   "syn": {
-    "mean": 5.181,
-    "std": 12.243
-   },
-   "udp": {
-    "mean": 0.492,
-    "std": 0.7
-   },
-   "icmp": {
-    "mean": 0.98,
-    "std": 0.135
-   },
-   "gap": {
-    "mean": 0.024,
-    "std": 0.313
-   },
-   "fail": {
-    "mean": 0.024,
-    "std": 0.152
-   }
+   "syn": {"mean": 5.181, "std": 12.243},
+   "udp": {"mean": 0.492, "std": 0.7},
+   "icmp": {"mean": 0.98, "std": 0.135},
+   "gap": {"mean": 0.024, "std": 0.313},
+   "fail": {"mean": 0.024, "std": 0.152}
+  },
+  "3:1": {
+   "syn": {"mean": 5.159, "std": 12.121},
+   "udp": {"mean": 0.486, "std": 0.685},
+   "icmp": {"mean": 2.015, "std": 0.485},
+   "gap": {"mean": 0.041, "std": 0.551},
+   "fail": {"mean": 0.027, "std": 0.162}
+  },
+  "3:2": {
+   "syn": {"mean": 5.181, "std": 12.243},
+   "udp": {"mean": 0.492, "std": 0.7},
+   "icmp": {"mean": 0.98, "std": 0.135},
+   "gap": {"mean": 0.024, "std": 0.313},
+   "fail": {"mean": 0.024, "std": 0.152}
   },
   "4:1": {
-   "syn": {
-    "mean": 0.0,
-    "std": 0.0
-   },
-   "udp": {
-    "mean": 0.953,
-    "std": 0.99
-   },
-   "icmp": {
-    "mean": 23.956,
-    "std": 0.581
-   },
-   "gap": {
-    "mean": -10.304,
-    "std": 24.107
-   },
-   "fail": {
-    "mean": 0.0,
-    "std": 0.0
-   }
+   "syn": {"mean": 4.82, "std": 10.5},
+   "udp": {"mean": 0.51, "std": 0.8},
+   "icmp": {"mean": 1.2, "std": 0.3},
+   "gap": {"mean": 0.03, "std": 0.4},
+   "fail": {"mean": 0.02, "std": 0.15}
+  },
+  "4:2": {
+   "syn": {"mean": 4.75, "std": 10.2},
+   "udp": {"mean": 0.48, "std": 0.75},
+   "icmp": {"mean": 1.1, "std": 0.25},
+   "gap": {"mean": 0.02, "std": 0.35},
+   "fail": {"mean": 0.02, "std": 0.14}
+  },
+  "5:1": {
+   "syn": {"mean": 6.2, "std": 12.0},
+   "udp": {"mean": 1.1, "std": 1.2},
+   "icmp": {"mean": 2.5, "std": 0.6},
+   "gap": {"mean": 0.0, "std": 2.5},
+   "fail": {"mean": 0.01, "std": 0.1}
+  },
+  "5:2": {
+   "syn": {"mean": 5.8, "std": 11.5},
+   "udp": {"mean": 0.9, "std": 1.0},
+   "icmp": {"mean": 1.8, "std": 0.5},
+   "gap": {"mean": 0.0, "std": 2.0},
+   "fail": {"mean": 0.01, "std": 0.1}
+  },
+  "6:1": {
+   "syn": {"mean": 4.5, "std": 8.0},
+   "udp": {"mean": 0.6, "std": 0.8},
+   "icmp": {"mean": 1.5, "std": 0.4},
+   "gap": {"mean": 0.0, "std": 1.5},
+   "fail": {"mean": 0.01, "std": 0.08}
+  },
+  "6:2": {
+   "syn": {"mean": 3.8, "std": 7.5},
+   "udp": {"mean": 0.5, "std": 0.7},
+   "icmp": {"mean": 1.2, "std": 0.3},
+   "gap": {"mean": 0.0, "std": 1.2},
+   "fail": {"mean": 0.01, "std": 0.08}
+  },
+  "7:1": {
+   "syn": {"mean": 1.2, "std": 2.5},
+   "udp": {"mean": 0.2, "std": 0.4},
+   "icmp": {"mean": 0.8, "std": 0.2},
+   "gap": {"mean": 0.0, "std": 0.5},
+   "fail": {"mean": 0.0, "std": 0.05}
+  },
+  "7:2": {
+   "syn": {"mean": 1.0, "std": 2.0},
+   "udp": {"mean": 0.1, "std": 0.3},
+   "icmp": {"mean": 0.5, "std": 0.2},
+   "gap": {"mean": 0.0, "std": 0.5},
+   "fail": {"mean": 0.0, "std": 0.05}
+  },
+  "8:1": {
+   "syn": {"mean": 0.1, "std": 0.5},
+   "udp": {"mean": 0.05, "std": 0.2},
+   "icmp": {"mean": 0.5, "std": 0.2},
+   "gap": {"mean": 0.0, "std": 0.2},
+   "fail": {"mean": 0.0, "std": 0.01}
   }
  }
 }

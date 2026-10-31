@@ -90,7 +90,7 @@ export default function IncidentStrip({ phase, incident }) {
     NORMAL: ["text-emerald-300", "정상 · 감지된 위협 없음"],
     MITIGATED: ["text-sky-300", "대응 중 · 공격 포트 격리, 우회 경로 운영"],
     COOLDOWN_VERIFY: ["text-teal-300", "복구 확인 중 · 공격 종료 여부 검증"],
-  }[phase] ?? ["text-slate-400", "데이터 수신 대기 중"];
+  }[phase] ?? ["text-slate-300", "데이터 수신 대기 중"];
 
   return (
     <div

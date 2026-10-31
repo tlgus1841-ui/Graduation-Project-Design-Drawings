@@ -1,6 +1,5 @@
 """Self-Defending SDN Tower - H_legit(10.0.0.1) -> H_server(10.0.0.4) 정상 트래픽 생성기.
 
-주간 계획: docs/writing/reports/weekly/week04_traffic_normal_plan.md
 실행 예: sudo uv run python traffic/traffic_normal.py --src 10.0.0.1 --dst 10.0.0.4
 """
 
@@ -123,7 +122,7 @@ def run(profile: PacketProfile, mean_interval: float, duration: float, verbose: 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="H_legit -> H_server 정상 트래픽 생성기")
     parser.add_argument("--src", default="10.0.0.1", help="발신 호스트 IP (H_legit)")
-    parser.add_argument("--dst", default="10.0.0.4", help="수신 호스트 IP (H_server)")
+    parser.add_argument("--dst", default="10.0.0.11", help="수신 호스트 IP (H_server)")
     parser.add_argument("--mean-interval", type=float, default=0.2, help="평균 발송 간격(초)")
     parser.add_argument("--duration", type=float, default=60.0, help="총 실행 시간(초)")
     parser.add_argument("--verbose", action="store_true", help="Scapy 전송 로그 출력")

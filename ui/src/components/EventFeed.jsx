@@ -13,19 +13,19 @@ function EventFeed({ events }) {
   return (
     <Panel title="Security Events" subtitle={`최근 ${events.length}건`} className="h-[420px]">
       {events.length === 0 ? (
-        <p className="text-sm text-slate-400">아직 이벤트가 없습니다.</p>
+        <p className="text-base text-slate-300">아직 이벤트가 없습니다.</p>
       ) : (
-        <ol className="space-y-2" data-testid="event-feed">
+        <ol className="space-y-2.5" data-testid="event-feed">
           {events.map((e) => {
             const k = KIND[e.kind] ?? KIND.phase;
             return (
-              <li key={e.id} className="rounded-lg bg-slate-900/60 px-3 py-2">
+              <li key={e.id} className="rounded-lg bg-slate-900/60 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-xs">
                   <span className={`rounded px-1.5 py-0.5 font-bold ${k.cls}`}>{k.label}</span>
-                  <span className="font-mono text-slate-400">{clockMs(e.ts)}</span>
+                  <span className="font-mono text-slate-300">{clockMs(e.ts)}</span>
                 </div>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{e.title}</p>
-                <p className="text-xs text-slate-400">{e.detail}</p>
+                <p className="mt-1 text-base font-semibold text-slate-100">{e.title}</p>
+                <p className="text-sm text-slate-300">{e.detail}</p>
               </li>
             );
           })}

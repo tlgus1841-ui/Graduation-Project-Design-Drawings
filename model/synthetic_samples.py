@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - 합성 트래픽 피처 샘플 생성기 (정상/공격/Flash Crowd).
 
-주간 계획: docs/writing/reports/weekly/week15_demo_packaging_plan.md
-
 Mininet/Ryu가 없는 환경에서 docs/specs/defense_scenarios.md §3.1/§3.2의
 정상/공격 통계 특성을 따르는 합성 데이터를 생성한다. 7주차부터 테스트
 파일(test_model_evaluator.py)에 흩어져 있던 생성기를 여기로 모았다 —

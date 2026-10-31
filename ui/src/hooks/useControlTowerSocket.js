@@ -10,8 +10,16 @@ const PING_INTERVAL_MS = 15000;
 export function resolveWsUrl() {
   const fromEnv = import.meta.env.VITE_WS_URL;
   if (fromEnv) return fromEnv;
-  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${window.location.hostname}:8000/ws`;
+  const scheme = (typeof window !== "undefined" && window.location && window.location.protocol === "https:") ? "wss" : "ws";
+  // Vite 개발 서버(포트 5173)에서는 포트 8000의 WebSocket 서버로 직결
+  if (typeof window !== "undefined" && window.location && window.location.port === "5173") {
+    return `${scheme}://${window.location.hostname}:8000/ws`;
+  }
+  // 프로덕션 / Nginx 리버스 프록시 환경에서는 동일 Host 사용 (/ws 리버스 프록시 경유)
+  if (typeof window !== "undefined" && window.location && window.location.host) {
+    return `${scheme}://${window.location.host}/ws`;
+  }
+  return "ws://localhost:8000/ws";
 }
 
 export function useControlTowerSocket(url = resolveWsUrl()) {

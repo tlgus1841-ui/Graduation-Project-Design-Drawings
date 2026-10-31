@@ -23,12 +23,13 @@
 ┌───────────────────────────┴────────────────────────────┐
 │ [서버 2: SDN 관제탑 방어 코어 (SDN Tower & Core)]        │
 │ - OS: Ubuntu 22.04 LTS (GCP e2-standard-4 등)           │
-│ - Data Plane: Mininet / Open vSwitch (S1, S2, S3, S4)  │
+│ - Data Plane: Native Open vSwitch 2.17 (s1, s2, s3, s4) │
 │   * S4의 Port 1: GRE 터널을 통해 [서버 1]과 직결       │
-│ - Control Plane: Docker Ryu 4.34 (OpenFlow 1.3)        │
-│ - AI Worker: Isolation Forest 이상 탐지 엔진            │
-│ - Message Bus: Redis 7.2 Pub/Sub                       │
-│ - Web Backend & UI: FastAPI (8000) & React 18 (5173)   │
+│ - All-in-One Docker Stack:                              │
+│   * SDN Controller: Ryu 4.34 (OpenFlow 1.3)             │
+│   * AI Worker: Isolation Forest 실시간 이상 탐지 엔진   │
+│   * Message Bus: Redis 7.2 Pub/Sub                      │
+│   * Web Control Tower: FastAPI (API/WS) + Nginx SPA(80) │
 │ - 모의 트래픽: H_legit (정상 사용자), H_attacker (해커) │
 └────────────────────────────────────────────────────────┘
 ```
@@ -55,12 +56,12 @@
 
 ### [Step 2] 서버 1과 서버 2 간 가상 네트워크 케이블(GRE 터널) 연결
 1. **서버 1에서:** 서버 2로 향하는 GRE 터널 생성 및 `10.0.0.4` 바인딩.
-2. **서버 2에서:** Mininet의 Egress 스위치(`S4`) 1번 포트에 서버 1로 향하는 GRE 터널 연결 (`ovs-vsctl add-port s4 gre0`).
-3. **양방향 통신 테스트:** 서버 2의 가상 호스트(`H_legit`)에서 `curl http://10.0.0.4` 실행 시 서버 1의 웹페이지가 수신되는지 확인.
+2. **서버 2에서:** Native OVS Egress 스위치(`s4`) 1번 포트에 서버 1로 향하는 GRE 터널 연결 (`sudo ovs-vsctl add-port s4 gre0 -- set interface gre0 type=gre options:remote_ip=<서버1_IP> ofport_request=1`).
+3. **양방향 통신 테스트:** 서버 2의 호스트(`ns_legit`)에서 `curl http://10.0.0.4` 실행 시 서버 1의 웹페이지가 수신되는지 확인.
 
-### [Step 3] 토폴로지 파일(`diamond_topo.py`) 외부 포트 모드 옵션 지원
-1. `diamond_topo.py`에 `--external-server` 옵션 추가.
-2. 옵션 활성화 시 Mininet 내부의 가상 `h_server` 프로세스를 생성하지 않고, 실제 물리/터널 인터페이스(`gre0`)를 S4의 1번 포트로 직접 할당.
+### [Step 3] OVS 외부 포트 인터페이스 연결
+1. 기존 `scripts/setup_native_ovs.sh`의 `s4-server` veth 페어 대신 GRE 터널 포트(`gre0`)를 `ofport_request=1`로 직접 할당.
+2. Native OVS 커널 브릿지(`s4`)가 패킷을 받아 OpenFlow 1.3 룰에 따라 L2 GRE 패킷으로 서버 1에 직접 송출.
 
 ### [Step 4] E2E 리허설 및 스트레스 테스트
 1. H_attacker로 공격 툴(`traffic_attack.py`)을 쏘았을 때 서버 1의 웹사이트가 실제 부하를 받는지 확인.

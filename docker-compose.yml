@@ -1,25 +1,110 @@
 services:
-  # 1. 메시지 브로커 (Redis 7.2)
+  # 1. 메시지 브로커 (Redis 7.2 Alpine)
   redis-broker:
     image: redis:7.2-alpine
     container_name: sdn-redis
-    restart: always
-    network_mode: host
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     command: redis-server --port 6379 --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+    networks:
+      - sdn-net
 
-  # 2. SDN 제어 평면 (Ryu Controller 4.34)
+  # 2. SDN 제어 평면 (Ryu Controller 4.34, Python 3.8)
   ryu-controller:
     build:
       context: ./ryu
       dockerfile: Dockerfile.ryu
     container_name: sdn-ryu
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "6653:6653"
+      - "8080:8080"
     environment:
       - PYTHONPATH=/app:/workspace
+      - REDIS_HOST=sdn-redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://sdn-redis:6379/0
     volumes:
       - ./ryu/app:/app
       - ./harness:/workspace/harness
+      - ./config:/workspace/config:ro
     command: ryu-manager --ofp-tcp-listen-port 6653 --observe-links /app/controller.py
     depends_on:
-      - redis-broker
+      redis-broker:
+        condition: service_healthy
+    networks:
+      - sdn-net
+
+  # 3. 관제 API 백엔드 (FastAPI, Python 3.10)
+  control-api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile.api
+    container_name: sdn-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SDN_MOCK=0
+      - REDIS_URL=redis://sdn-redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      redis-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    networks:
+      - sdn-net
+
+  # 4. AI 이상 탐지 및 분류 워커 (Isolation Forest & Criteria Engine)
+  ai-worker:
+    build:
+      context: .
+      dockerfile: model/Dockerfile.ai
+    container_name: sdn-ai-worker
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://sdn-redis:6379/0
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./model:/workspace/model
+      - ./config:/workspace/config:ro
+    command: python -m model.inference_worker --model model/isolation_forest.joblib --redis-url redis://sdn-redis:6379/0
+    depends_on:
+      redis-broker:
+        condition: service_healthy
+      control-api:
+        condition: service_healthy
+    networks:
+      - sdn-net
+
+  # 5. 웹 관제탑 프론트엔드 & Nginx 리버스 프록시 (Multi-stage SPA + Nginx 1.25 Alpine)
+  control-ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.ui
+    container_name: sdn-ui
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "5173:80"
+    depends_on:
+      control-api:
+        condition: service_healthy
+    networks:
+      - sdn-net
+
+networks:
+  sdn-net:
+    name: sdn-net
+    driver: bridge

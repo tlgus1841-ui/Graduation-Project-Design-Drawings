@@ -112,7 +112,7 @@ def build_message(server_ip: str, port: int, per_ip: Dict[str, Tuple[int, int, i
 
 def main() -> None:
     p = argparse.ArgumentParser(description="서버 연결 상태 수집기 (Slow HTTP 판단용)")
-    p.add_argument("--server-ip", default="10.0.0.4")
+    p.add_argument("--server-ip", default="10.0.0.11")
     p.add_argument("--port", type=int, default=80)
     p.add_argument("--interval", type=float, default=1.0)
     p.add_argument("--redis-url", default="redis://localhost:6379/0")
@@ -120,7 +120,10 @@ def main() -> None:
     a = p.parse_args()
 
     import redis
-    r = redis.Redis.from_url(a.redis_url)
+    # redis-py 5.0.1의 Redis.from_url() 타입 스텁이 mypy에서 반환 타입을 None으로
+    # 잘못 추론한다(런타임은 정상). 이 저장소의 다른 곳(model/inference_worker.py 등)과
+    # 동일하게 ConnectionPool.from_url()을 거치는 방식으로 피한다.
+    r = redis.Redis(connection_pool=redis.ConnectionPool.from_url(a.redis_url))
     tracker = ConnTracker()
     cmd = ss_command(a.port, a.netns_pid)
     print(f"[server_conn_agent] watching {a.server_ip}:{a.port} every {a.interval}s", flush=True)

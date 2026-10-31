@@ -165,23 +165,24 @@ def test_attacker_traffic_dropped_at_ingress_when_mitigated():
     while gen.phase != Phase.MITIGATED:
         gen.step()
 
-    def s1_counters() -> Dict[int, Any]:
-        stats = next(e for e in gen.step() if e["type"] == REDIS_CHANNEL_PORT_STATS)
+    def counters(dpid: int) -> Dict[int, Any]:
+        stats = next(e for e in gen.step() if e["type"] == REDIS_CHANNEL_PORT_STATS and e["data"]["dpid"] == dpid)
         return {s["port_no"]: s for s in stats["data"]["stats"]}
 
-    before, after = s1_counters(), s1_counters()
-    # Attack keeps arriving on S1:2 but nothing more leaves via the primary trunk S1:3
-    assert after[2]["rx_packets"] - before[2]["rx_packets"] > 1000
-    assert after[3]["tx_packets"] == before[3]["tx_packets"]
-    # H_legit is carried over the bypass trunk S1:4
-    assert after[4]["tx_packets"] > before[4]["tx_packets"]
+    # S3: attacker ingress port
+    before_s3, after_s3 = counters(3), counters(3)
+    assert after_s3[2]["rx_packets"] - before_s3[2]["rx_packets"] > 1000
+
+    # S1: core switch where primary trunk to S5 is port 3 and bypass trunk to S2 is port 1
+    before_s1, after_s1 = counters(1), counters(1)
+    assert after_s1[3]["tx_packets"] == before_s1[3]["tx_packets"]
+    assert after_s1[1]["tx_packets"] > before_s1[1]["tx_packets"]
 
 
 def test_topology_snapshot_reflects_mitigation():
     topo = MockTelemetryGenerator().topology_snapshot(Phase.MITIGATED)
     links = {(link.source, link.target): link.status for link in topo.links}
-    assert links[("s1", "h_attacker")] == "BLOCKED"
-    assert links[("s1", "s3")] == links[("s3", "s4")] == "REROUTED"
+    assert links[("s3", "h2")] == "BLOCKED"
     assert links[("s1", "s2")] == "ACTIVE"
 
 
@@ -203,7 +204,7 @@ def test_health_endpoint(client):
 
 def test_topology_endpoint(client):
     topo = TopologySyncMessage.model_validate(client.get("/api/topology").json())
-    assert {node.id for node in topo.nodes} >= {"s1", "s2", "s3", "s4", "h_legit", "h_attacker", "h_server"}
+    assert {node.id for node in topo.nodes} >= {"s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "h1", "h2", "h5"}
 
 
 def test_websocket_sends_initial_snapshot(client):

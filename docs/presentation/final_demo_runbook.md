@@ -24,28 +24,39 @@
 
 ## 2. 시연 전 준비 (발표 30분 전)
 
-| # | 확인 | 명령 / 방법 |
-|:---:|:---|:---|
-| 1 | Redis 실행 | `redis-server --daemonize yes` → `redis-cli ping` 이 `PONG` |
-| 2 | Ryu 실행 | `ryu-manager --ofp-tcp-listen-port 6653 ryu/app/controller.py` (또는 `docker compose up -d redis-broker ryu-controller`) |
-| 3 | 관제탑 백엔드 (실데이터) | `SDN_MOCK=0 uv run uvicorn api.main:app --port 8000` |
-| 4 | 관제탑 화면 | `cd ui && npm run dev` → 브라우저 전체 화면, 배지 `CONNECTED` · `LIVE` |
-| 5 | AI 추론 워커 | `uv run python -m model.inference_worker --model model/isolation_forest.joblib --log demo_events.jsonl` |
-| 6 | Mininet 기동 · pingall | `sudo python3 topo/diamond_topo.py` → `pingall` 0% |
-| 7 | 정상 ping 시작 | `h_legit ping -i 0.2 10.0.0.4` (터미널 창을 관제탑 옆에 배치) |
-| 8 | 백업 영상 | 바탕화면에 두고 재생 프로그램을 미리 열어 둠 |
-| 9 | 화면 | 알림 끄기, 글자 크기 확대, 마우스 커서 강조 |
+### 2.1 [권장] 올인원 프로덕션 원클릭 가동 (Phase 6-B All-in-One)
+로컬 또는 원격 VM(`http://<GCP_VM_IP>`)에서 명령어 한 줄로 5대 컨테이너 및 Native OVS 토폴로지를 일괄 가동합니다:
 
-> 이전 시연 잔여 규칙이 남아 있으면 우회 · 차단이 처음부터 걸려 있을 수 있다. 시작 전 `bash scripts/reset_env.sh` 또는 `sudo mn -c` 후 다시 기동한다.
+```bash
+# 로컬 시연 시 (전체 스택 + Native OVS 4-스위치 + 백그라운드 핑 자동 기동)
+./scripts/prod_stack.sh up
+./scripts/prod_stack.sh status
+# → 브라우저 접속: http://localhost (표준 포트 80)
+
+# 원격 클라우드 VM 시연 시 (노트북에서 원클릭 원격 제어)
+./scripts/vm_demo_controller.sh restart-all
+./scripts/vm_demo_controller.sh status
+# → 브라우저 접속: http://<GCP_VM_IP> (표준 포트 80)
+```
+
+| # | 확인 항목 | 정상 상태 기준 |
+|:---:|:---|:---|
+| 1 | All-in-One 도커 서비스 (5개) | `redis-broker`, `ryu-controller`, `control-api`, `ai-worker`, `control-ui` 전원 `Up (healthy)` |
+| 2 | Native OVS 브릿지 (4개) | `s1~s4` 컨트롤러 `tcp:127.0.0.1:6653` 연결 (`is_connected: true`) |
+| 3 | 관제탑 웹 대시보드 (Port 80) | 브라우저 `http://localhost` (또는 `http://<GCP_VM_IP>`) 배지 `WS CONNECTED` · `LIVE` 확인 |
+| 4 | 정상 ping 지속성 | `tail -f /tmp/h_legit_ping.log` 에서 `0.07 ms` 무유실 핑 관측 |
+| 5 | 백업 영상 대기 | 만약의 장애를 대비하여 바탕화면에 무편집 시연 영상 준비 |
+
+> 이전 시연 잔여 규칙이 남아 있으면 우회 · 차단이 처음부터 걸려 있을 수 있다. 시작 전 `sudo ./scripts/reset_env.sh` 로 완전 클린업 후 다시 기동한다.
 
 ## 3. 시연 4단계 진행 (약 2분 30초)
 
 | 단계 | 조작 | 관객이 볼 것 | 말할 것 |
 |:---:|:---|:---|:---|
-| ① 정상 | 없음 (ping 흐르는 중) | 배지 `NORMAL`, S1:3 쪽 트래픽 | "정상 사용자의 ping이 S1, S2를 거쳐 서버로 갑니다." |
-| ② 공격 | `h_attacker .venv/bin/python -m traffic.traffic_attack --dst 10.0.0.4 --duration 20` (Mininet을 레포 폴더에서 띄운 경우) | 상태 띠 빨간 점멸, S1:2 PPS 급증 · BPP 54B | "IP를 위조한 SYN Flood입니다. 패킷이 작고 많아집니다." |
-| ③ 격리 · 우회 | 없음 (자동) | `MITIGATED`, 격리 포트 S1:2, 우회 S1→S3→S4, 탐지→격리 ms | "두 번 연속 확인되자 포트를 막고 정상 트래픽을 돌렸습니다. ping은 끊기지 않습니다." |
-| ④ 복구 | 없음 (공격 20초 후 자동 종료) | 쿨다운 10초 진행 막대 → `NORMAL` + 복구 완료 알림 | "10초간 조용한 것을 확인하고 스스로 원래 경로로 돌아왔습니다." |
+| ① 정상 | 없음 (ping 흐르는 중) | 배지 `NORMAL`, S1:3 주 경로 트래픽 | "정상 사용자의 ping이 S1, S2를 거쳐 서버로 갑니다. (지연시간 0.07ms)" |
+| ② 공격 | `sudo ./scripts/native_attack.sh syn 15 500`<br>(또는 `./scripts/vm_demo_controller.sh attack syn 15 500`) | 상태 띠 빨간 점멸, S1:2 PPS 급증 · BPP 54B 급감 | "IP를 위조한 고속 SYN Flood입니다. 패킷 크기가 급감하고 포트 카운트가 치솟습니다." |
+| ③ 격리 · 우회 | 없음 (자율 방어) | `MITIGATED`, In_port 2 단일 격리, 우회 S1→S3→S4 활성화 | "공격을 감지하고 포트를 즉시 차단(Priority 100)한 뒤, 정상 트래픽을 S3로 우회시켰습니다. ping은 단 1개도 끊기지 않습니다." |
+| ④ 복구 | 없음 (공격 종료 후) | 쿨다운 5초 검증 진행 막대 → `NORMAL` + 자가 복구 완료 알림 | "위협 소멸을 실측 검증하고 플래핑 없이 스스로 원래 주 경로(S2)로 복구되었습니다." |
 
 ping 창에서 `icmp_seq` 번호가 건너뛰지 않는 것을 마지막에 짚어 준다.
 
@@ -55,7 +66,7 @@ ping 창에서 `icmp_seq` 번호가 건너뛰지 않는 것을 마지막에 짚�
 |:---|:---|:---|
 | 배지 `DISCONNECTED` / `RECONNECTING` | 백엔드 끊김 | 10초 기다려도 안 되면 백업 영상 |
 | 공격 후 20초 넘게 경보 없음 | 통계 · 방어 루프 문제 | 백업 영상으로 전환, 시연 후 원인 설명 |
-| pingall 실패 | 컨트롤러 미연결 | `sudo mn -c` 후 재기동 (1분 이내), 안 되면 백업 영상 |
+| ping 통신 실패 | 컨트롤러/토폴로지 미연결 | `./scripts/prod_stack.sh restart` 후 재기동 (30초 이내), 안 되면 백업 영상 |
 | 화면이 멈춤 | 브라우저 | 새로고침 1회 (WebSocket 자동 재연결) |
 
 **원칙:** 현장 수리는 1분까지만. 넘으면 백업 영상으로 바꾸고 "같은 시나리오를 미리 녹화한 무편집 영상입니다"라고 말한다.
@@ -101,4 +112,4 @@ ping 창에서 `icmp_seq` 번호가 건너뛰지 않는 것을 마지막에 짚�
 | 발표 | 1 ~ 8장 발표 → 9장 시연 → 10장 결론 | 김관우 |
 | 시연 중 | 터미널 감시, 문제 시 §4 판단 신호 | 박시현 · 유재민 |
 | 질의응답 | 기술 질문은 박시현 · 유재민, 일정 · 범위 질문은 김관우 | 공통 |
-| 직후 | 질문 · 피드백을 `docs/writing/reports/final_review_feedback.md` §1 ~ §3에 기록 | 김관우 |
+| 직후 | 질문 · 피드백을 `docs/verification/final_review_feedback.md` §1 ~ §3에 기록 | 김관우 |

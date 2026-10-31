@@ -1,78 +1,76 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Self-Defending SDN Tower: 4-Stage Autonomous Defense Demo Runner
+# Self-Defending SDN Tower: 8-Switch Enterprise Autonomous Defense Demo
 # Author: Sihyeon Park (22101489 / Tech Lead)
-# Phase 6 (Week 15 & 16) Milestone
+# Phase 6-C-4: 8-스위치 엔터프라이즈 토폴로지 표준 시나리오 가이드
 # ==============================================================================
-
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 echo "=============================================================================="
-echo "🛡️  Self-Defending SDN Tower: E2E Autonomous Defense Demo (v1.0.0)"
+echo "🛡️  Self-Defending SDN Tower: 8-Switch 5-Zone Enterprise Defense Demo"
 echo "=============================================================================="
 
-# 1. Check prerequisites
-echo "[Step 1/5] Checking environment and services..."
-if ! command -v uv &> /dev/null; then
-    echo "❌ Error: 'uv' package manager not found. Please install uv."
-    exit 1
+# 1. 의존성 및 서비스 점검
+echo "[Step 1/5] 환경 및 서비스 상태 점검..."
+if command -v docker &> /dev/null; then
+  RUNNING=$(docker ps --filter "name=sdn-" --format "{{.Names}}" | tr '\n' ' ')
+  echo "  -> 실행 중인 SDN 컨테이너: ${RUNNING:-없음}"
 fi
 
-echo "  -> Running regression test suite..."
-uv run pytest -q
-
-# 2. Redis check / start
-echo "[Step 2/5] Checking Redis message bus..."
-if ! command -v redis-cli &> /dev/null || ! redis-cli ping &> /dev/null; then
-    echo "  -> Notice: Redis not detected on localhost:6379."
-    echo "  -> Tip: Start Docker container with: docker compose up -d redis-broker"
+# 2. Redis 브로커 점검
+echo "[Step 2/5] Redis 메시지 버스 점검..."
+if command -v redis-cli &> /dev/null && redis-cli ping &> /dev/null; then
+  echo "  -> Redis 상태: 정상 연결 (PONG)"
+else
+  echo "  -> 알림: 로컬 Redis 미감지 (Docker compose sdn-redis 컨테이너 참조)"
 fi
 
-# 3. Print demo topology & architecture overview
-echo "[Step 3/5] Topology architecture:"
-echo "       [H_legit: 10.0.0.1 (P1)]       "
-echo "       [H_attacker: 10.0.0.2 (P2)]   "
-echo "                     │               "
-echo "                ┌────┴────┐          "
-echo "                │ Switch 1│ (Ingress)"
-echo "                └────┬────┘          "
-echo "             (P3)   │   (P4)        "
-echo "        ┌───────────┴───────────┐    "
-echo "        ▼                       ▼    "
-echo "   ┌─────────┐             ┌─────────┐"
-echo "   │Switch 2 │ (Primary)   │Switch 3 │ (Bypass)"
-echo "   └────┬────┘             └────┬────┘"
-echo "        │ (P2)                  │ (P2)"
-echo "        └───────────┬───────────┘    "
-echo "             (P2)   │   (P3)        "
-echo "                ┌────┴────┐          "
-echo "                │ Switch 4│ (Egress) "
-echo "                └────┬────┘          "
-echo "                     │ (P1)          "
-echo "             [H_server: 10.0.0.4]    "
+# 3. 8-스위치 5-Zone 엔터프라이즈 토폴로지 개요
+echo ""
+echo "[Step 3/5] 8-스위치 5-Zone 엔터프라이즈 아키텍처:"
+cat << 'EOF'
+           [User Zone A: h1, h2]          [User Zone B: h3, h4]
+                     │                              │
+                ┌────┴────┐                    ┌────┴────┐
+                │Switch S3│                    │Switch S4│
+                └────┬────┘                    └────┬────┘
+                     │ (Trunk P99)                  │ (Trunk P99)
+        ┌────────────┴──────────────────────────────┴────────────┐
+        │  [Dual-Core Backbone Zone: S1 (0x01) <-> S2 (0x02)]   │
+        └────────────┬──────────────────────────────┬────────────┘
+                     │ (Trunk P99)                  │ (Trunk P99)
+                ┌────┴────┐                    ┌────┴────┐
+                │Switch S5│                    │Switch S6│
+                └────┬────┘                    └────┬────┘
+                     │                              │
+          [Server A: h5 Web, h6 API]    [Server B: h7 DB, h8 Backup]
 
-# 4. Scenario Lifecycle Outline
-echo ""
-echo "[Step 4/5] 4-Stage Autonomous Defense Scenario Sequence:"
-echo "  [Stage 1] NORMAL: H_legit -> H_server via S1-S2-S4 (Baseline, Loss: 0%)"
-echo "  [Stage 2] ATTACK: H_attacker injects SYN Flood -> AI Worker detects (Score < 0.0, BPP <= 80)"
-echo "  [Stage 3] MITIGATE: Ryu installs In_port 2 Drop (Priority 100) & S1-S3-S4 Bypass (Priority 20)"
-echo "  [Stage 4] RECOVER: Attack ceases -> FSM Cooldown (10s) -> Zero-loss Rollback"
+        [Admin Zone S7: h_admin, h_patch (10.0.0.253)]
+        [Quarantine Zone S8: h_sink (10.0.0.250)]
+EOF
 
-# 5. Execution options
+# 4. 4단계 자율 자기방어 생명주기
 echo ""
-echo "[Step 5/5] Launch options:"
-echo "  A) Run Headless Automated 4-Stage Simulation:"
-echo "     uv run pytest tests/harness/test_full_scenario.py -v"
+echo "[Step 4/5] 4단계 자율 방어 생명주기 시나리오:"
+echo "  [Stage 1] NORMAL    : h1(10.0.0.1) -> h5 Web(10.0.0.11) 정상 통신 (손실률 0.0%)"
+echo "  [Stage 2] ATTACK    : h2(10.0.0.2)에서 6종 공격 주입 -> AI 워커 즉각 탐지 (< 1.5s)"
+echo "  [Stage 3] MITIGATE  : Ryu OpenFlow Table 2 동적 차단 및 S1-S2 자율 우회 포워딩"
+echo "  [Stage 4] QUARANTINE: 침해 호스트 격리망 이동 -> 오직 패치서버(10.0.0.253)만 접속 허용"
+echo "  [Stage 5] RECOVERY  : 치료 완료 후 FSM 쿨다운(10s) -> Zero-loss 원상 복구"
+
+# 5. 실행 명령어 가이드
 echo ""
-echo "  B) Start Web Control Tower API Server & AI Inference Worker:"
-echo "     uv run uvicorn api.main:app --host 0.0.0.0 --port 8000"
-echo "     uv run python -m model.inference_worker --model model/isolation_forest.joblib"
+echo "[Step 5/5] 실행 및 검증 옵션:"
+echo "  A) 원격 VM 원클릭 배포:"
+echo "     ./scripts/deploy_remote.sh 34.50.17.220"
 echo ""
-echo "  C) Run Scapy Normal / Attack Traffic:"
-echo "     sudo uv run python traffic/traffic_normal.py"
-echo "     sudo uv run python traffic/traffic_attack.py"
+echo "  B) 실환경 공격 주입 테스트 (Native OVS):"
+echo "     sudo ./scripts/native_attack.sh syn 10 500"
+echo "     sudo ./scripts/native_attack.sh spread 10 300"
+echo ""
+echo "  C) 웹 관제탑 접속 (실시간 대시보드):"
+echo "     http://34.50.17.220/"
 echo "=============================================================================="

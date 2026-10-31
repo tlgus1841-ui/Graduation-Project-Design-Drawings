@@ -67,7 +67,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="포트 스캔 공격기 (TCP SYN / UDP)")
     p.add_argument("--kind", choices=("tcp", "udp"), required=True)
     p.add_argument("--src", default="10.0.0.2", help="공격자 자신의 IP (응답을 받아야 하므로 변조하지 않음)")
-    p.add_argument("--dst", default="10.0.0.4")
+    p.add_argument("--dst", default="10.0.0.11")
     p.add_argument("--ports", default="1-1000")
     p.add_argument("--rate", type=float, default=500.0, help="초당 두드리는 포트 수")
     a = p.parse_args()

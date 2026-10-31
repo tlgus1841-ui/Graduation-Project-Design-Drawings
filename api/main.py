@@ -34,8 +34,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.manual_control import (
     ManualControlRejected,
     ManualControlRequest,
+    QuarantineReleaseRequest,
     RelearnRequest,
     build_manual_command,
+    build_quarantine_release_command,
     build_relearn_command,
 )
 from api.mock_generator import SYSTEM_STATUS_TYPE, MockTelemetryGenerator
@@ -152,6 +154,36 @@ def create_app(enable_mock: Optional[bool] = None, *, start_source: bool = True,
             return {"accepted": True, "delivered_to": "redis", "receivers": receivers, "command": payload}
         await hub.broadcast(make_envelope(REDIS_CHANNEL_CONTROL_COMMAND, payload))
         return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload}
+
+    @app.post("/api/control/quarantine/release")
+    async def quarantine_release(
+        req: QuarantineReleaseRequest, x_admin_token: Optional[str] = Header(default=None)
+    ) -> Dict[str, Any]:
+        """격리 단말 관리자 수동 승인 기반 복귀 (Human-in-the-loop)"""
+        expected = os.getenv("SDN_ADMIN_TOKEN")
+        if expected and x_admin_token != expected:
+            raise HTTPException(status_code=401, detail="관리자 토큰이 올바르지 않습니다.")
+        try:
+            command = build_quarantine_release_command(req)
+        except ManualControlRejected as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        payload = command.model_dump(mode="json")
+        if isinstance(source, RedisBridge):
+            try:
+                receivers = await source.publish(REDIS_CHANNEL_CONTROL_COMMAND, command)
+            except Exception as exc:
+                logger.warning("Quarantine release command publish failed: %s", exc)
+                raise HTTPException(status_code=503, detail="Redis에 연결할 수 없어 명령을 보내지 못했습니다.") from exc
+            return {"accepted": True, "delivered_to": "redis", "receivers": receivers, "command": payload}
+        await hub.broadcast(make_envelope(REDIS_CHANNEL_CONTROL_COMMAND, payload))
+        return {"accepted": True, "delivered_to": "mock", "receivers": 0, "command": payload}
+
+    @app.get("/api/control/quarantine/list")
+    async def quarantine_list() -> Dict[str, Any]:
+        """현재 토폴로지 내 격리된 단말 목록 조회"""
+        snap = source.topology_snapshot()
+        quarantined = [n.model_dump(mode="json") for n in snap.nodes if n.status == "QUARANTINED"]
+        return {"count": len(quarantined), "hosts": quarantined}
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:

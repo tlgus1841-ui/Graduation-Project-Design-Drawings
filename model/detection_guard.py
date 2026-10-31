@@ -1,7 +1,5 @@
 """Self-Defending SDN Tower - 오탐 방지 공격 확정 게이트 (Flash Crowd vs 실제 공격).
 
-주간 계획: docs/writing/reports/weekly/week13_detection_guard_plan.md
-
 docs/specs/defense_scenarios.md §3.2 T1: BPP <= BPP_ATTACK_MAX(80) 그리고
 score < SCORE_THRESHOLD가 DETECT_CONSECUTIVE(2)주기 연속 충족되어야 공격으로
 확정한다. PPS가 치솟아도(Flash Crowd) BPP가 정상 범위면 BPP 게이트에서

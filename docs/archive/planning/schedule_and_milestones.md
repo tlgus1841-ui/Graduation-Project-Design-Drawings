@@ -178,7 +178,7 @@
   - 주간 진도 보고서 취합 및 지도교수님 대면 보고 진행
 
 ### 3. 주요 산출물 및 검증 결과
-* **산출 코드/문서:** `harness/safety/whitelist_guard.py`, `ryu/app/defense.py`, `docs/reports/week_report.md`
+* **산출 코드/문서:** `harness/safety/whitelist_guard.py`, `ryu/app/controller.py`(계획 당시엔 별도 `defense.py`로 분리할 구상이었으나 실제로는 컨트롤러 본체에 통합), 주간 진도는 당시 주간 보고서 문서로 남겼으나 이후 Git 커밋 히스토리 체계로 일원화됨(`.cursorrules`, `rules/`)
 * **검증 지표:** 공격 주입 후 0.1초 내 In_port 격리 완료, 정상 호스트 Ping 무유실 유지 확인
 
 ### 4. 차주 계획 및 협업 조율 사항

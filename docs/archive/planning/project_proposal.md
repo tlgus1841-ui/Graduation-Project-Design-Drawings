@@ -196,8 +196,8 @@
 | | Scapy | 2.5.0 | Host (`venv-ai`, Py 3.10) | Raw 소켓 패킷 변조 및 정상/공격 트래픽 생성 |
 | **Web Backend** | FastAPI | 0.109.2 | Host (`venv-web`, Py 3.10) | Asyncio 기반 초고속 비동기 WebSocket 서버 |
 | | Pydantic | 2.6.1 | Host (`venv-web`, Py 3.10) | 엄격한 계약 기반 데이터 모델 검증 |
-| **Web Frontend** | React | 18.2.0 | Node 20 / Vite | 인터랙티브 컴포넌트 기반 UI 구성 |
-| | vis-network | 9.1.9 | Vite npm 패키지 | 네트워크 토폴로지 실시간 동적 물리 그래프 렌더링 |
+| **Web Frontend** | React | 18.3.1 | Node 20 / Vite | 인터랙티브 컴포넌트 기반 UI 구성 |
+| | vis-network | 9.1.13 | Vite npm 패키지 | 네트워크 토폴로지 실시간 동적 물리 그래프 렌더링 |
 
 ---
 

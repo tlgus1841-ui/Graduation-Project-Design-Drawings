@@ -11,13 +11,31 @@
 
 ## 2. 실행 방법
 
+### 2.1 [권장] 올인원 프로덕션 실행 (Phase 6-B All-in-One Docker Compose)
+모든 백엔드(FastAPI), 메시지 버스(Redis), SDN 컨트롤러(Ryu), AI 탐지 엔진, 프론트엔드 Nginx 리버스 프록시가 단일 Docker Compose로 오케스트레이션됩니다.
+
+```bash
+# 전체 스택(Native OVS 4-스위치 + Docker 5개 서비스) 원클릭 기동
+./scripts/prod_stack.sh up
+
+# 상태 확인 (5개 서비스 Health & OVS 연결 상태)
+./scripts/prod_stack.sh status
+
+# 스택 완전 정지 및 정리
+./scripts/prod_stack.sh down
+```
+* **웹 관제탑 단일 접속 URL**: `http://localhost` (표준 80 포트) 또는 `http://localhost:5173` (하위 호환)
+* **백엔드 헬스체크**: `http://localhost/api/health` 또는 `http://localhost:8000/api/health`
+
+### 2.2 개발/로컬 개별 실행 모드
+
 | 모드 | 용도 | 실행 |
 |:---|:---|:---|
 | 더미(mock) | 시연 연습, 화면 개발 | `uv run uvicorn api.main:app --port 8000` |
-| 실데이터(live) | Mininet·Ryu·Redis 연동 | `SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000` |
+| 실데이터(live) | Mininet/OVS·Ryu·Redis 연동 | `SDN_MOCK=0 REDIS_URL=redis://localhost:6379/0 uv run uvicorn api.main:app --port 8000` |
 
-웹 화면은 `cd ui && npm install && npm run dev` 후 브라우저에서 `http://localhost:5173`을 연다.
-수동 제어를 아무나 쓰지 못하게 하려면 백엔드 실행 전에 `export SDN_ADMIN_TOKEN=<비밀값>`을 설정한다.
+웹 화면을 직접 Vite 개발 서버로 띄울 때는 `cd ui && npm install && npm run dev` 후 브라우저에서 `http://localhost:5173`을 엽니다.
+수동 제어를 아무나 쓰지 못하게 하려면 백엔드 실행 전에 `export SDN_ADMIN_TOKEN=<비밀값>`을 설정합니다.
 
 ## 3. 화면 구성
 
@@ -64,8 +82,9 @@
 - 차트 위 한 줄에 각 포트의 최신값이 숫자로 나온다.
 - **포트 표:** 모든 스위치 포트의 PPS·bps·BPP. 공격 의심 포트는 빨간 글씨와 ⚠, 공격 유입 포트는 행 전체가 깜빡인다.
 
-## 4. 방어 단계별로 보이는 것
+## 4. 방어 단계 및 6종 공격 유형별 표시
 
+### 4.1 상태 스트립 표시
 | 단계 (배지) | 상태 스트립 | 운영자 할 일 |
 |:---|:---|:---|
 | `SYSTEM CALIBRATING` | 노랑 "기준 트래픽 학습 중" (시작 후 15초) | 기다린다 |
@@ -74,6 +93,15 @@
 | `MITIGATED` | **파란 스트립** · 격리 포트, 우회 경로, 탐지→격리 시간 | 정상 트래픽(파란 선)이 S3로 우회 중인지 확인 |
 | `RESTORING` | **청록 스트립** · 복구까지 남은 초, 진행 막대 | 기다린다. 공격이 다시 오면 자동으로 `MITIGATED`로 돌아간다 |
 | `NORMAL` (복구 후) | 우측 하단 **자가 복구 완료 알림** (탐지~복구 시각, 총 소요) | "확인"으로 닫는다 (15초 후 자동으로 닫힘) |
+
+### 4.2 실시간 정밀 분류 6대 위협 유형
+관제탑 이벤트 피드 및 상태 스트립에 표기되는 6종 공격의 의미입니다:
+1. `SYN_FLOOD_SPOOFING`: IP를 무작위 변조한 대량 TCP SYN 폭격 (BPP < 80B, SYN-ACK 대비 SYN 폭증)
+2. `UDP_FLOOD`: 대량 UDP 패킷 볼륨 공격 (BPP ~74B, 실패 응답 폭증)
+3. `ICMP_FLOOD`: 대량 Ping 볼륨 공격 (BPP ~98B)
+4. `PORT_SCAN`: 단일 호스트의 다수 포트 순차 탐색 (SYN 스캔 및 RST/ICMP 도달불가 응답 급증)
+5. `SLOW_HTTP`: 요청 헤더를 지연 전송하여 웹서버 연결 고갈 유발 (Slowloris)
+6. `LATERAL_SPREAD`: 내부 서브넷 IP를 순회하며 웜/랜섬웨어 전파 시도 (ARP 미응답 및 연결 실패 폭증)
 
 ## 5. 비상 수동 제어
 
@@ -114,6 +142,17 @@ curl -X POST http://localhost:8000/api/control/manual \
   -H "Content-Type: application/json" -H "X-Admin-Token: <토큰>" \
   -d '{"action":"RESTORE","dpid":1,"port":1,"reason":"AI 오탐으로 수동 복원","operator":"김관우"}'
 ```
+
+### 5.4 기준선 재학습 제어 (Relearn Baseline)
+새로운 대규모 정상 이벤트(예: 플래시 크라우드, 정기 대용량 백업) 발생 시 오탐을 방지하기 위해 운영자가 직접 AI 기준선을 업데이트할 수 있습니다.
+* 헤더 우측의 **[기준선 재학습]** 버튼을 클릭합니다.
+* 현재 트래픽 관측값을 기준으로 EWMA 및 Criteria Baseline이 안전하게 재계산되어 적용됩니다.
+* REST API로도 호출 가능합니다:
+  ```bash
+  curl -X POST http://localhost:8000/api/control/relearn \
+    -H "Content-Type: application/json" \
+    -d '{"operator":"관리자","reason":"신규 서비스 런칭에 따른 트래픽 기준선 갱신"}'
+  ```
 
 ## 6. 문제 해결
 
