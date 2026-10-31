@@ -15,12 +15,12 @@ cd "${REPO_ROOT}"
 case "${ACTION}" in
   up|start)
     echo "=========================================================="
-    echo "🚀 [1/3] Native OVS 4-Switch Diamond Topology Setup..."
+    echo "🚀 [1/3] Native OVS 8-Switch 5-Zone Topology Setup..."
     echo "=========================================================="
     if [[ $EUID -eq 0 ]]; then
-      bash "${SCRIPT_DIR}/setup_native_ovs.sh"
+      bash "${SCRIPT_DIR}/setup_large_ovs.sh"
     else
-      sudo bash "${SCRIPT_DIR}/setup_native_ovs.sh"
+      sudo bash "${SCRIPT_DIR}/setup_large_ovs.sh"
     fi
 
     echo ""
@@ -42,11 +42,11 @@ case "${ACTION}" in
       sleep 1
     done
 
-    # Start background ping for legitimate traffic monitoring
-    if ip netns list | grep -q "ns_legit"; then
-      echo "📡 Starting background legitimate traffic ping (H_legit -> H_server)..."
-      sudo pkill -f 'ping -i 0.5 10.0.0.4' 2>/dev/null || true
-      sudo ip netns exec ns_legit ping -i 0.5 10.0.0.4 > /tmp/h_legit_ping.log 2>&1 &
+    # Start background ping for legitimate traffic monitoring (h1 -> h5 Web)
+    if ip netns list | grep -q "ns_h1"; then
+      echo "📡 Starting background legitimate traffic ping (h1 -> h5 Web: 10.0.0.11)..."
+      sudo pkill -f 'ping -i 0.5 10.0.0.11' 2>/dev/null || true
+      sudo ip netns exec ns_h1 ping -i 0.5 10.0.0.11 > /tmp/h1_ping.log 2>&1 &
     fi
 
     echo ""
@@ -63,7 +63,7 @@ case "${ACTION}" in
     echo "=========================================================="
     echo "🛑 Stopping Legitimate Ping & Background Traffic..."
     echo "=========================================================="
-    sudo pkill -f 'ping -i 0.5 10.0.0.4' 2>/dev/null || true
+    sudo pkill -f 'ping -i 0.5' 2>/dev/null || true
 
     echo ""
     echo "=========================================================="
@@ -76,9 +76,9 @@ case "${ACTION}" in
     echo "🧹 Teardown Native OVS Topology..."
     echo "=========================================================="
     if [[ $EUID -eq 0 ]]; then
-      bash "${SCRIPT_DIR}/teardown_native_ovs.sh" 2>/dev/null || true
+      bash "${SCRIPT_DIR}/cleanup_large_ovs.sh" 2>/dev/null || true
     else
-      sudo bash "${SCRIPT_DIR}/teardown_native_ovs.sh" 2>/dev/null || true
+      sudo bash "${SCRIPT_DIR}/cleanup_large_ovs.sh" 2>/dev/null || true
     fi
     echo "✅ Stack and network topology fully stopped."
     ;;
