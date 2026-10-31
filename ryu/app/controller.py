@@ -661,6 +661,28 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
+            elif h_zone == "QUARANTINE":
+                # QUARANTINE 호스트 (h_sink 및 정적 격리망):
+                # Pri 300: 관리 포털 (10.0.0.254:443, 53) 및 보안 패치 서버 (10.0.0.253:80) 허용
+                self.add_flow(
+                    datapath, priority=300,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=6, tcp_dst=443),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                self.add_flow(
+                    datapath, priority=300,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=17, udp_dst=53),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                if "10.0.0.253" in self.arp_table:
+                    self.add_flow(
+                        datapath, priority=300,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.253", ip_proto=6, tcp_dst=80),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
             else:
                 # USER 호스트: SERVER 향 허용 규칙 (Pri 200)
                 target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"]
