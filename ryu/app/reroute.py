@@ -18,11 +18,23 @@ class RerouteEngine:
     다이아몬드 토폴로지(S1, S2, S3, S4) 및 일반 메쉬 토폴로지 지원.
     """
 
-    def __init__(self):
+    def __init__(self, profile: Optional[Dict[str, Any]] = None):
         self.graph = nx.Graph()
         self.port_map: Dict[Tuple[int, int], Tuple[int, int]] = {}
         # (u, v) -> (u_out_port, v_in_port)
-        self._build_diamond_topology()
+        if profile and profile.get("links"):
+            self._build_topology_from_links(profile["links"])
+        else:
+            self._build_diamond_topology()
+
+    def _build_topology_from_links(self, links: List[Any]):
+        """프로파일 링크 명세로부터 그래프 및 포트 매핑 초기화"""
+        for link in links:
+            u, v, u_p, v_p = link[0], link[1], link[2], link[3]
+            w = float(link[4]) if len(link) > 4 else 1.0
+            self.graph.add_edge(u, v, weight=w)
+            self.port_map[(u, v)] = (u_p, v_p)
+            self.port_map[(v, u)] = (v_p, u_p)
 
     def _build_diamond_topology(self):
         """다이아몬드 기본 토폴로지 링크 및 포트 매핑 초기화"""
