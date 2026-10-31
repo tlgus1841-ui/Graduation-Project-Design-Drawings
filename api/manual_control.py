@@ -15,7 +15,7 @@ period and returns to the pre-learned baseline afterwards; the controller ignore
 from __future__ import annotations
 
 import uuid
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 

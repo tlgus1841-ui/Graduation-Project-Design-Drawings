@@ -12,7 +12,7 @@ from model.criteria_engine import (
 )
 
 KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in", "arp_fail", "zone_deny")
-PORT = (1, 2)
+PORT = (3, 2)
 CFG = CriteriaConfig()  # the measured numbers: floors, N = 10, attack floor 50/s, M = 5
 # A user making about one web request per second plus a little DNS and ping
 NORMAL = {"syn": 1, "fin": 1, "udp": 0.5, "icmp": 1}
@@ -20,7 +20,7 @@ BASE = {PORT: {"syn": (1.0, 1.0), "udp": (0.5, 0.5), "icmp": (1.0, 0.1), "gap": 
 
 
 class Counts:
-    """Cumulative counters for S1:2 advanced by per-second rates every 2-second report."""
+    """Cumulative counters for S3:2 advanced by per-second rates every 2-second report."""
 
     def __init__(self):
         self.t, self.n = 1000.0, {k: 0.0 for k in KINDS}
@@ -29,7 +29,7 @@ class Counts:
         self.t += 2.0
         for k in KINDS:
             self.n[k] += rates.get(k, 0) * 2
-        return FlowCountMessage(timestamp=self.t, dpid=1, counts=[
+        return FlowCountMessage(timestamp=self.t, dpid=3, counts=[
             FlowCountItem(port_no=2, kind=k, packets=int(v)) for k, v in self.n.items()])
 
 
@@ -202,7 +202,7 @@ def test_stale_health_is_ignored():
 
 
 def _conns(t, slow, pending=0):
-    return ServerConnMessage(timestamp=t, server_ip="10.0.0.4", port=80, clients=[
+    return ServerConnMessage(timestamp=t, server_ip="10.0.0.11", port=80, clients=[
         ServerConnItem(client_ip="10.0.0.2", open=max(slow, pending, 1), slow=slow, pending=pending)])
 
 
@@ -307,7 +307,7 @@ class Counts1(Counts):
         self.t += 1.0
         for k in KINDS:
             self.n[k] += rates.get(k, 0)
-        return FlowCountMessage(timestamp=self.t, dpid=1, counts=[
+        return FlowCountMessage(timestamp=self.t, dpid=3, counts=[
             FlowCountItem(port_no=2, kind=k, packets=int(v)) for k, v in self.n.items()])
 
 

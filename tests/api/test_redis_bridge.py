@@ -81,7 +81,7 @@ def test_malformed_and_wrong_schema_payloads_are_dropped():
 
 def test_topology_sync_updates_snapshot():
     bridge = RedisBridge()
-    assert {n.id for n in bridge.topology_snapshot().nodes} >= {"s1", "h_server"}  # static fallback
+    assert {n.id for n in bridge.topology_snapshot().nodes} >= {"s1", "h5"}  # static fallback
     topo = MockTelemetryGenerator().topology_snapshot(Phase.MITIGATED).model_dump_json()
     bridge.handle_message(REDIS_CHANNEL_TOPOLOGY_SYNC, topo)
     assert next(n for n in bridge.topology_snapshot().nodes if n.id == "s1").status == "MITIGATED"

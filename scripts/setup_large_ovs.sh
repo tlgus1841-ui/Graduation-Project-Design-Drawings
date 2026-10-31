@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Self-Defending SDN Tower: Native OVS 10-Switch 6-Zone Dual-Homing Topology Setup
+# Enterprise Production Milestone (Phase 6-C Enterprise Standard)
+# ==============================================================================
+set -euo pipefail
+
+# ------------------------------------------------------------------------------
+# 0. Pre-flight Checks
+# ------------------------------------------------------------------------------
+if [[ $EUID -ne 0 ]]; then
+  echo "❌ 오류: 본 스크립트는 네트워크 네임스페이스 및 OVS 조작을 위해 root 권한(sudo)이 필요합니다." >&2
+  exit 1
+fi
+
+for cmd in ovs-vsctl ethtool ip; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "❌ 오류: 필수 명령어 '$cmd'를 찾을 수 없습니다." >&2
+    echo "👉 설치 안내: sudo apt update && sudo apt install -y openvswitch-switch ethtool iproute2" >&2
+    exit 1
+  fi
+done
+
+if command -v systemctl &>/dev/null; then
+  if ! systemctl is-active --quiet openvswitch-switch; then
+    echo ">>> [Pre-flight] Open vSwitch 서비스 시작 중..."
+    systemctl start openvswitch-switch || true
+  fi
+fi
+
+CTRL_IP="${CTRL_IP:-127.0.0.1}"
+CTRL_PORT="${CTRL_PORT:-6653}"  # OpenFlow 1.3 IANA 표준 포트
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# [멱등성 보장] 기존 잔여 브릿지 및 네임스페이스 사전 정리
+if [[ -f "${SCRIPT_DIR}/cleanup_large_ovs.sh" ]]; then
+  echo ">>> [0/6] 기존 잔여 10-스위치 토폴로지 사전 클린업..."
+  bash "${SCRIPT_DIR}/cleanup_large_ovs.sh" >/dev/null 2>&1 || true
+fi
+
+# ------------------------------------------------------------------------------
+# 1. OVS 브릿지 10개 생성 및 OpenFlow 1.3 / DPID 설정
+# ------------------------------------------------------------------------------
+echo ">>> [1/6] OVS 브릿지 10개 생성 (S1~S10) 및 DPID 고정..."
+for sw_num in {1..10}; do
+  sw="s${sw_num}"
+  ovs-vsctl --may-exist add-br "$sw"
+  ovs-vsctl set bridge "$sw" protocols=OpenFlow13
+  ovs-vsctl set-fail-mode "$sw" secure
+  hex_dpid=$(printf "00000000000000%02x" "$sw_num")
+  ovs-vsctl set bridge "$sw" other-config:datapath-id="$hex_dpid"
+  ovs-ofctl -O OpenFlow13 del-flows "$sw" 2>/dev/null || true
+done
+
+# ------------------------------------------------------------------------------
+# 2. Ryu SDN 컨트롤러 연결
+# ------------------------------------------------------------------------------
+echo ">>> [2/6] Ryu SDN 컨트롤러 연결 (${CTRL_IP}:${CTRL_PORT})..."
+for sw_num in {1..10}; do
+  sw="s${sw_num}"
+  ovs-vsctl set-controller "$sw" "tcp:${CTRL_IP}:${CTRL_PORT}"
+  ovs-vsctl set controller "$sw" inactivity_probe=15000
+done
+
+# ------------------------------------------------------------------------------
+# 3. 스위치 간 트렁크 veth 페어 생성 및 연결 (Dual-Homing Mesh)
+# ------------------------------------------------------------------------------
+echo ">>> [3/6] 스위치 간 이중화 트렁크 링크 veth 구축..."
+
+create_trunk_link() {
+  local u=$1; local v=$2; local u_port=$3; local v_port=$4
+  local if_u="${u}-${v}"
+  local if_v="${v}-${u}"
+
+  ip link add "$if_u" type veth peer name "$if_v"
+  ip link set "$if_u" up mtu 1500
+  ip link set "$if_v" up mtu 1500
+
+  ethtool -K "$if_u" tx off rx off gso off gro off tso off 2>/dev/null || true
+  ethtool -K "$if_v" tx off rx off gso off gro off tso off 2>/dev/null || true
+
+  ovs-vsctl add-port "$u" "$if_u" -- set Interface "$if_u" ofport_request="$u_port"
+  ovs-vsctl add-port "$v" "$if_v" -- set Interface "$if_v" ofport_request="$v_port"
+}
+
+# Core S1 <-> S2 (Backbone ISL Trunk)
+create_trunk_link "s1" "s2" 1 1
+
+# S1 (Core 1) Uplinks to All Edges (Port 98 on Edges)
+create_trunk_link "s1" "s3" 2 98
+create_trunk_link "s1" "s4" 3 98
+create_trunk_link "s1" "s5" 4 98
+create_trunk_link "s1" "s6" 5 98
+create_trunk_link "s1" "s9" 6 98   # S1 <-> S9 (Border Gateway)
+create_trunk_link "s1" "s10" 7 98  # S1 <-> S10 (DMZ)
+create_trunk_link "s1" "s7" 8 98   # S1 <-> S7 (Admin)
+create_trunk_link "s1" "s8" 9 98   # S1 <-> S8 (Quarantine)
+
+# S2 (Core 2) Uplinks to All Edges (Port 99 on Edges)
+create_trunk_link "s2" "s3" 2 99
+create_trunk_link "s2" "s4" 3 99
+create_trunk_link "s2" "s5" 4 99
+create_trunk_link "s2" "s6" 5 99
+create_trunk_link "s2" "s9" 6 99   # S2 <-> S9 (Border Gateway)
+create_trunk_link "s2" "s10" 7 99  # S2 <-> S10 (DMZ)
+create_trunk_link "s2" "s7" 8 99   # S2 <-> S7 (Admin)
+create_trunk_link "s2" "s8" 9 99   # S2 <-> S8 (Quarantine)
+
+# ------------------------------------------------------------------------------
+# 4. 호스트 네트워크 네임스페이스 생성 및 스위치 연결
+# ------------------------------------------------------------------------------
+echo ">>> [4/6] 호스트 네임스페이스 및 Access veth 링크 구축..."
+
+create_host() {
+  local ns=$1; local sw=$2; local port=$3; local ip_addr=$4; local mac_addr=$5; local prefix=${6:-24}
+  local veth_host="vh_${ns}"
+  local veth_sw="vs_${ns}"
+
+  ip netns add "$ns"
+
+  ip link add "$veth_host" type veth peer name "$veth_sw"
+  ip link set "$veth_host" netns "$ns"
+  ip link set "$veth_sw" up mtu 1500
+
+  ip -n "$ns" link set dev "$veth_host" address "$mac_addr"
+  ip -n "$ns" addr add "$ip_addr/$prefix" dev "$veth_host"
+  ip -n "$ns" link set dev "$veth_host" up
+  ip -n "$ns" link set dev lo up
+  ip -n "$ns" route add default dev "$veth_host" 2>/dev/null || true
+
+  ethtool -K "$veth_sw" tx off rx off gso off gro off tso off 2>/dev/null || true
+  ip netns exec "$ns" ethtool -K "$veth_host" tx off rx off gso off gro off tso off 2>/dev/null || true
+
+  ovs-vsctl add-port "$sw" "$veth_sw" -- set Interface "$veth_sw" ofport_request="$port"
+}
+
+# User Zone (S3: h1, h2 / S4: h3, h4)
+create_host "ns_h1" "s3" 1 "10.0.0.1" "00:00:00:00:00:01"
+create_host "ns_h2" "s3" 2 "10.0.0.2" "00:00:00:00:00:02"
+create_host "ns_h3" "s4" 1 "10.0.0.3" "00:00:00:00:00:03"
+create_host "ns_h4" "s4" 2 "10.0.0.4" "00:00:00:00:00:04"
+
+# DMZ Zone (S10: web1, web2)
+create_host "ns_web1" "s10" 1 "10.0.0.11" "00:00:00:00:00:11"
+create_host "ns_web2" "s10" 2 "10.0.0.12" "00:00:00:00:00:12"
+
+# Internal Server Zone (S5: db1 / S6: app1)
+create_host "ns_h5" "s5" 1 "10.0.0.21" "00:00:00:00:00:21"
+create_host "ns_h6" "s6" 1 "10.0.0.22" "00:00:00:00:00:22"
+
+# Admin Zone (S7: h_admin, h_patch)
+create_host "ns_admin" "s7" 1 "10.0.0.254" "00:00:00:00:00:fe"
+create_host "ns_patch" "s7" 2 "10.0.0.253" "00:00:00:00:00:fd"
+
+# Quarantine Zone (S8: h_sink & probe)
+create_host "ns_sink" "s8" 1 "10.0.0.240" "00:00:00:00:00:f0"
+
+# External Zone (S9: ext_h1 / 외부 공격자)
+create_host "ns_ext" "s9" 1 "192.168.100.100" "00:00:00:00:00:99" 24
+# 외부 공격자 네임스페이스 기본 라우팅 설정
+ip netns exec ns_ext ip route add 10.0.0.0/16 dev vh_ns_ext 2>/dev/null || true
+
+# ------------------------------------------------------------------------------
+# 5. 보안 업데이트 패치 서버 서비스 기동 (10.0.0.253:80) & 웹서버 (10.0.0.11:80)
+# ------------------------------------------------------------------------------
+echo ">>> [5/6] 보안 업데이트 패치 서버 (10.0.0.253) 및 DMZ 웹서버 (10.0.0.11) 기동..."
+mkdir -p /tmp/sdn_patch_root/patches
+cp "${ROOT_DIR}/docker/patch_server/clean_agent.sh" /tmp/sdn_patch_root/ 2>/dev/null || true
+cp "${ROOT_DIR}/docker/patch_server/clean_agent.sh" /tmp/sdn_patch_root/patches/ 2>/dev/null || true
+chmod +x /tmp/sdn_patch_root/clean_agent.sh /tmp/sdn_patch_root/patches/clean_agent.sh 2>/dev/null || true
+echo '<html><body><h1>SDN Patch Server (10.0.0.253)</h1><a href="/patches/clean_agent.sh">clean_agent.sh</a></body></html>' > /tmp/sdn_patch_root/index.html
+
+# Fallback-safe HTTP server daemon inside ns_patch
+ip netns exec ns_patch nohup python3 -m http.server 80 --directory /tmp/sdn_patch_root > /tmp/sdn_patch_server.log 2>&1 &
+echo ">>> 패치 서버 PID: $! (ns_patch / 10.0.0.253:80)"
+
+# DMZ 웹서버 데몬 (ns_web1 / 10.0.0.11:80)
+mkdir -p /tmp/sdn_web_root
+echo '<html><body><h1>SDN Enterprise Web Server (10.0.0.11)</h1></body></html>' > /tmp/sdn_web_root/index.html
+ip netns exec ns_web1 nohup python3 -m http.server 80 --directory /tmp/sdn_web_root > /tmp/sdn_web_server.log 2>&1 &
+echo ">>> DMZ 웹서버 PID: $! (ns_web1 / 10.0.0.11:80)"
+
+# ------------------------------------------------------------------------------
+# 6. 토폴로지 링크 및 인터페이스 활성화 확인
+# ------------------------------------------------------------------------------
+echo ">>> [6/6] 인터페이스 활성화 및 검증..."
+for sw_num in {1..10}; do
+  ip link set "s${sw_num}" up || true
+done
+
+echo "=========================================================================="
+echo "✅ Native OVS 10-Switch 6-Zone 엔터프라이즈 토폴로지 구성이 완료되었습니다!"
+echo "   - Backbone: S1 (DPID: 0x01), S2 (DPID: 0x02) - ISL 40Gbps Trunk"
+echo "   - User:     S3 (h1, h2), S4 (h3, h4) - Dual-Homed to S1/S2"
+echo "   - DMZ:      S10 (web1: 10.0.0.11, web2: 10.0.0.12) - Dual-Homed"
+echo "   - Server:   S5 (db1: 10.0.0.21), S6 (app1: 10.0.0.22) - Dual-Homed"
+echo "   - Admin:    S7 (h_admin: 10.0.0.254, h_patch: 10.0.0.253) - No-Transit"
+echo "   - Quarantine: S8 (h_sink/probe: 10.0.0.240) - No-Transit"
+echo "   - External: S9 (ext_h1: 192.168.100.100) - Border Gateway Dual-Homed"
+echo "=========================================================================="

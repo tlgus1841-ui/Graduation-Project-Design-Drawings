@@ -97,7 +97,7 @@ def run(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="H_attacker -> H_server 랜덤 IP 스푸핑 SYN Flood 공격기")
-    parser.add_argument("--dst", default="10.0.0.4", help="목적지 호스트 IP (H_server)")
+    parser.add_argument("--dst", default="10.0.0.11", help="목적지 호스트 IP (H_server)")
     parser.add_argument("--dport", type=int, default=80, help="목적지 포트")
     parser.add_argument("--duration", type=float, default=10.0, help="총 실행 시간(초)")
     parser.add_argument("--rate", type=int, default=None, help="초당 고정 패킷 수 (--min-pps 및 --max-pps를 동일 값으로 설정)")

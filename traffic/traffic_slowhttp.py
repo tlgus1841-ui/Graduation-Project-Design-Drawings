@@ -52,7 +52,7 @@ def run(server: str, port: int, sockets: int, interval: float, duration: float, 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Slow HTTP 공격기 (Slowloris 방식)")
-    p.add_argument("--server", default="10.0.0.4")
+    p.add_argument("--server", default="10.0.0.11")
     p.add_argument("--port", type=int, default=80)
     p.add_argument("--sockets", type=int, default=150, help="붙잡을 연결 수 (Slowloris 기본값 150)")
     p.add_argument("--interval", type=float, default=10.0, help="연결마다 헤더 한 줄을 보내는 간격(초)")

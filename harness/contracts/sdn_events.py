@@ -35,20 +35,34 @@ PORT_STATS_INTERVAL_SEC = 2.0
 # Ryu -> AI Worker: 보호 서버 응답 확인(손실·지연) 결과, 2초 주기 (위험 단계의 서비스 악화 조건)
 REDIS_CHANNEL_SERVICE_HEALTH = "sdn:health:service"
 
-# 서비스 상태 확인: 컨트롤러가 정상 사용자 자리(S1)에서 보호 서버로 보내는 ICMP echo의 가상 출발지.
-# 실제 호스트가 없는 주소라 컨트롤러가 ARP에 대신 답하고, 응답은 S1으로 돌아와 컨트롤러가 받는다.
-SERVICE_PROBE_IP = "10.0.0.250"
-SERVICE_PROBE_MAC = "00:00:00:00:00:fa"
-SERVICE_PROBE_TARGET_IP = "10.0.0.4"
-SERVICE_PROBE_DPID = 1
+# 서비스 상태 확인: 컨트롤러가 정상 사용자 자리(S3)에서 보호 서버(h5 Web)로 보내는 ICMP echo의 가상 출발지.
+# 실제 호스트가 없는 주소라 컨트롤러가 ARP에 대신 답하고, 응답은 S3으로 돌아와 컨트롤러가 받는다.
+SERVICE_PROBE_IP = "10.0.0.240"
+SERVICE_PROBE_MAC = "00:00:00:00:00:f0"
+SERVICE_PROBE_TARGET_IP = "10.0.0.11"
+SERVICE_PROBE_DPID = 3
 SERVICE_PROBE_INTERVAL_SEC = 0.2
 # 이 시간 안에 응답이 없으면 손실로 센다
 SERVICE_PROBE_TIMEOUT_SEC = 1.0
 
 # 서버 연결 수집기(pipeline/server_conn_agent.py) -> AI Worker: 접속한 PC마다 열린 HTTP 연결·느린 요청 수 (Slow HTTP)
 REDIS_CHANNEL_SERVER_CONNS = "sdn:stats:serverconn"
-# 접속 호스트 IP → (dpid, 포트). 컨트롤러의 arp_table과 같아야 한다 (tests/ryu/test_service_probe.py가 확인)
-ACCESS_HOST_PORTS = {"10.0.0.1": (1, 1), "10.0.0.2": (1, 2), "10.0.0.4": (4, 1)}
+# 10-스위치 접속 호스트 IP → (dpid, 포트). 컨트롤러의 arp_table과 같아야 한다.
+ACCESS_HOST_PORTS = {
+    "10.0.0.1": (3, 1),
+    "10.0.0.2": (3, 2),
+    "10.0.0.3": (4, 1),
+    "10.0.0.4": (4, 2),
+    "10.0.0.11": (10, 1),
+    "10.0.0.12": (10, 2),
+    "10.0.0.21": (5, 1),
+    "10.0.0.22": (6, 1),
+    "10.0.0.254": (7, 1),
+    "10.0.0.253": (7, 2),
+    "10.0.0.240": (8, 1),
+    "10.0.0.250": (8, 1),
+    "192.168.100.100": (9, 1),
+}
 
 # 수동 RESTORE(command_id "manual-…") 직후 같은 포트의 자동 재격리를 보류하는 시간(초).
 # 운영자가 AI 오탐을 의심해 풀어 준 포트를, 2초 뒤 다음 경보가 곧바로 다시 막지 않게 한다.
@@ -105,6 +119,9 @@ class CountKind(str, Enum):
     ARP_FAIL = "arp_fail"
     # Table 1 망 정책 위반 (USER -> USER 차단 등) 누적 패킷 수
     ZONE_DENY = "zone_deny"
+    ZONE_DENY_INTERNAL = "zone_deny_internal"    # 내부 확산 차단 (USER -> USER/ADMIN)
+    ZONE_DENY_PORT_SCAN = "zone_deny_port_scan"  # 서버/DMZ 미허용 포트 접근 차단
+    ZONE_DENY_EXTERNAL = "zone_deny_external"    # 외부 인터넷 미허용 인바운드 차단
 
 
 class ThreatType(str, Enum):

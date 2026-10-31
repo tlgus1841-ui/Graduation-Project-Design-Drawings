@@ -1,11 +1,11 @@
 """
 Self-Defending SDN Tower: Multi-hop Dynamic Rerouting Engine.
 Author: Sihyeon Park (22101489 / Tech Lead)
-Phase 4 (Week 10) Milestone
+Phase 6-C Enterprise Milestone
 
 NetworkX Dijkstra-based alternative path computation and proactive multi-hop
 flow rule provisioning (OFPFC_ADD) across intermediate switches to guarantee
-zero packet loss during mitigation.
+zero packet loss during mitigation. Supports Enterprise Dual-Homing Topology.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,26 +15,42 @@ import networkx as nx
 class RerouteEngine:
     """
     OpenFlow 1.3 다중 홉 우회 경로 계산 및 플로우 프로비저닝 엔진.
-    다이아몬드 토폴로지(S1, S2, S3, S4) 및 일반 메쉬 토폴로지 지원.
+    엔터프라이즈 8-스위치(S1~S8) 및 10-스위치(S1~S10) 토폴로지 지원.
     """
 
-    def __init__(self):
+    def __init__(self, profile: Optional[Dict[str, Any]] = None):
         self.graph = nx.Graph()
         self.port_map: Dict[Tuple[int, int], Tuple[int, int]] = {}
         # (u, v) -> (u_out_port, v_in_port)
-        self._build_diamond_topology()
+        if profile and profile.get("links"):
+            self._build_topology_from_links(profile["links"])
+        else:
+            self._build_default_8sw_topology()
 
-    def _build_diamond_topology(self):
-        """다이아몬드 기본 토폴로지 링크 및 포트 매핑 초기화"""
-        # S1: P3 <-> S2: P1
-        # S1: P4 <-> S3: P1
-        # S2: P2 <-> S4: P2
-        # S3: P2 <-> S4: P3
+    def _build_topology_from_links(self, links: List[Any]):
+        """프로파일 링크 명세로부터 그래프 및 포트 매핑 초기화"""
+        for link in links:
+            u, v, u_p, v_p = link[0], link[1], link[2], link[3]
+            w = float(link[4]) if len(link) > 4 else 1.0
+            self.graph.add_edge(u, v, weight=w)
+            self.port_map[(u, v)] = (u_p, v_p)
+            self.port_map[(v, u)] = (v_p, u_p)
+
+    def _build_default_8sw_topology(self):
+        """엔터프라이즈 8-스위치 기본 토폴로지 링크 및 포트 매핑 초기화"""
         links = [
-            (1, 2, 3, 1, 1.0),  # (u, v, u_port, v_port, weight)
-            (1, 3, 4, 1, 2.0),  # Backup route has slightly higher initial weight
-            (2, 4, 2, 2, 1.0),
-            (3, 4, 2, 3, 2.0),
+            # Core S1 <-> S2
+            (1, 2, 1, 1, 1.0),
+            # S1 to Edges
+            (1, 3, 2, 99, 1.0),
+            (1, 5, 3, 99, 1.0),
+            (1, 7, 4, 98, 1.0),
+            (1, 8, 5, 98, 1.0),
+            # S2 to Edges
+            (2, 4, 2, 99, 1.0),
+            (2, 6, 3, 99, 1.0),
+            (2, 7, 4, 99, 1.0),
+            (2, 8, 5, 99, 1.0),
         ]
         for u, v, u_p, v_p, w in links:
             self.graph.add_edge(u, v, weight=w)
@@ -85,11 +101,6 @@ class RerouteEngine:
         """
         우회 경로 [S1, ..., Sn] 상의 각 스위치별 선제적 OFPFC_ADD 설치 명세 생성.
         중간 스위치(Intermediate)부터 Egress, Ingress 순으로 설치할 수 있도록 반환.
-        반환 예시:
-        [
-          {"dpid": 3, "out_port": 2, "dst_ip": "10.0.0.4", "is_intermediate": True},
-          {"dpid": 1, "out_port": 4, "dst_ip": "10.0.0.4", "is_intermediate": False}
-        ]
         """
         if len(path) < 2:
             return []
@@ -111,6 +122,5 @@ class RerouteEngine:
             })
 
         # 중간 경유 스위치들을 먼저 프로비저닝한 뒤 출발지(Ingress)를 변경하는 안전 순서 정렬
-        # (중간 스위치 우선 설치 -> 마지막에 Ingress 스위치 스위칭)
         specs.sort(key=lambda s: 0 if s["is_intermediate"] else 1)
         return specs

@@ -112,7 +112,7 @@ def build_message(server_ip: str, port: int, per_ip: Dict[str, Tuple[int, int, i
 
 def main() -> None:
     p = argparse.ArgumentParser(description="서버 연결 상태 수집기 (Slow HTTP 판단용)")
-    p.add_argument("--server-ip", default="10.0.0.4")
+    p.add_argument("--server-ip", default="10.0.0.11")
     p.add_argument("--port", type=int, default=80)
     p.add_argument("--interval", type=float, default=1.0)
     p.add_argument("--redis-url", default="redis://localhost:6379/0")

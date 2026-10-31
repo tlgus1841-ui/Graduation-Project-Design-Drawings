@@ -36,9 +36,9 @@ def test_e2e_telemetry_to_mitigation_pipeline():
     controller = ControllerCls()
     controller.redis_client = redis_client
 
-    # Register switches S1, S2, S3, S4
+    # Register switches S1 ~ S8
     mock_dps = {}
-    for dpid in [1, 2, 3, 4]:
+    for dpid in range(1, 9):
         dp = MagicMock()
         dp.id = dpid
         dp.ofproto = MagicMock()
@@ -50,10 +50,10 @@ def test_e2e_telemetry_to_mitigation_pipeline():
 
     # Step 1: Telemetry publication
     stats_msg = PortStatsMessage(
-        dpid=1,
+        dpid=3,
         stats=[
             PortStatItem(
-                dpid=1,
+                dpid=3,
                 port_no=2,
                 rx_packets=5000,
                 tx_packets=10,
@@ -68,7 +68,7 @@ def test_e2e_telemetry_to_mitigation_pipeline():
 
     # Step 2: AI detects anomaly and publishes alert
     alert = AnomalyAlertMessage(
-        dpid=1,
+        dpid=3,
         in_port=2,
         threat_type=ThreatType.SYN_FLOOD_SPOOFING.value,
         score=-0.91,
@@ -82,8 +82,8 @@ def test_e2e_telemetry_to_mitigation_pipeline():
     controller._handle_redis_message(REDIS_CHANNEL_ANOMALY_ALERT, alert_json)
 
     # Step 4: Verify defenses applied
-    # 4.1 In_port 2 dropped on S1
-    assert mock_dps[1].send_msg.called
+    # 4.1 In_port 2 dropped on S3
+    assert mock_dps[3].send_msg.called
     # 4.2 FSM transitioned to MITIGATED
     assert controller.fsm.get_state() == DefenseState.MITIGATED
 

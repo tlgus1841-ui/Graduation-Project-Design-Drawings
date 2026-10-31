@@ -8,9 +8,7 @@ Validates:
 - config/zones.yaml parsing and validation
 """
 
-import json
 from pathlib import Path
-import pytest
 import yaml
 
 from harness.contracts.sdn_events import (
@@ -94,14 +92,17 @@ def test_zones_yaml_structure():
     assert "ADMIN" in data["zones"]
     assert "QUARANTINE" in data["zones"]
     assert "10.0.0.1" in data["zones"]["USER"]
-    assert "10.0.0.4" in data["zones"]["SERVER"]
+    assert "10.0.0.11" in data["zones"]["SERVER"]
+    assert "10.0.0.254" in data["zones"]["ADMIN"]
+    assert "10.0.0.253" in data["zones"]["ADMIN"]
 
-    # 2. Hosts check
+    # 2. Hosts check (8-Switch Topology)
     assert "hosts" in data
     assert "10.0.0.1" in data["hosts"]
     assert data["hosts"]["10.0.0.1"]["mac"] == "00:00:00:00:00:01"
-    assert data["hosts"]["10.0.0.1"]["dpid"] == 1
+    assert data["hosts"]["10.0.0.1"]["dpid"] == 3
     assert data["hosts"]["10.0.0.1"]["port"] == 1
+    assert data["hosts"]["10.0.0.11"]["dpid"] == 5
 
     # 3. Rules check
     assert "rules" in data
@@ -109,6 +110,7 @@ def test_zones_yaml_structure():
     assert "USER_TO_SERVER_WEB" in rule_names
     assert "USER_TO_SERVER_DNS" in rule_names
     assert "QUARANTINE_TO_ADMIN_HTTPS" in rule_names
+    assert "QUARANTINE_TO_ADMIN_HTTP_PATCH" in rule_names
 
     # 4. Silent drop & lateral spread
     assert "silent_drop_udp_ports" in data
@@ -120,5 +122,6 @@ def test_zones_yaml_structure():
 
     # 5. Hard whitelist
     assert "hard_whitelist" in data
-    assert data["hard_whitelist"]["probe_ip"] == "10.0.0.250"
-    assert "10.0.0.4" in data["hard_whitelist"]["protected_ips"]
+    assert data["hard_whitelist"]["probe_ip"] == "10.0.0.240"
+    assert "10.0.0.11" in data["hard_whitelist"]["protected_ips"]
+    assert "10.0.0.253" in data["hard_whitelist"]["protected_ips"]
