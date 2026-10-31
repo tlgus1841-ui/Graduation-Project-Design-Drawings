@@ -128,7 +128,7 @@
   │     ├── VM 작업 폴더 Git 의존성 제거: 런타임 디렉토리(`/home/tlgus1841/sdn-tower-runtime`) 단독 패키징 및 Git 충돌 원천 차단
   │     ├── 무중단 컨테이너 재빌드/재기동 및 원격 헬스체크(`http://34.50.17.220/api/health`) 자동화 검증
   │     └── 기존 VM 작업 디렉토리(`~/sdn-tower`) 안전 스냅샷 보관 정책 적용 완료 (DoD 6개 전수 충족)
-  ├── [Phase 6-C-4] 8-스위치 표준 운영 안정화 및 도구 정합성 확보 ── [현재 진행 중]
+  ├── [Phase 6-C-4] 8-스위치 표준 운영 안정화 및 도구 정합성 확보 ── [완료 (Verified)]
   │     ├── 구형 4-스위치 잔여 의존성 완전 청산: 표준 8-스위치 단일 체제로 운영 도구 전면 정합화
   │     ├── 트래픽 주입 도구 8-스위치 표준화 (`scripts/native_attack.sh`: `ns_attacker` 에러 제거 ➔ `ns_h2` ➔ `ns_h5` Web)
   │     ├── 데모 시나리오 및 원격 제어 도구 최신화 (`demo_scenario.sh`, `vm_demo_controller.sh` ➔ `~/sdn-tower-runtime`)
