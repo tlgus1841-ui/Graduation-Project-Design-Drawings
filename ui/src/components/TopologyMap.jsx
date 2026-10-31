@@ -83,7 +83,6 @@ export function toVisNode(n, isLarge = false) {
       color: "#f8fafc",
       size: isCore ? 17 : (isSwitch ? 15 : 13),
       face: "ui-sans-serif, system-ui",
-      bold: isSwitch,
     },
     margin: isCore ? 14 : (isSwitch ? 10 : 8),
   };
@@ -95,6 +94,8 @@ export function toVisEdge(l) {
   const isSafeChannel = l.status === "QUARANTINE_SAFE";
   const bypass = isBypassEdge(l);
   const isTrunk = l.is_trunk || (l.source?.startsWith("s") && l.target?.startsWith("s"));
+  const src = String(l.source || "").toUpperCase();
+  const dst = String(l.target || "").toUpperCase();
 
   return {
     id: `${l.source}-${l.target}`,
@@ -112,16 +113,17 @@ export function toVisEdge(l) {
       : (isSafeChannel ? { enabled: true, color: "rgba(249,115,22,0.95)", size: 15, x: 0, y: 0 } : { enabled: false }),
     title: isSafeChannel
       ? "L4 격리 치료 채널: TCP 80 (패치 다운로드 허용)"
-      : `${isTrunk ? "🔗 Trunk 백본" : "💻 호스트 접속"}: ${l.source.toUpperCase()}:${l.src_port} ↔ ${l.target.toUpperCase()}:${l.dst_port} · ${l.status}`,
+      : `${isTrunk ? "🔗 Trunk 백본" : "💻 호스트 접속"}: ${src}:${l.src_port ?? 0} ↔ ${dst}:${l.dst_port ?? 0} · ${l.status || "ACTIVE"}`,
   };
 }
 
 // Generate augmented links including dynamic quarantine safe channel links
 export function getAugmentedLinks(topology) {
-  const allLinks = [...(topology.links || [])];
-  const hasPatchServer = topology.nodes?.some((n) => n.id === "h_patch");
+  const allLinks = [...(topology?.links || [])];
+  const nodes = topology?.nodes || [];
+  const hasPatchServer = nodes.some((n) => n.id === "h_patch");
   if (hasPatchServer) {
-    for (const n of topology.nodes) {
+    for (const n of nodes) {
       if (n.status === "QUARANTINED") {
         allLinks.push({
           source: n.id,
@@ -254,7 +256,7 @@ function TopologyMap({ topology, ports }) {
     if (!selected) {
       // Restore all nodes and edges to full brightness
       const visNodes = topology.nodes.map((n) => toVisNode(n, isLarge));
-      nodesRef.current.update(visNodes.map(({ x, y, ...rest }) => rest));
+      nodesRef.current.update(visNodes);
       edgesRef.current.update(allLinks.map(toVisEdge));
       return;
     }

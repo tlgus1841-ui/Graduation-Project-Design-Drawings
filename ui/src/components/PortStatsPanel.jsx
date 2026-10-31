@@ -10,11 +10,12 @@ const TABS = [
   { id: "BACKBONE", label: "백본망 (S1, S2)", dpids: [1, 2] },
 ];
 
-export default function PortStatsPanel({ ports, phase, incident }) {
+export default function PortStatsPanel({ ports = {}, phase, incident }) {
   const [activeTab, setActiveTab] = useState("ALL");
   const [viewMode, setViewMode] = useState("cards"); // "cards" | "table"
 
-  const rows = Object.entries(ports).sort(([a], [b]) =>
+  const safePorts = ports || {};
+  const rows = Object.entries(safePorts).sort(([a], [b]) =>
     a.localeCompare(b, undefined, { numeric: true }),
   );
 
@@ -92,9 +93,12 @@ export default function PortStatsPanel({ ports, phase, incident }) {
         /* Responsive Card Grid View (4~6 columns) */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
           {filteredRows.map(([key, p]) => {
-            const hot = p.pps > 1000 && p.bpp > 0 && p.bpp < 80;
+            const pps = Number(p.pps) || 0;
+            const bpp = Number(p.bpp) || 0;
+            const bps = Number(p.bps) || 0;
+            const hot = pps > 1000 && bpp > 0 && bpp < 80;
             const alerting = key === alertKey;
-            const ppsPct = Math.min(100, Math.max(2, Math.round((p.pps / 2000) * 100)));
+            const ppsPct = Math.min(100, Math.max(2, Math.round((pps / 2000) * 100)));
             return (
               <div
                 key={key}
@@ -123,7 +127,7 @@ export default function PortStatsPanel({ ports, phase, incident }) {
                 <div className="mt-2">
                   <div className="flex items-baseline justify-between">
                     <span className="font-mono text-lg font-extrabold tracking-tight text-white">
-                      {fmt(p.pps)}
+                      {fmt(pps)}
                     </span>
                     <span className="text-[10px] uppercase font-mono text-slate-400">pps</span>
                   </div>
@@ -131,15 +135,15 @@ export default function PortStatsPanel({ ports, phase, incident }) {
                   <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                     <div
                       className={`h-full transition-all duration-300 rounded-full ${
-                        alerting || hot ? "bg-red-500" : p.pps > 500 ? "bg-amber-400" : "bg-emerald-400"
+                        alerting || hot ? "bg-red-500" : pps > 500 ? "bg-amber-400" : "bg-emerald-400"
                       }`}
                       style={{ width: `${ppsPct}%` }}
                     />
                   </div>
                 </div>
                 <div className="mt-2.5 flex items-center justify-between border-t border-slate-800/80 pt-1.5 font-mono text-[11px] text-slate-400">
-                  <span>{fmt(p.bps)}b</span>
-                  <span>{p.bpp ? `${fmt(p.bpp)}B` : "-"}</span>
+                  <span>{fmt(bps)}b</span>
+                  <span>{bpp ? `${fmt(bpp)}B` : "-"}</span>
                 </div>
               </div>
             );
@@ -159,7 +163,10 @@ export default function PortStatsPanel({ ports, phase, incident }) {
           </thead>
           <tbody className="font-mono text-slate-100">
             {filteredRows.map(([key, p]) => {
-              const hot = p.pps > 1000 && p.bpp > 0 && p.bpp < 80;
+              const pps = Number(p.pps) || 0;
+              const bpp = Number(p.bpp) || 0;
+              const bps = Number(p.bps) || 0;
+              const hot = pps > 1000 && bpp > 0 && bpp < 80;
               const alerting = key === alertKey;
               return (
                 <tr
@@ -171,10 +178,10 @@ export default function PortStatsPanel({ ports, phase, incident }) {
                 >
                   <td className="py-2">S{p.dpid}:{p.portNo}</td>
                   <td className="py-2 font-sans text-slate-300">{getPortLabel(key)}</td>
-                  <td className="py-2 text-right">{fmt(p.pps)}</td>
-                  <td className="py-2 text-right">{fmt(p.bps)}</td>
+                  <td className="py-2 text-right">{fmt(pps)}</td>
+                  <td className="py-2 text-right">{fmt(bps)}</td>
                   <td className="py-2 text-right">
-                    {p.bpp ? `${fmt(p.bpp)}B` : "-"}
+                    {bpp ? `${fmt(bpp)}B` : "-"}
                     {(hot || alerting) && " ⚠"}
                   </td>
                 </tr>
