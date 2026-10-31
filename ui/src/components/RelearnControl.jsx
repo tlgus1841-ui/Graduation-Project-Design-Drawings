@@ -6,9 +6,13 @@ import { sendRelearn } from "../lib/api.js";
 // registration, an event), the operator approves a period in which the AI worker relearns traffic volume.
 // Attack signals (unmatched SYN, failure replies) are never relearned, and the baseline returns afterwards.
 const TARGETS = [
-  { value: "0:0", label: "모든 접속 포트" },
-  { value: "1:1", label: "S1:1 · H_legit" },
-  { value: "1:2", label: "S1:2 · H_attacker" },
+  { value: "0:0", label: "모든 접속 포트 (전체)" },
+  { value: "3:1", label: "S3:1 · h1 (사용자 A1)" },
+  { value: "3:2", label: "S3:2 · h2 (사용자 A2)" },
+  { value: "4:1", label: "S4:1 · h3 (사용자 B1)" },
+  { value: "4:2", label: "S4:2 · h4 (사용자 B2)" },
+  { value: "1:1", label: "S1:1 · H_legit (레거시)" },
+  { value: "1:2", label: "S1:2 · H_attacker (레거시)" },
 ];
 const PERIODS = [30, 60, 120, 240];
 

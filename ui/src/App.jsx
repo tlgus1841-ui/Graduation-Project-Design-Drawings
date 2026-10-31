@@ -33,7 +33,7 @@ export default function App() {
           <PhaseBadge phase={state.phase} />
           <ConnectionBadge status={status} retries={retries} />
           <RelearnControl />
-          <ManualControl />
+          <ManualControl topology={state.topology} />
         </>
       }
     >
