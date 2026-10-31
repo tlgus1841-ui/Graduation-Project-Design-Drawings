@@ -11,10 +11,8 @@ Validates the full Phase 1 ~ 5 lifecycle:
 5. Admin audit approval releasing the quarantined host back to the USER zone
 """
 
-import json
 from unittest.mock import MagicMock
 import fakeredis
-import pytest
 
 from harness.contracts.sdn_events import (
     REDIS_CHANNEL_ANOMALY_ALERT,

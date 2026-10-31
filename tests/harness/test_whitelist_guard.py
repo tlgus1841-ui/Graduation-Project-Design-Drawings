@@ -44,7 +44,7 @@ def test_whitelist_blocks_trunk_isolation_with_exception():
 def test_whitelist_can_isolate_boolean_check():
     guard = WhitelistGuard()
     assert guard.can_isolate(1, 2) is False  # S1:P2 is trunk
-    assert guard.can_isolate(3, 99) is False # S3:P99 is trunk
+    assert guard.can_isolate(3, 99) is False  # S3:P99 is trunk
     assert guard.can_isolate(5, 1) is False  # S5:P1 is h5 (Web server), protected
 
 

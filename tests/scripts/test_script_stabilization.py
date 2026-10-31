@@ -1,13 +1,12 @@
 import os
 import sys
-import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from model.criteria_engine import load_baselines
+from model.criteria_engine import load_baselines  # noqa: E402
 
 
 def test_native_attack_script_integrity():

@@ -273,7 +273,6 @@ class MockTelemetryGenerator:
             _host("h_patch", "h_patch", "10.0.0.253", "00:00:00:00:00:fd"),
             _host("h_sink", "h_sink", "10.0.0.250", "00:00:00:00:00:fa"),
         ]
-        bypass_status = "REROUTED" if mitigated else "ACTIVE"
         h2_link_status = "BLOCKED" if mitigated else "ACTIVE"
 
         links = [

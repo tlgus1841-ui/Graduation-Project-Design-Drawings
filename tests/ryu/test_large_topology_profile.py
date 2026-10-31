@@ -7,14 +7,11 @@ Validates:
 4. Extended zones.yaml policies including QUARANTINE_TO_ADMIN_HTTP_PATCH and H_Patch
 """
 
-import os
 import importlib.util
 from pathlib import Path
-import pytest
 
 from harness.topology.profile_loader import (
     get_topology_profile,
-    compute_routing_table,
     find_profiles_yaml_path,
 )
 

@@ -5,7 +5,7 @@ Supports dual-mode execution: diamond_4sw (Default) and zone_8sw (Enterprise).
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 import networkx as nx
 import yaml
 

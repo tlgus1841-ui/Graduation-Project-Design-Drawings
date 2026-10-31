@@ -5,14 +5,7 @@ Quarantine L4 Patch Server (10.0.0.253:80) Flow Enforcement & Multi-Switch Polic
 
 from unittest.mock import MagicMock
 import os
-import pytest
 
-from harness.contracts.sdn_events import (
-    CountKind,
-    DefenseAction,
-    ControlCommandMessage,
-)
-from harness.topology.profile_loader import get_topology_profile
 from tests.ryu.test_controller_logic import SelfDefendingSDNController
 
 _globals = SelfDefendingSDNController.__init__.__globals__

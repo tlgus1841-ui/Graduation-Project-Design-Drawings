@@ -95,7 +95,6 @@ def _setup_and_load_controller():
 
 
 SelfDefendingSDNController = _setup_and_load_controller()
-from topo.diamond_topo import DiamondTopo  # noqa: E402
 
 
 def test_arp_table_and_topo_consistency():

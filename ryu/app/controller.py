@@ -1398,11 +1398,13 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     self.reroute_traffic(source_dpid=cmd.target_dpid, target_dpid=5, dst_ip="10.0.0.11")
                     self._publish_topology_sync("MITIGATED")
                 elif cmd.action in ("QUARANTINE", DefenseAction.QUARANTINE.value):
-                    self.quarantine_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)
-                    self._publish_topology_sync("MITIGATED")
+                    if cmd.target_ip:
+                        self.quarantine_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)
+                        self._publish_topology_sync("MITIGATED")
                 elif cmd.action in ("RELEASE", DefenseAction.RELEASE.value):
-                    self.release_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)
-                    self._publish_topology_sync("NORMAL")
+                    if cmd.target_ip:
+                        self.release_host(cmd.target_ip, cmd.target_mac, cmd.target_dpid, cmd.target_port)
+                        self._publish_topology_sync("NORMAL")
         except Exception as e:
             self.logger.warning(f"[Control Dispatcher] Error processing message on {channel}: {e}")
 

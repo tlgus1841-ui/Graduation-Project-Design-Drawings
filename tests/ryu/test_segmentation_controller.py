@@ -10,12 +10,10 @@ Validates:
 """
 
 from unittest.mock import MagicMock
-import pytest
 
 from harness.contracts.sdn_events import (
     REDIS_CHANNEL_CONTROL_COMMAND,
     ControlCommandMessage,
-    CountKind,
     DefenseAction,
 )
 from tests.ryu.test_controller_logic import SelfDefendingSDNController
