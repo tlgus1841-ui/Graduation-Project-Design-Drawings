@@ -36,7 +36,8 @@ ATTACK = {1: (20, 98), 2: (1700, 54), 99: (1720, 55)}
 
 
 def test_only_unprotected_access_ports_are_watched():
-    assert watched_ports() == [(3, 1), (3, 2), (4, 1), (4, 2), (8, 1)]
+    # users S3 · S4, sinkhole S8 and the external entrance S9; servers, DMZ and admin are protected
+    assert watched_ports() == [(3, 1), (3, 2), (4, 1), (4, 2), (8, 1), (9, 1)]
 
 
 def test_attack_is_confirmed_on_second_sample_and_keeps_alerting(model):

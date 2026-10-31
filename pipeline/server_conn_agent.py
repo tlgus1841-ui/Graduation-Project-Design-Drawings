@@ -13,7 +13,8 @@
   미리 연결과 구별이 안 되므로 20초 기준에만 맡긴다.)
 
 실행 (서버에서): python -m pipeline.server_conn_agent --port 80
-테스트베드: Mininet 호스트의 네트워크 공간에서 ss를 실행하도록 --netns-pid <h_server의 PID>를 준다.
+테스트베드: 서버의 네트워크 공간에서 ss를 실행하도록 --netns <이름>(ip netns, 예: ns_web1)이나
+--netns-pid <PID>(Mininet 호스트)를 준다.
 """
 
 from __future__ import annotations
@@ -98,8 +99,10 @@ class ConnTracker:
         return {ip: (n, slow, pending) for ip, (n, slow, pending) in per_ip.items()}
 
 
-def ss_command(port: int, netns_pid: Optional[int]) -> List[str]:
+def ss_command(port: int, netns_pid: Optional[int], netns: Optional[str] = None) -> List[str]:
     cmd = ["ss", "-Htin", "state", "established", f"( sport = :{port} )"]
+    if netns:
+        return ["ip", "netns", "exec", netns] + cmd
     return (["nsenter", f"--net=/proc/{netns_pid}/ns/net"] + cmd) if netns_pid else cmd
 
 
@@ -117,6 +120,7 @@ def main() -> None:
     p.add_argument("--interval", type=float, default=1.0)
     p.add_argument("--redis-url", default="redis://localhost:6379/0")
     p.add_argument("--netns-pid", type=int, help="이 프로세스의 네트워크 공간에서 ss 실행 (Mininet 호스트)")
+    p.add_argument("--netns", help="이 이름의 네트워크 공간(ip netns)에서 ss 실행 (네이티브 OVS 토폴로지)")
     a = p.parse_args()
 
     import redis
@@ -125,7 +129,7 @@ def main() -> None:
     # 동일하게 ConnectionPool.from_url()을 거치는 방식으로 피한다.
     r = redis.Redis(connection_pool=redis.ConnectionPool.from_url(a.redis_url))
     tracker = ConnTracker()
-    cmd = ss_command(a.port, a.netns_pid)
+    cmd = ss_command(a.port, a.netns_pid, a.netns)
     print(f"[server_conn_agent] watching {a.server_ip}:{a.port} every {a.interval}s", flush=True)
     while True:
         out = subprocess.run(cmd, capture_output=True, text=True).stdout

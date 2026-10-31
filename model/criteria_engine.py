@@ -308,6 +308,12 @@ class CriteriaEngine:
         # 망 정책이 버린 패킷 (zone_deny는 종류를 나누기 전의 이름, 옆 PC로 가려던 것과 같이 본다)
         denied_internal = (r.get("zone_deny", 0.0) + r.get("zone_deny_internal", 0.0)) * dt
         denied_probe = (r.get("zone_deny_port_scan", 0.0) + r.get("zone_deny_external", 0.0)) * dt
+        # 같은 PC가 UDP · ICMP Flood 크기로 보내는 보고에서 막힌 서버 포트 패킷은 Flood의 일부다.
+        # 창에도 넣지 않아야 Flood가 끝난 뒤 남은 개수로 '스캔'이 늦게 잡히지 않는다
+        flood_sized = any(r.get(ind, 0.0) >= self.attack_line(key, ind) and r.get(ind, 0.0) > lines[ind]
+                          for ind in ("udp", "icmp"))
+        if flood_sized:
+            denied_probe = 0.0
         st.window.append((now, min(r["fail"] * dt, 2 * probes), min(r.get("unreach_in", 0.0) * dt, 2 * probes),
                           probes, r.get("arp_fail", 0.0) * dt, denied_internal, denied_probe))
         # 창은 시간으로 자른다 (보고 시각이 조금씩 흔들려도 같은 개수가 들어가게 반 주기 여유)
@@ -319,8 +325,6 @@ class CriteriaEngine:
         unreach = sum(w[2] for w in recent)
         recent_denied_internal = sum(w[5] for w in recent)
         recent_denied_probe = sum(w[6] for w in recent)
-        flood_sized = any(r.get(ind, 0.0) >= self.attack_line(key, ind) and r.get(ind, 0.0) > lines[ind]
-                          for ind in ("udp", "icmp"))
         scan = []
         if fails >= cfg.scan_min and fails >= cfg.scan_ratio * sum(w[3] for w in recent):
             scan.append(fails / cfg.scan_min)
@@ -330,7 +334,7 @@ class CriteriaEngine:
             scan.append(unreach / cfg.scan_unreach_min)
         if recent_denied_probe:
             reasons.append(f"blocked probes {recent_denied_probe:.0f}")
-        if recent_denied_probe >= cfg.scan_min and not flood_sized:
+        if recent_denied_probe >= cfg.scan_min:
             scan.append(recent_denied_probe / cfg.scan_min)
         if scan:
             candidates[ThreatType.PORT_SCAN.value] = max(scan)

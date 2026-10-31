@@ -49,3 +49,4 @@ def test_message_and_namespace_command():
     assert msg.clients[0].client_ip == "10.0.0.2" and (msg.clients[0].slow, msg.clients[0].pending) == (0, 150)
     assert ss_command(80, None)[0] == "ss"
     assert ss_command(80, 1234)[:2] == ["nsenter", "--net=/proc/1234/ns/net"]
+    assert ss_command(80, None, "ns_web1")[:4] == ["ip", "netns", "exec", "ns_web1"]

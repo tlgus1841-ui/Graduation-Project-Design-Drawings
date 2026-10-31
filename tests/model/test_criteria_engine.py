@@ -282,8 +282,12 @@ def test_blocked_server_or_external_probes_are_a_scan(kind):
 def test_udp_flood_to_random_blocked_ports_stays_a_flood():
     """A UDP flood to random server ports is mostly dropped by Table 1; it is still a flood, not a scan."""
     engine, c = CriteriaEngine(CFG, BASE, ports=[PORT]), Counts()
-    out = run(engine, c, NORMAL, *[{**NORMAL, "udp": 500, "zone_deny_port_scan": 499}] * 2)
+    flood = {**NORMAL, "udp": 500, "zone_deny_port_scan": 499}
+    out = run(engine, c, NORMAL, flood, flood)
     assert stages(out)[-1] == (RiskStage.DANGER, ThreatType.UDP_FLOOD.value)
+    # after the flood stops, the blocked packets it left in the 4-s window do not become a late "scan"
+    after = run(engine, c, NORMAL, NORMAL)
+    assert all(s[1] != ThreatType.PORT_SCAN.value for s in stages(after))
 
 
 def test_a_few_missing_hosts_is_not_spread():

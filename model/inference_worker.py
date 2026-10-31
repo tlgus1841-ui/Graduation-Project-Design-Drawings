@@ -61,6 +61,7 @@ from harness.safety.whitelist_guard import (  # noqa: E402
     DEFAULT_ACCESS_PORTS,
     DEFAULT_PROTECTED_ACCESS_PORTS,
 )
+from harness.topology.profile_loader import get_topology_profile  # noqa: E402
 from model.attack_classifier import (  # noqa: E402
     CATEGORY_TO_THREAT_TYPE,
     AttackCategory,
@@ -93,9 +94,16 @@ MAX_PLAUSIBLE_PPS = 1e7
 
 
 def watched_ports() -> List[PortKey]:
-    """경보 대상 포트 = 접속 포트 - 보호 호스트 포트."""
-    return sorted((dpid, port) for dpid, ports in DEFAULT_ACCESS_PORTS.items() for port in ports
-                  if (dpid, port) not in PROTECTED_HOST_PORTS)
+    """경보 대상 포트 = 접속 포트 - 보호 호스트 포트. 컨트롤러와 같은 토폴로지 프로필에서 읽는다.
+
+    (whitelist_guard의 기본값은 8-스위치 시절 그대로라 외부 입구 S9 · DMZ S10이 빠져 있다)
+    """
+    profile = get_topology_profile(os.environ.get("SDN_TOPOLOGY_PROFILE"))
+    access = profile.get("access_ports") or DEFAULT_ACCESS_PORTS
+    protected = {(int(dpid), port) for dpid, ports in (profile.get("protected_access_ports") or {}).items()
+                 for port in ports} if profile.get("access_ports") else PROTECTED_HOST_PORTS
+    return sorted((int(dpid), port) for dpid, ports in access.items() for port in ports
+                  if (int(dpid), port) not in protected)
 
 
 class InferenceWorker:

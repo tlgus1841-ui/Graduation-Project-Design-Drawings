@@ -1,16 +1,18 @@
-"""판단 기준 숫자 측정: 정상 시나리오 5종의 평소값과 공격별 크기를 실제 패킷으로 잰다.
+"""판단 기준 숫자 측정: 정상 시나리오의 평소값과 공격별 크기를 실제 패킷으로 잰다.
 
-다이아몬드 토폴로지에서 두 접속 호스트(H_legit, H_attacker)가 정상 사용자로 normal_seconds 동안
-traffic/normal_user.py를 돌리고(평소값 학습 구간), 이어서 H_attacker가 공격을 하나씩 실행한다
-(정상 트래픽은 계속 흐름). 숫자는 컨트롤러의 세는 규칙(sdn:stats:flowcount)과 포트 통계
-(sdn:stats:port)를 Redis에서 받아 기록한 것이다 — 판단 프로그램이 보는 것과 같은 값이다.
+10-스위치 6-망 네이티브 토폴로지(scripts/setup_large_ovs.sh, ip netns)에서 사용자 PC 4대(h1~h4)와
+외부 접속자(ext)가 정상 사용자로 normal_seconds 동안 traffic/normal_user.py를 돌리고(평소값 학습 구간),
+이어서 내부 공격자(h2)와 외부 공격자(ext)가 공격을 하나씩 실행한다 (정상 트래픽은 계속 흐름).
+숫자는 컨트롤러의 세는 규칙(sdn:stats:flowcount)과 포트 통계(sdn:stats:port)를 Redis에서 받아 기록한
+것이다 — 판단 프로그램이 보는 것과 같은 값이다. (8주차~6-B의 다이아몬드 측정은 Mininet으로 했다)
 
-실행 (Ryu 컨트롤러·Redis 실행 중):
-    sudo python3 -m harness.verification.criteria_measure --run --out runs/criteria   # 시스템 python3 (Mininet)
+실행 (토폴로지 · Ryu 컨트롤러 · Redis 실행 중, root):
+    sudo bash scripts/setup_large_ovs.sh
+    sudo .venv/bin/python -m harness.verification.criteria_measure --run --out runs/criteria
     .venv/bin/python -m harness.verification.criteria_measure --analyze runs/criteria  # 분석 + 평소값 파일
 
 방어까지 켠 검증 (추론 워커를 --log events.jsonl로 함께 실행):
-    sudo python3 -m harness.verification.criteria_measure --run --defense --out runs/e2e
+    sudo .venv/bin/python -m harness.verification.criteria_measure --run --defense --out runs/e2e
     .venv/bin/python -m harness.verification.criteria_measure --e2e runs/e2e --events events.jsonl
 """
 
@@ -19,13 +21,15 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import random
+import signal
 import subprocess
 import sys
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VENV_PY = REPO_ROOT / ".venv" / "bin" / "python"
@@ -33,38 +37,61 @@ FLOW_COUNTS = "sdn:stats:flowcount"
 PORT_STATS = "sdn:stats:port"
 SERVICE_HEALTH = "sdn:health:service"
 SERVER_CONNS = "sdn:stats:serverconn"
-SERVICE = "service S1→H_server"  # 서비스 상태 확인 ping (컨트롤러)
-# (dpid, port) → 이름. 측정 대상은 호스트가 붙은 접속 포트
-PORTS = {(1, 1): "S1:1 H_legit", (1, 2): "S1:2 H_attacker", (4, 1): "S4:1 H_server"}
-HOST_IPS = {(1, 1): "10.0.0.1", (1, 2): "10.0.0.2", (4, 1): "10.0.0.4"}
+SERVICE = "service S3→web1"  # 서비스 상태 확인 ping (컨트롤러, 사용자 스위치 S3에서 웹서버로)
+SERVER_IP = "10.0.0.11"  # 보호하는 DMZ 웹서버 (web1)
+# 역할 → (ip netns 이름, IP). 이름은 scripts/setup_large_ovs.sh와 같다
+HOSTS: Dict[str, Tuple[str, str]] = {
+    "h1": ("ns_h1", "10.0.0.1"),    # 정상 사용자 (ping으로 손실을 잰다)
+    "h2": ("ns_h2", "10.0.0.2"),    # 내부 공격자 · 감염 PC (공격 전에는 평범한 사용자)
+    "h3": ("ns_h3", "10.0.0.3"),
+    "h4": ("ns_h4", "10.0.0.4"),
+    "ext": ("ns_ext", "192.168.100.100"),  # 외부 접속자 · 외부 공격자 (S9 외부 입구)
+    "web1": ("ns_web1", SERVER_IP),
+}
+# (dpid, port) → 이름. 측정 대상은 호스트가 붙은 접속 포트 (harness.contracts.ACCESS_HOST_PORTS와 같다)
+PORTS = {(3, 1): "S3:1 h1", (3, 2): "S3:2 h2", (4, 1): "S4:1 h3", (4, 2): "S4:2 h4",
+         (9, 1): "S9:1 ext", (10, 1): "S10:1 web1"}
+HOST_IPS = {(3, 1): "10.0.0.1", (3, 2): "10.0.0.2", (4, 1): "10.0.0.3", (4, 2): "10.0.0.4",
+            (9, 1): "192.168.100.100", (10, 1): SERVER_IP}
 KINDS = ("syn", "fin", "rst", "udp", "icmp", "rst_in", "unreach_in")
 DERIVED = ("gap", "fail", "pps")  # gap = syn-(fin+rst), fail = rst_in+unreach_in, pps = 포트 전체 수신
 # 쉬는 구간의 앞부분(초)은 직전 공격의 늦은 보고와 복구 시간이라 쉬는 구간 통계에서 뺀다
 QUIET_SKIP = 6.0
 # 공격하는 동안 서버에 거는 장애: 서버가 내보내는 패킷의 40%를 무작위로 버린다 (iptables statistic).
-# 서버가 힘들어져 정상 사용자가 피해를 보는 상황을 만든다 (이 실험 환경의 커널에는 tc netem이 없다)
+# 서버가 힘들어져 정상 사용자가 피해를 보는 상황을 만든다
 SERVER_FAULTS = {"udp_weak_degraded": "OUTPUT -m statistic --mode random --probability 0.4 -j DROP"}
+EXT = "--src 192.168.100.100"
 
-ATTACKS: List[Tuple[str, str, int]] = [
-    ("syn_strong", "traffic.traffic_attack --dst 10.0.0.4 --min-pps 1000 --max-pps 1000 --duration 20", 20),
-    ("udp_strong", "traffic.traffic_flood --kind udp --pps 1000 --duration 20", 20),
-    ("icmp_strong", "traffic.traffic_flood --kind icmp --pps 1000 --duration 20", 20),
-    ("syn_weak", "traffic.traffic_attack --dst 10.0.0.4 --min-pps 100 --max-pps 100 --duration 20", 20),
-    ("udp_weak", "traffic.traffic_flood --kind udp --pps 100 --duration 20", 20),
-    ("icmp_weak", "traffic.traffic_flood --kind icmp --pps 100 --duration 20", 20),
+# (이름, 공격하는 호스트, traffic 모듈과 인자, 길이(초))
+ATTACKS: List[Tuple[str, str, str, int]] = [
+    ("syn_strong", "h2", f"traffic.traffic_attack --dst {SERVER_IP} --min-pps 1000 --max-pps 1000 --duration 20", 20),
+    ("udp_strong", "h2", f"traffic.traffic_flood --kind udp --dst {SERVER_IP} --pps 1000 --duration 20", 20),
+    ("icmp_strong", "h2", f"traffic.traffic_flood --kind icmp --dst {SERVER_IP} --pps 1000 --duration 20", 20),
+    ("syn_weak", "h2", f"traffic.traffic_attack --dst {SERVER_IP} --min-pps 100 --max-pps 100 --duration 20", 20),
+    ("udp_weak", "h2", f"traffic.traffic_flood --kind udp --dst {SERVER_IP} --pps 100 --duration 20", 20),
+    ("icmp_weak", "h2", f"traffic.traffic_flood --kind icmp --dst {SERVER_IP} --pps 100 --duration 20", 20),
     # 서비스 악화 조건 확인: 판정선의 4배(위험 기준 5배 미만) 공격, 서버를 일부러 나쁘게 만든 약한 공격
-    ("icmp_mid", "traffic.traffic_flood --kind icmp --pps 200 --duration 20", 20),
-    ("udp_weak_degraded", "traffic.traffic_flood --kind udp --pps 100 --duration 20", 20),
+    ("icmp_mid", "h2", f"traffic.traffic_flood --kind icmp --dst {SERVER_IP} --pps 200 --duration 20", 20),
+    ("udp_weak_degraded", "h2", f"traffic.traffic_flood --kind udp --dst {SERVER_IP} --pps 100 --duration 20", 20),
+    # 외부 입구(S9)로 들어오는 Flood. 외부에서는 DMZ 웹 80 · 8080만 열려 있어 UDP · ICMP는 입구에서 막힌다
+    ("ext_syn_strong", "ext", f"traffic.traffic_attack --dst {SERVER_IP} --min-pps 1000 --max-pps 1000 --duration 20",
+     20),
+    ("ext_udp_strong", "ext", f"traffic.traffic_flood --kind udp --dst {SERVER_IP} --pps 1000 --duration 20", 20),
+    ("ext_icmp_strong", "ext", f"traffic.traffic_flood --kind icmp --dst {SERVER_IP} --pps 1000 --duration 20", 20),
     # 내부 확산: 없는 내부 주소 56개에 445 포트 연결 시도 (초당 10개)
-    ("internal_spread", "traffic.traffic_spread --subnet 10.0.0 --hosts 5-60 --port 445 --rate 10", 9),
-    # Slow HTTP (Slowloris 방식): 느린 요청은 20초가 지나야 느리다고 볼 수 있어 60초 동안 한다.
-    # 끝난 뒤 서버가 남은 연결을 시간 초과로 끊으며 RST를 한꺼번에 보내므로 다른 공격보다 뒤에 둔다
-    ("slow_http_weak", "traffic.traffic_slowhttp --server 10.0.0.4 --sockets 30 --interval 10 --duration 60", 60),
-    ("slow_http", "traffic.traffic_slowhttp --server 10.0.0.4 --sockets 150 --interval 10 --duration 60", 60),
+    ("internal_spread", "h2", "traffic.traffic_spread --subnet 10.0.0 --hosts 30-85 --port 445 --rate 10", 9),
+    # 옆으로 퍼지기(랜섬웨어): 실제로 있는 사용자 PC · 서버 · 관리망의 445에 연결 시도 → 망 정책이 막는다
+    ("lateral_spread", "h2", "traffic.traffic_spread --subnet 10.0.0 --hosts 1,3,4,12,21,22,253,254 --port 445"
+     " --rate 4", 5),
+    # Slow HTTP (Slowloris 방식). 끝난 뒤 서버가 남은 연결을 시간 초과로 끊으며 RST를 한꺼번에 보내므로 뒤에 둔다
+    ("slow_http_weak", "h2", f"traffic.traffic_slowhttp --server {SERVER_IP} --sockets 30 --interval 10 --duration 60",
+     60),
+    ("slow_http", "h2", f"traffic.traffic_slowhttp --server {SERVER_IP} --sockets 150 --interval 10 --duration 60", 60),
     # 스캔은 받은 실패 응답을 5분 동안 세므로, 실패가 적은 스캔부터 해서 앞 스캔의 실패가 섞이지 않게 한다
-    ("udp_scan", "traffic.traffic_scan --kind udp --ports 1-300 --rate 300", 1),
-    ("tcp_scan_slow", "traffic.traffic_scan --kind tcp --ports 1-40 --rate 2", 20),
-    ("tcp_scan", "traffic.traffic_scan --kind tcp --ports 1-1000 --rate 500", 2),
+    ("udp_scan", "h2", f"traffic.traffic_scan --kind udp --dst {SERVER_IP} --ports 1-300 --rate 300", 1),
+    ("tcp_scan_slow", "h2", f"traffic.traffic_scan --kind tcp --dst {SERVER_IP} --ports 1-40 --rate 2", 20),
+    ("tcp_scan", "h2", f"traffic.traffic_scan --kind tcp --dst {SERVER_IP} --ports 1-1000 --rate 500", 2),
+    ("ext_tcp_scan", "ext", f"traffic.traffic_scan --kind tcp --dst {SERVER_IP} {EXT} --ports 1-1000 --rate 500", 2),
 ]
 
 
@@ -240,59 +267,88 @@ def analyze_e2e(out_dir: Path, events_path: Path) -> dict:
     return report
 
 
+def _netns(host: str, cmd: str) -> List[str]:
+    return ["ip", "netns", "exec", HOSTS[host][0], "sh", "-c", cmd]
+
+
+def _background(host: str, cmd: str, log: Path) -> subprocess.Popen:
+    """호스트의 네트워크 공간에서 cmd를 뒤에서 실행한다 (끝낼 때 프로세스 그룹째 멈춘다)."""
+    with log.open("w") as f:
+        return subprocess.Popen(_netns(host, cmd), cwd=REPO_ROOT, stdout=f, stderr=subprocess.STDOUT,
+                                start_new_session=True)
+
+
+def _stop(procs: List[subprocess.Popen]) -> None:
+    for proc in procs:
+        try:
+            os.killpg(proc.pid, signal.SIGINT)  # ping은 SIGINT를 받아야 마지막 요약을 남긴다
+        except ProcessLookupError:
+            pass
+    for proc in procs:
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+
+
+def release_quarantined(reason: str) -> List[str]:
+    """관리자 역할: 격리망에 있는 PC를 모두 원래 망으로 돌려보낸다 (다음 실험에 앞 실험의 격리가 섞이지 않게)."""
+    import redis
+    sys.path.insert(0, str(REPO_ROOT))
+    from harness.contracts import ACCESS_HOST_PORTS, REDIS_CHANNEL_CONTROL_COMMAND, ControlCommandMessage
+
+    r = redis.Redis()
+    released = sorted(ip.decode() for ip in cast(Set[bytes], r.smembers("sdn:quarantined_hosts")))
+    for ip in released:
+        dpid, port = ACCESS_HOST_PORTS.get(ip, (0, 0))
+        cmd = ControlCommandMessage(command_id=f"manual-measure-release-{ip}-{time.time():.0f}", action="RELEASE",
+                                    target_dpid=dpid, target_port=port, reason=reason, target_ip=ip)
+        r.publish(REDIS_CHANNEL_CONTROL_COMMAND, cmd.model_dump_json())
+    return released
+
+
 def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optional[List[str]] = None,
         defense: bool = False) -> None:
-    from mininet.log import setLogLevel
-    from mininet.net import Mininet
-    from mininet.node import OVSSwitch, RemoteController
-
-    sys.path.insert(0, str(REPO_ROOT / "topo"))
-    from diamond_topo import DiamondTopo
-
+    """토폴로지(scripts/setup_large_ovs.sh) · 컨트롤러 · Redis가 떠 있는 상태에서 정상 구간 + 공격을 실행한다."""
     attacks = [a for a in ATTACKS if not only or a[0] in only]
     out_dir.mkdir(parents=True, exist_ok=True)
-    setLogLevel("warning")
-    net = Mininet(topo=DiamondTopo(), controller=None, switch=OVSSwitch, autoSetMacs=False, autoStaticArp=False)
-    net.addController("c0", controller=RemoteController, ip="127.0.0.1", port=6653)
-    for sw in net.switches:
-        sw.datapath = "user"
-    net.start()
     tapper = subprocess.Popen([str(VENV_PY), "-m", "harness.verification.criteria_measure", "--tap",
                                str(out_dir / "tap.jsonl")], cwd=REPO_ROOT)
     phases: List[dict] = []
-    agent = None
+    procs: List[subprocess.Popen] = []
     try:
-        for sw in net.switches:
-            sw.cmd(f"ovs-vsctl set bridge {sw.name} protocols=OpenFlow13")
-        for h in net.hosts:
-            # The userspace datapath does not fill in offloaded checksums; real TCP/UDP needs them off.
-            h.cmd(f"ethtool -K {h.defaultIntf()} tx off rx off")
-        time.sleep(3)
-        net.pingAll()
-        legit, attacker, server = net.get("h_legit", "h_attacker", "h_server")
-        server.cmd("mkdir -p /tmp/www && head -c 2048 /dev/urandom > /tmp/www/index.html"
-                   " && head -c 20000000 /dev/urandom > /tmp/www/big.bin")
-        # 웹 서버: 30초 동안 아무것도 안 오는 연결은 닫는다 (Apache의 요청 대기 시간 20~40초와 같은 역할)
-        server.cmd("cd /tmp/www && python3 -c \"from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler"
-                   " as H; H.timeout = 30; ThreadingHTTPServer(('', 80), H).serve_forever()\" > /dev/null 2>&1 &")
+        # 웹서버: 설치 스크립트가 띄운 것 대신 30초 동안 아무것도 안 오는 연결을 닫는 서버로 바꾼다
+        # (Apache의 요청 대기 시간 20~40초와 같은 역할). 대용량 다운로드 파일도 둔다
+        subprocess.run(["pkill", "-f", "http.server 80 --directory /tmp/sdn_web_root"], check=False)
+        subprocess.run(_netns("web1", "mkdir -p /tmp/www && head -c 2048 /dev/urandom > /tmp/www/index.html"
+                                      " && head -c 20000000 /dev/urandom > /tmp/www/big.bin"), check=True)
+        procs.append(_background("web1", "cd /tmp/www && exec python3 -c \"from http.server import "
+                                         "ThreadingHTTPServer, SimpleHTTPRequestHandler as H; H.timeout = 30; "
+                                         "ThreadingHTTPServer(('', 80), H).serve_forever()\"", out_dir / "web.log"))
         # DNS 응답기: 보내기 실패(장애 주입 중 iptables가 버림)에도 죽지 않게 한다
-        server.cmd("python3 -c \"import socket\ns=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)\n"
-                   "s.bind(('0.0.0.0',53))\nwhile True:\n d,a=s.recvfrom(512)\n try:\n  s.sendto(d+b'0'*40,a)\n"
-                   " except OSError:\n  pass\""
-                   " > /dev/null 2>&1 &")
-        # 서버 연결 수집기 (Slow HTTP): 서버의 네트워크 공간에서 ss를 읽는다
-        agent = subprocess.Popen([str(VENV_PY), "-m", "pipeline.server_conn_agent", "--netns-pid", str(server.pid)],
-                                 cwd=REPO_ROOT, stdout=subprocess.DEVNULL)
+        procs.append(_background("web1", "exec python3 -c \"import socket\ns=socket.socket(socket.AF_INET,"
+                                         "socket.SOCK_DGRAM)\ns.bind(('0.0.0.0',53))\nwhile True:\n d,a=s.recvfrom(512)"
+                                         "\n try:\n  s.sendto(d+b'0'*40,a)\n except OSError:\n  pass\"",
+                                 out_dir / "dns.log"))
+        # 서버 연결 수집기 (Slow HTTP): 웹서버의 네트워크 공간에서 ss를 읽는다
+        procs.append(subprocess.Popen([str(VENV_PY), "-m", "pipeline.server_conn_agent", "--server-ip", SERVER_IP,
+                                       "--netns", HOSTS["web1"][0]], cwd=REPO_ROOT, stdout=subprocess.DEVNULL,
+                                      start_new_session=True))
         time.sleep(1)
-        total = normal_seconds + sum(d + gap + 8 for _, _, d in attacks) + gap + 30
-        user = f"python3 {REPO_ROOT}/traffic/normal_user.py --server 10.0.0.4 --duration {total} --surge-at {surge_at}"
+        total = normal_seconds + sum(d + gap + 8 for *_, d in attacks) + gap + 30
+        user = (f"exec {VENV_PY} {REPO_ROOT}/traffic/normal_user.py --server {SERVER_IP} --duration {total}"
+                f" --surge-at {surge_at}")
         if defense:
             # 방어 검증: 정상 사용자의 ping을 시각과 함께 남겨 구간별 손실을 잰다 (e2e_scenario와 같은 방식)
-            legit.cmd(f"ping -D -i 0.05 -w {total} 10.0.0.4 > {out_dir}/ping_legit.txt 2>&1 &")
-            legit.cmd(f"{user} --ping-interval 0 --seed 1 > {out_dir}/user_legit.log 2>&1 &")
+            procs.append(_background("h1", f"exec ping -D -i 0.05 -w {total} {SERVER_IP}", out_dir / "ping_legit.txt"))
+            procs.append(_background("h1", f"{user} --ping-interval 0 --seed 1", out_dir / "user_h1.log"))
         else:
-            legit.cmd(f"{user} --ping-interval 0.05 --seed 1 > {out_dir}/user_legit.log 2>&1 &")
-        attacker.cmd(f"{user} --ping-interval 1 --seed 2 > {out_dir}/user_attacker.log 2>&1 &")
+            procs.append(_background("h1", f"{user} --ping-interval 0.05 --seed 1", out_dir / "user_h1.log"))
+        for seed, host in enumerate(("h2", "h3", "h4"), start=2):
+            procs.append(_background(host, f"{user} --ping-interval 1 --seed {seed}", out_dir / f"user_{host}.log"))
+        # 외부 접속자는 공개된 웹만 쓴다 (ping · DNS · 닫힌 포트 실수는 외부에선 막혀 평소값을 흐린다)
+        procs.append(_background("ext", f"{user} --ping-interval 0 --dns-mean 1e9 --mistake-every 1e9 --seed 6",
+                                 out_dir / "user_ext.log"))
         t0 = time.time()
         time.sleep(normal_seconds)
         # The first 10 s are the users' start-up, not their steady state.
@@ -300,37 +356,38 @@ def run(out_dir: Path, normal_seconds: int, gap: int, surge_at: str, only: Optio
         # 공격 시작 시각을 보고 주기와 엇갈리게 0~2초 무작위로 늦춘다. 쉬는 구간이 딱 30초면 공격이 매번
         # 보고 직후에 시작해 탐지 시간이 늘 가장 늦은 경우로만 재진다
         jitter = random.Random(7)
-        for name, cmd, _ in attacks:
+        for name, host, cmd, _ in attacks:
             q0 = time.time()
             time.sleep(gap + jitter.uniform(0.0, 2.0))
             phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": QUIET_SKIP})
             fault = SERVER_FAULTS.get(name)
             if fault:
-                server.cmd(f"iptables -I {fault}")
+                subprocess.run(_netns("web1", f"iptables -I {fault}"), check=True)
             a0 = time.time()
-            log = attacker.cmd(f"cd {REPO_ROOT} && {VENV_PY} -m {cmd}")
-            phases.append({"name": name, "start": a0, "end": time.time(), "log": log.strip()[-200:]})
+            done = subprocess.run(_netns(host, f"{VENV_PY} -m {cmd}"), cwd=REPO_ROOT, capture_output=True, text=True)
+            log = (done.stdout + done.stderr).strip()
+            phases.append({"name": name, "host": host, "start": a0, "end": time.time(), "log": log[-200:]})
             if fault:
-                server.cmd(f"iptables -D {fault}")
+                subprocess.run(_netns("web1", f"iptables -D {fault}"), check=False)
                 phases[-1]["server_fault"] = fault
-            print(f"[criteria_measure] {name}: {log.strip()[-120:]}", flush=True)
+            print(f"[criteria_measure] {name} ({host}): {log[-120:]}", flush=True)
+            # 실험이 끝나면 관리자가 확인하고 격리를 푼다 (쉬는 구간 앞부분 QUIET_SKIP초는 통계에서 빠진다)
+            released = release_quarantined(f"measurement: {name} finished")
+            if released:
+                phases[-1]["released"] = released
         # 마지막 공격 뒤에도 쉬는 구간을 둬서 늦은 보고와 뒤처리(복구, 서버가 남은 연결을 끊는 것)까지 본다
         q0 = time.time()
         time.sleep(gap)
         phases.append({"name": "quiet", "start": q0, "end": time.time(), "skip": QUIET_SKIP})
     finally:
         (out_dir / "phases.json").write_text(json.dumps({"phases": phases}, ensure_ascii=False, indent=1))
-        for h in net.hosts:
-            h.cmd("pkill -f normal_user.py; pkill -f http.server; pkill -f 'socket.SOCK_DGRAM'; pkill -INT ping")
+        _stop(procs)
         tapper.terminate()
-        if agent:
-            agent.terminate()
-        net.stop()
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="판단 기준 숫자 측정 (정상 시나리오 + 공격)")
-    p.add_argument("--run", action="store_true", help="Mininet에서 측정 실행 (root, 시스템 python3)")
+    p.add_argument("--run", action="store_true", help="네이티브 토폴로지에서 측정 실행 (root)")
     p.add_argument("--analyze", type=Path, help="측정 폴더를 분석해 summary.json 작성")
     p.add_argument("--tap", type=Path, help=argparse.SUPPRESS)
     p.add_argument("--out", type=Path, default=Path("runs/criteria"))
