@@ -12,6 +12,7 @@ const TABS = [
 
 export default function PortStatsPanel({ ports, phase, incident }) {
   const [activeTab, setActiveTab] = useState("ALL");
+  const [viewMode, setViewMode] = useState("cards"); // "cards" | "table"
 
   const rows = Object.entries(ports).sort(([a], [b]) =>
     a.localeCompare(b, undefined, { numeric: true }),
@@ -31,36 +32,121 @@ export default function PortStatsPanel({ ports, phase, incident }) {
     <Panel
       title="Port Telemetry"
       subtitle="수신 기준 · 2초 주기"
-      className="h-[340px]"
+      className="min-h-[350px]"
       headerAction={
-        <div className="flex items-center gap-1 overflow-x-auto rounded-lg bg-slate-900/60 p-0.5 border border-slate-700/60">
-          {TABS.map((tab) => {
-            const hasAlert = alertDpid && tab.dpids?.includes(alertDpid);
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
-                  active ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <span>{tab.label}</span>
-                {hasAlert && (
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-ping motion-reduce:animate-none">
-                    !
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Subnet Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto rounded-lg bg-slate-900/60 p-0.5 border border-slate-700/60">
+            {TABS.map((tab) => {
+              const hasAlert = alertDpid && tab.dpids?.includes(alertDpid);
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+                    active ? "bg-sky-600 text-white" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {hasAlert && (
+                    <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-ping motion-reduce:animate-none">
+                      !
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* View Mode Switcher */}
+          <div className="flex items-center rounded-lg bg-slate-900/60 p-0.5 border border-slate-700/60 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                viewMode === "cards" ? "bg-sky-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"
+              }`}
+              title="카드 그리드 뷰"
+            >
+              카드
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                viewMode === "table" ? "bg-sky-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"
+              }`}
+              title="상세 테이블 뷰"
+            >
+              테이블
+            </button>
+          </div>
         </div>
       }
     >
       {filteredRows.length === 0 ? (
         <p className="text-base text-slate-300">해당 구역의 포트 통계 수신 대기 중…</p>
+      ) : viewMode === "cards" ? (
+        /* Responsive Card Grid View (4~6 columns) */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+          {filteredRows.map(([key, p]) => {
+            const hot = p.pps > 1000 && p.bpp > 0 && p.bpp < 80;
+            const alerting = key === alertKey;
+            const ppsPct = Math.min(100, Math.max(2, Math.round((p.pps / 2000) * 100)));
+            return (
+              <div
+                key={key}
+                data-alert={alerting || undefined}
+                className={`flex flex-col justify-between rounded-lg border p-2.5 transition-all ${
+                  alerting
+                    ? "bg-red-950/70 border-red-500 shadow-lg shadow-red-950/60 ring-2 ring-red-500/50 animate-pulse"
+                    : hot
+                    ? "bg-red-950/30 border-red-500/60"
+                    : "bg-slate-900/70 border-slate-700/60 hover:border-slate-500"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-mono text-xs font-bold text-sky-300 bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/60">
+                    S{p.dpid}:{p.portNo}
+                  </span>
+                  {(alerting || hot) && (
+                    <span className="flex items-center gap-0.5 text-[11px] font-bold text-red-400 animate-bounce">
+                      ⚠ ALERT
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 truncate text-xs font-semibold text-slate-200" title={getPortLabel(key)}>
+                  {getPortLabel(key)}
+                </div>
+                <div className="mt-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-mono text-lg font-extrabold tracking-tight text-white">
+                      {fmt(p.pps)}
+                    </span>
+                    <span className="text-[10px] uppercase font-mono text-slate-400">pps</span>
+                  </div>
+                  {/* Traffic Meter Progress Bar */}
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className={`h-full transition-all duration-300 rounded-full ${
+                        alerting || hot ? "bg-red-500" : p.pps > 500 ? "bg-amber-400" : "bg-emerald-400"
+                      }`}
+                      style={{ width: `${ppsPct}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between border-t border-slate-800/80 pt-1.5 font-mono text-[11px] text-slate-400">
+                  <span>{fmt(p.bps)}b</span>
+                  <span>{p.bpp ? `${fmt(p.bpp)}B` : "-"}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* Detailed Table View */
         <table className="w-full text-base">
           <thead className="text-left text-sm uppercase tracking-wider text-slate-300">
             <tr>

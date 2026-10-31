@@ -40,6 +40,7 @@ export const isBypassEdge = (l) => BYPASS_NODES.has(l.source) || BYPASS_NODES.ha
 export function toVisNode(n, isLarge = false) {
   const color = NODE_COLOR[n.status] ?? NODE_COLOR.NORMAL;
   const isSwitch = n.node_type === "switch" || /^s\d+$/i.test(n.id);
+  const isCore = n.id === "s1" || n.id === "s2";
   const isQuarantined = n.status === "QUARANTINED";
   const isPatchServer = n.id === "h_patch";
   const isAdmin = n.id === "h_admin";
@@ -47,13 +48,21 @@ export function toVisNode(n, isLarge = false) {
 
   let label = n.label;
   if (isSwitch) {
-    label = n.id.toUpperCase();
+    label = isCore ? `${n.id.toUpperCase()} (Core)` : n.id.toUpperCase();
   } else if (isQuarantined) {
     label = `⚠️ ${n.label} (격리)`;
   } else if (isPatchServer) {
     label = `🛠️ ${n.label} (패치서버)`;
   } else if (isAdmin) {
     label = `🛡️ ${n.label} (관리자)`;
+  } else if (n.id === "h5") {
+    label = `${n.label} (Web)`;
+  } else if (n.id === "h6") {
+    label = `${n.label} (API)`;
+  } else if (n.id === "h7") {
+    label = `${n.label} (DB)`;
+  } else if (n.id === "h8") {
+    label = `${n.label} (Backup)`;
   }
 
   return {
@@ -63,14 +72,20 @@ export function toVisNode(n, isLarge = false) {
     label,
     title: `${n.label} · ${n.status}${n.ip ? ` · ${n.ip}` : ""}`,
     shape: isSwitch ? "box" : (isPatchServer ? "diamond" : "ellipse"),
-    borderWidth: n.status === "ATTACKED" || isQuarantined ? 5 : 3,
+    borderWidth: n.status === "ATTACKED" || isQuarantined ? 5 : (isCore ? 4 : 3),
+    shapeProperties: isSwitch ? { borderRadius: isCore ? 12 : 8 } : undefined,
     color: {
-      background: "#0f172a",
+      background: isCore ? "#0f172a" : (isSwitch ? "#0b1329" : "#0f172a"),
       border: isPatchServer && !isQuarantined ? "#a855f7" : color,
       highlight: { background: "#1e293b", border: color },
     },
-    font: { color: "#e2e8f0", size: 16, face: "ui-sans-serif, system-ui", bold: isSwitch },
-    margin: 12,
+    font: {
+      color: "#f8fafc",
+      size: isCore ? 17 : (isSwitch ? 15 : 13),
+      face: "ui-sans-serif, system-ui",
+      bold: isSwitch,
+    },
+    margin: isCore ? 14 : (isSwitch ? 10 : 8),
   };
 }
 
@@ -79,13 +94,14 @@ export function toVisEdge(l) {
   const rerouted = l.status === "REROUTED";
   const isSafeChannel = l.status === "QUARANTINE_SAFE";
   const bypass = isBypassEdge(l);
+  const isTrunk = l.is_trunk || (l.source?.startsWith("s") && l.target?.startsWith("s"));
 
   return {
     id: `${l.source}-${l.target}`,
     from: l.source,
     to: l.target,
     color: { color: s.color, highlight: s.color },
-    width: s.width,
+    width: rerouted ? 8 : (isTrunk ? 4 : s.width),
     dashes: s.dashes,
     smooth: bypass
       ? { enabled: true, type: "curvedCW", roundness: 0.35 }
@@ -96,8 +112,28 @@ export function toVisEdge(l) {
       : (isSafeChannel ? { enabled: true, color: "rgba(249,115,22,0.95)", size: 15, x: 0, y: 0 } : { enabled: false }),
     title: isSafeChannel
       ? "L4 격리 치료 채널: TCP 80 (패치 다운로드 허용)"
-      : `${l.source.toUpperCase()}:${l.src_port} ↔ ${l.target.toUpperCase()}:${l.dst_port} · ${l.status}`,
+      : `${isTrunk ? "🔗 Trunk 백본" : "💻 호스트 접속"}: ${l.source.toUpperCase()}:${l.src_port} ↔ ${l.target.toUpperCase()}:${l.dst_port} · ${l.status}`,
   };
+}
+
+// Generate augmented links including dynamic quarantine safe channel links
+export function getAugmentedLinks(topology) {
+  const allLinks = [...(topology.links || [])];
+  const hasPatchServer = topology.nodes?.some((n) => n.id === "h_patch");
+  if (hasPatchServer) {
+    for (const n of topology.nodes) {
+      if (n.status === "QUARANTINED") {
+        allLinks.push({
+          source: n.id,
+          target: "h_patch",
+          src_port: 0,
+          dst_port: 80,
+          status: "QUARANTINE_SAFE",
+        });
+      }
+    }
+  }
+  return allLinks;
 }
 
 // Sync a DataSet to `items` in place (update/add/remove) instead of rebuilding the network.
@@ -145,9 +181,9 @@ function TopologyMap({ topology, ports }) {
         ctx.fillStyle = b.config.bg;
         ctx.strokeStyle = b.config.border;
         ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
+        ctx.setLineDash([]); // Clean solid border
 
-        const radius = 12;
+        const radius = 16;
         ctx.beginPath();
         if (typeof ctx.roundRect === "function") {
           ctx.roundRect(b.minX, b.minY, b.width, b.height, radius);
@@ -157,10 +193,24 @@ function TopologyMap({ topology, ports }) {
         ctx.fill();
         ctx.stroke();
 
-        // Zone Header Text
-        ctx.font = "bold 13px ui-sans-serif, system-ui, sans-serif";
-        ctx.fillStyle = b.config.color;
-        ctx.fillText(b.config.label, b.minX + 16, b.minY + 22);
+        // Zone Tag Pill in top-left
+        const tagText = b.config.label;
+        ctx.font = "bold 12px ui-sans-serif, system-ui, sans-serif";
+        const textWidth = ctx.measureText(tagText).width;
+        const tagPadding = 8;
+        const tagHeight = 20;
+
+        ctx.fillStyle = b.config.border;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(b.minX + 12, b.minY + 10, textWidth + tagPadding * 2, tagHeight, 4);
+        } else {
+          ctx.rect(b.minX + 12, b.minY + 10, textWidth + tagPadding * 2, tagHeight);
+        }
+        ctx.fill();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(tagText, b.minX + 12 + tagPadding, b.minY + 10 + 14);
         ctx.restore();
       }
     });
@@ -182,30 +232,81 @@ function TopologyMap({ topology, ports }) {
     const hadNodes = nodesRef.current.length > 0;
 
     const visNodes = topology.nodes.map((n) => toVisNode(n, isLarge));
-    syncDataSet(nodesRef.current, hadNodes && layoutModeRef.current === "cluster"
-      ? visNodes.map(({ x, y, ...rest }) => rest)
-      : visNodes);
+    syncDataSet(
+      nodesRef.current,
+      hadNodes && layoutModeRef.current === "cluster"
+        ? visNodes.map(({ x, y, ...rest }) => rest)
+        : visNodes,
+    );
 
-    // Combine explicit links + dynamic quarantine safe channel links
-    const allLinks = [...(topology.links || [])];
-    const hasPatchServer = topology.nodes.some((n) => n.id === "h_patch");
-    if (hasPatchServer) {
-      for (const n of topology.nodes) {
-        if (n.status === "QUARANTINED") {
-          allLinks.push({
-            source: n.id,
-            target: "h_patch",
-            src_port: 0,
-            dst_port: 80,
-            status: "QUARANTINE_SAFE",
-          });
-        }
-      }
-    }
-
+    const allLinks = getAugmentedLinks(topology);
     syncDataSet(edgesRef.current, allLinks.map(toVisEdge));
     if (!hadNodes && visNodes.length) networkRef.current?.fit();
   }, [topology]);
+
+  // Reactive Focus & Dimming when a node is selected/deselected
+  useEffect(() => {
+    if (!networkRef.current || !topology.nodes?.length) return;
+    const net = networkRef.current;
+    const isLarge = isLargeTopology(topology.nodes);
+    const allLinks = getAugmentedLinks(topology);
+
+    if (!selected) {
+      // Restore all nodes and edges to full brightness
+      const visNodes = topology.nodes.map((n) => toVisNode(n, isLarge));
+      nodesRef.current.update(visNodes.map(({ x, y, ...rest }) => rest));
+      edgesRef.current.update(allLinks.map(toVisEdge));
+      return;
+    }
+
+    const connectedNodes = new Set(net.getConnectedNodes(selected));
+    connectedNodes.add(selected);
+    const connectedEdges = new Set(net.getConnectedEdges(selected));
+
+    const nodeUpdates = topology.nodes.map((n) => {
+      const base = toVisNode(n, isLarge);
+      if (connectedNodes.has(n.id)) {
+        return {
+          id: n.id,
+          opacity: 1.0,
+          color: base.color,
+          font: base.font,
+          borderWidth: n.id === selected ? base.borderWidth + 2 : base.borderWidth,
+        };
+      }
+      return {
+        id: n.id,
+        opacity: 0.18,
+        color: {
+          background: "#070b14",
+          border: "rgba(100,116,139,0.2)",
+          highlight: { background: "#0f172a", border: "rgba(100,116,139,0.3)" },
+        },
+        font: { color: "rgba(148,163,184,0.25)" },
+      };
+    });
+
+    const edgeUpdates = allLinks.map((l) => {
+      const base = toVisEdge(l);
+      if (connectedEdges.has(base.id)) {
+        return {
+          id: base.id,
+          color: base.color,
+          width: base.width + 1.5,
+          opacity: 1.0,
+        };
+      }
+      return {
+        id: base.id,
+        color: { color: "rgba(51,65,85,0.12)", highlight: "rgba(51,65,85,0.12)" },
+        width: 1,
+        opacity: 0.12,
+      };
+    });
+
+    nodesRef.current.update(nodeUpdates);
+    edgesRef.current.update(edgeUpdates);
+  }, [selected, topology]);
 
   const handleLayoutModeChange = (mode) => {
     setLayoutMode(mode);
@@ -249,6 +350,11 @@ function TopologyMap({ topology, ports }) {
     }
   };
 
+  const handleClearSelection = () => {
+    setSelected(null);
+    networkRef.current?.unselectAll();
+  };
+
   const node = topology.nodes.find((n) => n.id === selected);
   const nodePorts = node?.dpid
     ? Object.values(ports).filter((p) => p.dpid === node.dpid).sort((a, b) => a.portNo - b.portNo)
@@ -256,29 +362,41 @@ function TopologyMap({ topology, ports }) {
 
   return (
     <Panel
-      title="Topology"
-      subtitle="드래그로 배치 · 노드 클릭 시 상세"
-      className="h-[460px]"
+      title="Topology Map"
+      subtitle="엔터프라이즈 8-스위치 5-Zone 망 구조 · 노드 선택 시 연관 경로 포커스"
+      className="h-[580px]"
       headerAction={
-        <div className="flex items-center gap-1 rounded-md bg-slate-800/80 p-0.5 border border-slate-700">
-          <button
-            type="button"
-            onClick={() => handleLayoutModeChange("cluster")}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-              layoutMode === "cluster" ? "bg-sky-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            클러스터 뷰
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLayoutModeChange("hierarchical")}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-              layoutMode === "hierarchical" ? "bg-sky-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            계층형 정렬
-          </button>
+        <div className="flex items-center gap-2">
+          {selected && (
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="flex items-center gap-1 rounded bg-sky-950/80 px-2 py-1 text-xs font-medium text-sky-300 border border-sky-700/60 hover:bg-sky-900 transition-colors"
+            >
+              <span>포커스: {selected.toUpperCase()}</span>
+              <span className="text-slate-400">✕</span>
+            </button>
+          )}
+          <div className="flex items-center gap-1 rounded-md bg-slate-800/80 p-0.5 border border-slate-700">
+            <button
+              type="button"
+              onClick={() => handleLayoutModeChange("cluster")}
+              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                layoutMode === "cluster" ? "bg-sky-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              5-Zone 클러스터
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLayoutModeChange("hierarchical")}
+              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                layoutMode === "hierarchical" ? "bg-sky-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              계층형 정렬
+            </button>
+          </div>
         </div>
       }
     >
@@ -286,31 +404,36 @@ function TopologyMap({ topology, ports }) {
         <div
           ref={containerRef}
           data-testid="topology-map"
-          className="min-h-0 flex-1"
+          className="min-h-0 flex-1 rounded-lg bg-slate-950/40 border border-slate-800/60"
           aria-label="엔터프라이즈 8-스위치 5-구역 상태 지도"
         />
-        <div className="flex min-h-[28px] flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-300">
+        <div className="flex min-h-[30px] flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-slate-300 px-1">
           {node ? (
-            <>
-              <span className="font-semibold text-slate-100">{node.label}</span>
-              <span>상태 {node.status}</span>
-              {node.ip && <span>{node.ip}</span>}
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-semibold text-slate-100 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                {node.label}
+              </span>
+              <span className="text-xs text-slate-400">상태: <strong className="text-slate-200">{node.status}</strong></span>
+              {node.ip && <span className="font-mono text-xs text-sky-400">IP: {node.ip}</span>}
               {nodePorts.map((p) => (
-                <span key={p.portNo} className="font-mono">
-                  p{p.portNo}{PORT_NAMES[`${p.dpid}:${p.portNo}`] ? ` ${PORT_NAMES[`${p.dpid}:${p.portNo}`]}` : ""}: {Math.round(p.pps)} PPS
+                <span key={p.portNo} className="font-mono text-xs bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-800 text-emerald-400">
+                  p{p.portNo}{PORT_NAMES[`${p.dpid}:${p.portNo}`] ? ` (${PORT_NAMES[`${p.dpid}:${p.portNo}`]})` : ""}: {Math.round(p.pps)} PPS
                 </span>
               ))}
-            </>
+            </div>
           ) : (
-            <>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <Legend color="#10b981" label="정상" />
-              <Legend color="#ef4444" label="공격 받음" />
-              <Legend color="#f97316" label="격리(치료중)" />
+              <Legend color="#ef4444" label="공격 감지" />
+              <Legend color="#f97316" label="격리/치료중" />
               <Legend color="#3b82f6" label="우회 경로" line />
-              <Legend color="#64748b" label="차단 링크" line dashed />
-              <Legend color="#f97316" label="L4 치료 채널" line dashed />
-            </>
+              <Legend color="#38bdf8" label="Trunk 백본" line />
+              <Legend color="#f97316" label="L4 패치 채널" line dashed />
+            </div>
           )}
+          <span className="text-[11px] text-slate-400 hidden sm:inline">
+            ※ 노드 클릭 시 연관 링크 하이라이트 (1-Hop Focus)
+          </span>
         </div>
       </div>
     </Panel>
@@ -324,11 +447,11 @@ function Legend({ color, label, line = false, dashed = false }) {
     <span className="inline-flex items-center gap-1.5">
       {line ? (
         <span
-          className="inline-block w-5 border-t-[3px]"
+          className="inline-block w-4 border-t-[3px]"
           style={{ borderColor: color, borderStyle: dashed ? "dashed" : "solid" }}
         />
       ) : (
-        <span className="inline-block h-3 w-3 rounded-sm border-2" style={{ borderColor: color }} />
+        <span className="inline-block h-2.5 w-2.5 rounded-sm border-2" style={{ borderColor: color }} />
       )}
       {label}
     </span>

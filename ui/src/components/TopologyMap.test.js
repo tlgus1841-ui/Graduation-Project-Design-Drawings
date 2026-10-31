@@ -27,25 +27,25 @@ describe("SEED layout (Legacy 4-Switch)", () => {
 });
 
 describe("SEED_8SW layout (Enterprise 8-Switch 5-Zone)", () => {
-  it("places core backbone switches S1 and S2 at top tier y = -180", () => {
-    expect(SEED_8SW.s1[1]).toBe(-180);
-    expect(SEED_8SW.s2[1]).toBe(-180);
+  it("places core backbone switches S1 and S2 at top tier y = -220", () => {
+    expect(SEED_8SW.s1[1]).toBe(-220);
+    expect(SEED_8SW.s2[1]).toBe(-220);
   });
 
-  it("places user switches S3/S4 on left and server switches S5/S6 on right at y = -20", () => {
-    expect(SEED_8SW.s3[1]).toBe(-20);
-    expect(SEED_8SW.s4[1]).toBe(-20);
-    expect(SEED_8SW.s5[1]).toBe(-20);
-    expect(SEED_8SW.s6[1]).toBe(-20);
+  it("places user switches S3/S4 on left wing and server switches S5/S6 on right wing at y = -60", () => {
+    expect(SEED_8SW.s3[1]).toBe(-60);
+    expect(SEED_8SW.s4[1]).toBe(-60);
+    expect(SEED_8SW.s5[1]).toBe(-60);
+    expect(SEED_8SW.s6[1]).toBe(-60);
     expect(SEED_8SW.s3[0]).toBeLessThan(0);
     expect(SEED_8SW.s5[0]).toBeGreaterThan(0);
   });
 
-  it("places admin S7 and quarantine S8 along center axis x = 0", () => {
-    expect(SEED_8SW.s7[0]).toBe(0);
-    expect(SEED_8SW.s8[0]).toBe(0);
-    expect(SEED_8SW.s7[1]).toBe(80);
-    expect(SEED_8SW.s8[1]).toBe(220);
+  it("places admin S7 and quarantine S8 in bottom tiers with wide separation", () => {
+    expect(SEED_8SW.s7[0]).toBeLessThan(0);
+    expect(SEED_8SW.s8[0]).toBeGreaterThan(0);
+    expect(SEED_8SW.s7[1]).toBe(240);
+    expect(SEED_8SW.s8[1]).toBe(240);
   });
 });
 

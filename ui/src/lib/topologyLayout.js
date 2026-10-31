@@ -12,37 +12,34 @@ export const SEED_4SW = {
 };
 
 export const SEED_8SW = {
-  // Core Tier (y = -180)
-  s1: [-140, -180],
-  s2: [140, -180],
+  // 1. Core Backbone Tier (Top Center: y = -220)
+  s1: [-180, -220],
+  s2: [180, -220],
 
-  // Edge Tier (y = -20 ~ 220)
-  // User Edge
-  s3: [-320, -20],
-  s4: [-160, -20],
-  // Server Edge
-  s5: [160, -20],
-  s6: [320, -20],
-  // Admin & Quarantine Edge
-  s7: [0, 80],
-  s8: [0, 220],
+  // 2. User Zone (Left Wing: S3 & S4 at y = -60, Hosts at y = 80)
+  s3: [-440, -60],
+  s4: [-240, -60],
+  h1: [-490, 80],
+  h2: [-390, 80],
+  h3: [-290, 80],
+  h4: [-190, 80],
 
-  // Host Tier (y = 100 ~ 300)
-  // User Hosts
-  h1: [-360, 100],
-  h2: [-280, 100],
-  h3: [-200, 100],
-  h4: [-120, 100],
-  // Server Hosts
-  h5: [120, 100],
-  h6: [200, 100],
-  h7: [280, 100],
-  h8: [360, 100],
-  // Admin Hosts
-  h_admin: [-70, 160],
-  h_patch: [70, 160],
-  // Quarantine Sink
-  h_sink: [0, 300],
+  // 3. Server Zone (Right Wing: S5 & S6 at y = -60, Hosts at y = 80)
+  s5: [240, -60],
+  s6: [440, -60],
+  h5: [190, 80], // Web Server (10.0.0.11)
+  h6: [290, 80], // API Server (10.0.0.12)
+  h7: [390, 80], // DB Server (10.0.0.21)
+  h8: [490, 80], // Storage Server (10.0.0.22)
+
+  // 4. Admin Zone (Bottom Left: S7 at y = 240, Hosts at y = 360)
+  s7: [-200, 240],
+  h_admin: [-280, 360], // Security Admin PC (10.0.0.254)
+  h_patch: [-120, 360], // Security Patch Server (10.0.0.253)
+
+  // 5. Quarantine Zone (Bottom Right: S8 at y = 240, Host at y = 360)
+  s8: [200, 240],
+  h_sink: [200, 360],   // Malware Analysis Sinkhole (10.0.0.250)
 };
 
 export const ZONE_CONFIG = {
