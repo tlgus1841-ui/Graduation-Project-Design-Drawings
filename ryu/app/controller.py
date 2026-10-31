@@ -63,6 +63,16 @@ from harness.safety.circuit_breaker import CircuitBreaker
 from harness.safety.flapping_fsm import DefenseState, FlappingFSM
 from harness.safety.whitelist_guard import WhitelistGuard
 try:
+    from harness.topology.profile_loader import get_topology_profile
+except ImportError:
+    try:
+        from profile_loader import get_topology_profile  # type: ignore[no-redef]
+    except ImportError:
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).resolve().parents[2]))
+        from harness.topology.profile_loader import get_topology_profile  # type: ignore[no-redef]
+try:
     from ryu.app.reroute import RerouteEngine
 except ImportError:
     try:
@@ -193,14 +203,18 @@ class SelfDefendingSDNController(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(SelfDefendingSDNController, self).__init__(*args, **kwargs)
+        # 토폴로지 프로파일 로드 (환경변수 SDN_TOPOLOGY_PROFILE 또는 기본 diamond_4sw)
+        self.profile = get_topology_profile()
+        self.profile_name = self.profile.get("name", "diamond_4sw")
+
         # 호스트 정적 매핑 테이블
-        self.arp_table = {
+        self.arp_table = self.profile.get("hosts", {
             "10.0.0.1": {"mac": "00:00:00:00:00:01", "dpid": 1, "port": 1},
             "10.0.0.2": {"mac": "00:00:00:00:00:02", "dpid": 1, "port": 2},
             "10.0.0.4": {"mac": "00:00:00:00:00:04", "dpid": 4, "port": 1},
-        }
+        })
         # 기본 최단 경로 라우팅 맵: {dpid: {dst_ip: out_port}}
-        self.routing_table = {
+        self.routing_table = self.profile.get("routing_table", {
             # S1 -> S4: Port 3 (S2행)
             1: {"10.0.0.1": 1, "10.0.0.2": 2, "10.0.0.4": 3},
             # S2 -> S4: Port 2, -> S1: Port 1
@@ -209,7 +223,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             3: {"10.0.0.1": 1, "10.0.0.2": 1, "10.0.0.4": 2},
             # S4 -> S1: Port 2 (S2행), -> H_server: Port 1
             4: {"10.0.0.1": 2, "10.0.0.2": 2, "10.0.0.4": 1},
-        }
+        })
 
         # 6주차: 활성 Datapath 맵 및 Redis 텔레메트리 파이프라인 초기화
         self.datapaths = {}
@@ -226,8 +240,13 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         self._init_redis()
 
         # 7~13주차 핵심 엔진 인스턴스화
-        self.whitelist_guard = WhitelistGuard()
-        self.reroute_engine = RerouteEngine()
+        self.whitelist_guard = WhitelistGuard(
+            trunk_ports=self.profile.get("trunk_ports"),
+            access_ports=self.profile.get("access_ports"),
+            protected_ips=set(self.profile.get("protected_ips", ["10.0.0.1", "10.0.0.4"])),
+            protected_access_ports=self.profile.get("protected_access_ports"),
+        )
+        self.reroute_engine = RerouteEngine(profile=self.profile)
         self.circuit_breaker = CircuitBreaker()
         self.fsm = FlappingFSM(
             cooldown_sec=10.0,
@@ -242,11 +261,13 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         # 내부 확산: 접속 포트마다 ARP로 물어본 '없는 내부 주소' (서로 다른 주소, 누적)
         self.arp_fail_targets = {(host["dpid"], host["port"]): set() for host in self.arp_table.values()}
 
-        # 서비스 상태 확인: 정상 사용자 자리(S1)에서 보호 서버로 보내는 ping의 손실·지연
+        # 서비스 상태 확인: 정상 사용자 자리(S1 또는 프로파일 프로브 DPID)에서 보호 서버로 보내는 ping의 손실·지연
         self.probe = ProbeTracker()
-        # 응답을 S1까지 돌려보낼 때 쓸 경로 = S1에 붙은 호스트로 가는 경로
-        self.probe_route_ip = next(ip for ip, host in sorted(self.arp_table.items())
-                                   if host["dpid"] == SERVICE_PROBE_DPID)
+        probe_cfg = self.profile.get("probe", {})
+        probe_target_dpid = probe_cfg.get("dpid", SERVICE_PROBE_DPID)
+        # 응답을 송신 스위치까지 돌려보낼 때 쓸 경로 = 해당 스위치에 붙은 호스트로 가는 경로
+        matching_ips = [ip for ip, host in sorted(self.arp_table.items()) if host["dpid"] == probe_target_dpid]
+        self.probe_route_ip = matching_ips[0] if matching_ips else "10.0.0.1"
 
         # 2초 주기 비차단 포트 통계 폴링 그린스레드 가동
         self.monitor_thread = hub.spawn(self._monitor_loop)
@@ -594,13 +615,28 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                 continue
             h_port = host_info["port"]
             h_mac = host_info["mac"]
+            h_zone = host_info.get("zone", "SERVER" if ip == "10.0.0.4" else "USER")
 
-            if ip == "10.0.0.4":
-                # SERVER 호스트 (S4:P1): 역방향 응답 허용 (Pri 100)
+            if h_zone == "SERVER" or ip in ("10.0.0.4", "10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"):
+                # SERVER 호스트: 역방향 응답 허용 (Pri 100)
                 # Web reply (TCP src 80)
                 self.add_flow(
                     datapath, priority=100,
                     match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # API reply (TCP src 8080)
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=8080),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                # DB reply (TCP src 3306)
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=3306),
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
@@ -618,36 +654,58 @@ class SelfDefendingSDNController(app_manager.RyuApp):
                     actions=[], table_id=TABLE_POLICY,
                     instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
                 )
+            elif h_zone == "ADMIN":
+                # ADMIN 호스트 (H_Admin / H_Patch): 관리 서비스 응답 허용
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=443),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=6, tcp_src=80),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
+                self.add_flow(
+                    datapath, priority=100,
+                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ip_proto=17, udp_src=53),
+                    actions=[], table_id=TABLE_POLICY,
+                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                )
             else:
-                # USER 호스트 (S1:P1, S1:P2): SERVER(10.0.0.4) 향 허용 규칙 (Pri 200)
-                # Web request (TCP dst 80)
-                self.add_flow(
-                    datapath, priority=200,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=6, tcp_dst=80),
-                    actions=[], table_id=TABLE_POLICY,
-                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-                )
-                # DNS request (UDP dst 53)
-                self.add_flow(
-                    datapath, priority=200,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=17, udp_dst=53),
-                    actions=[], table_id=TABLE_POLICY,
-                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-                )
-                # ICMP request (Echo Request type 8)
-                self.add_flow(
-                    datapath, priority=200,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=8),
-                    actions=[], table_id=TABLE_POLICY,
-                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-                )
-                # ICMP reply (Echo Reply type 0)
-                self.add_flow(
-                    datapath, priority=200,
-                    match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=0),
-                    actions=[], table_id=TABLE_POLICY,
-                    instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-                )
+                # USER 호스트: SERVER 향 허용 규칙 (Pri 200)
+                target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"] if self.profile_name == "zone_8sw" else ["10.0.0.4"]
+                for s_ip in target_servers:
+                    # Web request (TCP dst 80)
+                    self.add_flow(
+                        datapath, priority=200,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=80),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
+                    # DNS request (UDP dst 53)
+                    self.add_flow(
+                        datapath, priority=200,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=17, udp_dst=53),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
+                    # ICMP request (Echo Request type 8)
+                    self.add_flow(
+                        datapath, priority=200,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=1, icmpv4_type=8),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
+                    # ICMP reply (Echo Reply type 0)
+                    self.add_flow(
+                        datapath, priority=200,
+                        match=parser.OFPMatch(in_port=h_port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=1, icmpv4_type=0),
+                        actions=[], table_id=TABLE_POLICY,
+                        instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+                    )
 
             # 6. Pri 0: Table-Miss per Access Port -> DROP & Count ZONE_DENY
             self.add_flow(
@@ -669,7 +727,8 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             return False
 
         # 하드 화이트리스트 보호 (서버 및 프로브 핑, 관리 서버는 절대 격리 불가)
-        if target_ip in ("10.0.0.4", "10.0.0.250", "10.0.0.254"):
+        protected = {"10.0.0.4", "10.0.0.250", "10.0.0.254", "10.0.0.253", "10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"} | set(self.whitelist_guard.protected_ips)
+        if target_ip in protected:
             self.logger.error(f"[Quarantine] Refusing to quarantine protected target: {target_ip}")
             return False
 
@@ -692,22 +751,24 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         parser = datapath.ofproto_parser
 
         # 1. 기존 Pri 200 정상 USER 허용 규칙 삭제
-        self.delete_flow(
-            datapath, priority=200,
-            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=6, tcp_dst=80),
-            table_id=TABLE_POLICY,
-        )
-        self.delete_flow(
-            datapath, priority=200,
-            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=17, udp_dst=53),
-            table_id=TABLE_POLICY,
-        )
-        for icmp_type in (8, 0):
+        target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"] if self.profile_name == "zone_8sw" else ["10.0.0.4"]
+        for s_ip in target_servers:
             self.delete_flow(
                 datapath, priority=200,
-                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=icmp_type),
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=80),
                 table_id=TABLE_POLICY,
             )
+            self.delete_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=17, udp_dst=53),
+                table_id=TABLE_POLICY,
+            )
+            for icmp_type in (8, 0):
+                self.delete_flow(
+                    datapath, priority=200,
+                    match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=1, icmpv4_type=icmp_type),
+                    table_id=TABLE_POLICY,
+                )
 
         # 2. Pri 300 격리 규칙 설치 (관리망 10.0.0.254:443 및 DNS 53만 허용)
         self.add_flow(
@@ -722,6 +783,14 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             actions=[], table_id=TABLE_POLICY,
             instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
         )
+        # 패치 서버(10.0.0.253)가 활성화된 경우: HTTP 80 패치 다운로드 허용
+        if "10.0.0.253" in self.arp_table:
+            self.add_flow(
+                datapath, priority=300,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.253", ip_proto=6, tcp_dst=80),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
 
         self.quarantined_hosts.add(target_ip)
         self.logger.info(f"[Quarantine] Host {target_ip} (MAC: {target_mac}) QUARANTINED on S{dpid}:P{port}")
@@ -765,24 +834,37 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.254", ip_proto=17, udp_dst=53),
             table_id=TABLE_POLICY,
         )
+        if "10.0.0.253" in self.arp_table:
+            self.delete_flow(
+                datapath, priority=300,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.253", ip_proto=6, tcp_dst=80),
+                table_id=TABLE_POLICY,
+            )
 
         # 2. Pri 200 정상 USER 규칙 복원
-        self.add_flow(
-            datapath, priority=200,
-            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=6, tcp_dst=80),
-            actions=[], table_id=TABLE_POLICY,
-            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-        )
-        self.add_flow(
-            datapath, priority=200,
-            match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=17, udp_dst=53),
-            actions=[], table_id=TABLE_POLICY,
-            instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
-        )
-        for icmp_type in (8, 0):
+        target_servers = ["10.0.0.11", "10.0.0.12", "10.0.0.21", "10.0.0.22"] if self.profile_name == "zone_8sw" else ["10.0.0.4"]
+        for s_ip in target_servers:
             self.add_flow(
                 datapath, priority=200,
-                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst="10.0.0.4", ip_proto=1, icmpv4_type=icmp_type),
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=6, tcp_dst=80),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+            self.add_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=17, udp_dst=53),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+            self.add_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=1, icmpv4_type=8),
+                actions=[], table_id=TABLE_POLICY,
+                instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
+            )
+            self.add_flow(
+                datapath, priority=200,
+                match=parser.OFPMatch(in_port=port, eth_type=0x0800, ipv4_dst=s_ip, ip_proto=1, icmpv4_type=0),
                 actions=[], table_id=TABLE_POLICY,
                 instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
             )
@@ -972,40 +1054,92 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         """Redis sdn:topology:sync 채널로 실시간 토폴로지 링크/노드 상태 브로드캐스트"""
         attacked = (phase_name == "ATTACK_DETECTED")
         mitigated = (phase_name in ("MITIGATED", "COOLDOWN_VERIFY", "COOLDOWN"))
-        s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
 
-        h_legit_status = "QUARANTINED" if "10.0.0.1" in self.quarantined_hosts else "NORMAL"
-        h_attacker_status = "QUARANTINED" if "10.0.0.2" in self.quarantined_hosts else s1_status
+        if self.profile_name == "zone_8sw":
+            s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
+            nodes = [
+                # 8 Switches
+                TopologyNode(id="s1", label="S1 (Core 1)", node_type="switch", dpid=1, status=s1_status),
+                TopologyNode(id="s2", label="S2 (Core 2)", node_type="switch", dpid=2),
+                TopologyNode(id="s3", label="S3 (User A)", node_type="switch", dpid=3),
+                TopologyNode(id="s4", label="S4 (User B)", node_type="switch", dpid=4),
+                TopologyNode(id="s5", label="S5 (Server A)", node_type="switch", dpid=5),
+                TopologyNode(id="s6", label="S6 (Server B)", node_type="switch", dpid=6),
+                TopologyNode(id="s7", label="S7 (Admin)", node_type="switch", dpid=7),
+                TopologyNode(id="s8", label="S8 (Quarantine)", node_type="switch", dpid=8),
+            ]
+            # 11 Hosts
+            for ip, h in self.arp_table.items():
+                lbl = h.get("label", ip)
+                h_status = "QUARANTINED" if ip in self.quarantined_hosts else "NORMAL"
+                nodes.append(
+                    TopologyNode(
+                        id=lbl, label=lbl, node_type="host",
+                        ip=ip, mac=h.get("mac", ""), status=h_status
+                    )
+                )
 
-        nodes = [
-            TopologyNode(id="s1", label="S1 (Ingress)", node_type="switch", dpid=1, status=s1_status),
-            TopologyNode(id="s2", label="S2 (Primary)", node_type="switch", dpid=2),
-            TopologyNode(id="s3", label="S3 (Bypass)", node_type="switch", dpid=3),
-            TopologyNode(id="s4", label="S4 (Egress)", node_type="switch", dpid=4),
-            TopologyNode(id="h_legit", label="H_legit", node_type="host", ip="10.0.0.1", mac="00:00:00:00:00:01", status=h_legit_status),
-            TopologyNode(
-                id="h_attacker", label="H_attacker", node_type="host",
-                ip="10.0.0.2", mac="00:00:00:00:00:02", status=h_attacker_status
-            ),
-            TopologyNode(id="h_server", label="H_server", node_type="host", ip="10.0.0.4", mac="00:00:00:00:00:04"),
-        ]
+            # Links
+            links = [
+                # Core Inter-switch
+                TopologyLink(source="s1", target="s2", src_port=1, dst_port=1, is_trunk=True),
+                # S1 Edges
+                TopologyLink(source="s1", target="s3", src_port=2, dst_port=99, is_trunk=True),
+                TopologyLink(source="s1", target="s5", src_port=3, dst_port=99, is_trunk=True),
+                TopologyLink(source="s1", target="s7", src_port=4, dst_port=98, is_trunk=True),
+                TopologyLink(source="s1", target="s8", src_port=5, dst_port=98, is_trunk=True),
+                # S2 Edges
+                TopologyLink(source="s2", target="s4", src_port=2, dst_port=99, is_trunk=True),
+                TopologyLink(source="s2", target="s6", src_port=3, dst_port=99, is_trunk=True),
+                TopologyLink(source="s2", target="s7", src_port=4, dst_port=99, is_trunk=True),
+                TopologyLink(source="s2", target="s8", src_port=5, dst_port=99, is_trunk=True),
+            ]
+            # Host access links
+            for ip, h in self.arp_table.items():
+                lbl = h.get("label", ip)
+                l_status = "BLOCKED" if ip in self.quarantined_hosts else "ACTIVE"
+                sw_id = f"s{h['dpid']}"
+                links.append(
+                    TopologyLink(
+                        source=sw_id, target=lbl,
+                        src_port=h["port"], dst_port=1, status=l_status
+                    )
+                )
+        else:
+            s1_status = "ATTACKED" if attacked else "MITIGATED" if mitigated else "NORMAL"
 
-        bypass_status = "REROUTED" if mitigated else "ACTIVE"
-        h_legit_link_status = "BLOCKED" if "10.0.0.1" in self.quarantined_hosts else "ACTIVE"
-        h_attacker_link_status = "BLOCKED" if (mitigated or "10.0.0.2" in self.quarantined_hosts) else "ACTIVE"
+            h_legit_status = "QUARANTINED" if "10.0.0.1" in self.quarantined_hosts else "NORMAL"
+            h_attacker_status = "QUARANTINED" if "10.0.0.2" in self.quarantined_hosts else s1_status
 
-        links = [
-            TopologyLink(source="s1", target="h_legit", src_port=1, dst_port=1, status=h_legit_link_status),
-            TopologyLink(
-                source="s1", target="h_attacker", src_port=2, dst_port=1,
-                status=h_attacker_link_status
-            ),
-            TopologyLink(source="s1", target="s2", src_port=3, dst_port=1, is_trunk=True),
-            TopologyLink(source="s1", target="s3", src_port=4, dst_port=1, is_trunk=True, status=bypass_status),
-            TopologyLink(source="s2", target="s4", src_port=2, dst_port=2, is_trunk=True),
-            TopologyLink(source="s3", target="s4", src_port=2, dst_port=3, is_trunk=True, status=bypass_status),
-            TopologyLink(source="s4", target="h_server", src_port=1, dst_port=1),
-        ]
+            nodes = [
+                TopologyNode(id="s1", label="S1 (Ingress)", node_type="switch", dpid=1, status=s1_status),
+                TopologyNode(id="s2", label="S2 (Primary)", node_type="switch", dpid=2),
+                TopologyNode(id="s3", label="S3 (Bypass)", node_type="switch", dpid=3),
+                TopologyNode(id="s4", label="S4 (Egress)", node_type="switch", dpid=4),
+                TopologyNode(id="h_legit", label="H_legit", node_type="host", ip="10.0.0.1", mac="00:00:00:00:00:01", status=h_legit_status),
+                TopologyNode(
+                    id="h_attacker", label="H_attacker", node_type="host",
+                    ip="10.0.0.2", mac="00:00:00:00:00:02", status=h_attacker_status
+                ),
+                TopologyNode(id="h_server", label="H_server", node_type="host", ip="10.0.0.4", mac="00:00:00:00:00:04"),
+            ]
+
+            bypass_status = "REROUTED" if mitigated else "ACTIVE"
+            h_legit_link_status = "BLOCKED" if "10.0.0.1" in self.quarantined_hosts else "ACTIVE"
+            h_attacker_link_status = "BLOCKED" if (mitigated or "10.0.0.2" in self.quarantined_hosts) else "ACTIVE"
+
+            links = [
+                TopologyLink(source="s1", target="h_legit", src_port=1, dst_port=1, status=h_legit_link_status),
+                TopologyLink(
+                    source="s1", target="h_attacker", src_port=2, dst_port=1,
+                    status=h_attacker_link_status
+                ),
+                TopologyLink(source="s1", target="s2", src_port=3, dst_port=1, is_trunk=True),
+                TopologyLink(source="s1", target="s3", src_port=4, dst_port=1, is_trunk=True, status=bypass_status),
+                TopologyLink(source="s2", target="s4", src_port=2, dst_port=2, is_trunk=True),
+                TopologyLink(source="s3", target="s4", src_port=2, dst_port=3, is_trunk=True, status=bypass_status),
+                TopologyLink(source="s4", target="h_server", src_port=1, dst_port=1),
+            ]
 
         sync_msg = TopologySyncMessage(
             timestamp=time.time(), phase=phase_name, nodes=nodes, links=links
