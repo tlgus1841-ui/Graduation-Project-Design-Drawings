@@ -1,0 +1,47 @@
+# ==============================================================================
+# Self-Defending SDN Tower - Production Deployment Exclusion Specification
+# Phase 6-C-3: 경량 런타임 아티팩트 격리 규칙 (.deployignore)
+#
+# rsync (--exclude-from) 및 tar 규격 호환
+# ==============================================================================
+
+# 1. 문서 및 기밀 지적 자산 (보안 원천 격리)
+docs/
+archive/
++ /README.md
+- *.md
+
+# 2. 테스트 스위트 및 벤치마크/로그 산출물
+tests/
+runs/
+results/
+*.log
+events.jsonl
+
+# 3. AI 개발 규칙 및 IDE 설정
+rules/
+.cursorrules
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 4. 버전 관리 및 CI 메타데이터
+.git/
+.github/
+.gitignore
+.gitattributes
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 5. 로컬 가상환경 및 프론트엔드 빌드 캐시
+.venv/
+venv/
+ui/node_modules/
+ui/dist/
+ui/.vite/
+dataset/*.csv

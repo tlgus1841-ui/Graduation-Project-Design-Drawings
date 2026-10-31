@@ -21,7 +21,6 @@ RUN pip install --no-cache-dir \
 COPY model /workspace/model
 COPY pipeline /workspace/pipeline
 COPY harness /workspace/harness
-COPY rules /workspace/rules
 
 ENV PYTHONPATH=/workspace
 ENV PYTHONUNBUFFERED=1
