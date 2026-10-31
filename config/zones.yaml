@@ -141,7 +141,7 @@ lateral_spread_ports:
 
 # 상시 허용 (Hard Whitelist): 어떠한 경우에도 차단/격리 불가
 hard_whitelist:
-  probe_ip: "10.0.0.250"
+  probe_ip: "10.0.0.240"
   protected_ips:
     - "10.0.0.11"
     - "10.0.0.12"

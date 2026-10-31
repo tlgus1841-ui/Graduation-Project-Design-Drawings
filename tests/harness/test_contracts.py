@@ -124,6 +124,6 @@ def test_zones_yaml_structure():
 
     # 5. Hard whitelist
     assert "hard_whitelist" in data
-    assert data["hard_whitelist"]["probe_ip"] == "10.0.0.250"
+    assert data["hard_whitelist"]["probe_ip"] == "10.0.0.240"
     assert "10.0.0.11" in data["hard_whitelist"]["protected_ips"]
     assert "10.0.0.253" in data["hard_whitelist"]["protected_ips"]

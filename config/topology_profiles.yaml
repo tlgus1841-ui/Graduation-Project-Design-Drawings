@@ -133,8 +133,8 @@ profiles:
 
     probe:
       dpid: 3
-      ip: "10.0.0.250"
-      mac: "00:00:00:00:00:fa"
+      ip: "10.0.0.240"
+      mac: "00:00:00:00:00:f0"
       target_ip: "10.0.0.11"
 
   # Single Default Profile

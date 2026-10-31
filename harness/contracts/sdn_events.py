@@ -37,8 +37,8 @@ REDIS_CHANNEL_SERVICE_HEALTH = "sdn:health:service"
 
 # 서비스 상태 확인: 컨트롤러가 정상 사용자 자리(S3)에서 보호 서버(h5 Web)로 보내는 ICMP echo의 가상 출발지.
 # 실제 호스트가 없는 주소라 컨트롤러가 ARP에 대신 답하고, 응답은 S3으로 돌아와 컨트롤러가 받는다.
-SERVICE_PROBE_IP = "10.0.0.250"
-SERVICE_PROBE_MAC = "00:00:00:00:00:fa"
+SERVICE_PROBE_IP = "10.0.0.240"
+SERVICE_PROBE_MAC = "00:00:00:00:00:f0"
 SERVICE_PROBE_TARGET_IP = "10.0.0.11"
 SERVICE_PROBE_DPID = 3
 SERVICE_PROBE_INTERVAL_SEC = 0.2

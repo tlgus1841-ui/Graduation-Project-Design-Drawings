@@ -272,7 +272,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
         """zones.yaml 설정 안전 로드 (로컬 개발 환경 및 컨테이너 환경 호환)"""
         default_cfg = {
             "silent_drop_udp_ports": [137, 138, 139, 1900, 5353, 5355],
-            "hard_whitelist": {"probe_ip": "10.0.0.250", "protected_ips": ["10.0.0.4", "10.0.0.254"]},
+            "hard_whitelist": {"probe_ip": "10.0.0.240", "protected_ips": ["10.0.0.4", "10.0.0.254"]},
         }
         try:
             import yaml
@@ -573,7 +573,7 @@ class SelfDefendingSDNController(app_manager.RyuApp):
             instructions=[parser.OFPInstructionGotoTable(TABLE_POLICE)],
         )
 
-        # 3. Pri 400: 컨트롤러 상태체크 핑 (10.0.0.250) 양방향 무조건 허용
+        # 3. Pri 400: 컨트롤러 상태체크 핑 (10.0.0.240) 양방향 무조건 허용
         self.add_flow(
             datapath, priority=400,
             match=parser.OFPMatch(eth_type=0x0800, ipv4_src=SERVICE_PROBE_IP),
