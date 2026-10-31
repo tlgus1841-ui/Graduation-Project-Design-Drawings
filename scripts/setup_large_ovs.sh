@@ -149,8 +149,9 @@ create_host "ns_sink" "s8" 1 "10.0.0.250" "00:00:00:00:00:fa"
 # ------------------------------------------------------------------------------
 echo ">>> [5/6] 보안 업데이트 패치 서버 서비스 기동 (10.0.0.253:80)..."
 mkdir -p /tmp/sdn_patch_root/patches
+cp "${ROOT_DIR}/docker/patch_server/clean_agent.sh" /tmp/sdn_patch_root/
 cp "${ROOT_DIR}/docker/patch_server/clean_agent.sh" /tmp/sdn_patch_root/patches/
-chmod +x /tmp/sdn_patch_root/patches/clean_agent.sh
+chmod +x /tmp/sdn_patch_root/clean_agent.sh /tmp/sdn_patch_root/patches/clean_agent.sh
 echo '<html><body><h1>SDN Patch Server (10.0.0.253)</h1><a href="/patches/clean_agent.sh">clean_agent.sh</a></body></html>' > /tmp/sdn_patch_root/index.html
 
 # Fallback-safe HTTP server daemon inside ns_patch
